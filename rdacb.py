@@ -63,19 +63,23 @@ class RDACB:
         return self.db.execute(query).fetchall()
 
     def scan_user(self, user):
-        self.logger.info(f"Scanning user '{user}'.")
-        for comment in self.reddit.redditor(user).comments.new():
-            self.logger.info(f"Saving comment {comment.id} from user '{user}'.")
-            if not comment.score_hidden:
-                self.save_comment(user, comment)
+        self.logger.info(f"Saving comments from user '{user}'.")
+        comments = self.reddit.redditor(user).comments.new()
+        self.save_comments(user, comments)
 
-    def save_comment(self, author, comment):
+    def save_comments(self, author, comments):
         with self.db:
-            data = (comment.fullname, author, comment.score, comment.permalink,
-                    comment.subreddit_id, comment.created_utc,
-                    comment.body)
             query = "INSERT OR REPLACE INTO downvoted VALUES (?, ?, ?, ?, ?, ?, ?)"
-            self.db.execute(query, data)
+            self.db.executemany(query, self._data_from_comments(comments, author))
+
+    @staticmethod
+    def _data_from_comments(comments, author):
+        for comment in comments:
+            if comment.score_hidden:
+                continue
+            yield (comment.fullname, author, comment.score,
+                   comment.permalink, comment.subreddit_id,
+                   comment.created_utc, comment.body)
 
     def run(self):
         while True:
