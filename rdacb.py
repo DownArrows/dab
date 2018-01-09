@@ -73,7 +73,7 @@ class RDACB:
 
     def save_downvoted(self, author, comment):
         with self.db:
-            data = (comment.fullname, author, comment.score, comment.link_permalink,
+            data = (comment.fullname, author, comment.score, comment.permalink,
                     comment.subreddit_id, comment.created_utc,
                     comment.body)
             query = "INSERT OR REPLACE INTO downvoted VALUES (?, ?, ?, ?, ?, ?, ?)"
