@@ -64,9 +64,10 @@ class RDACB:
 
     def scan_user(self, user):
         self.logger.info(f"Scanning user '{user}'.")
+        counter = 0
         for comment in self.reddit.redditor(user).comments.new():
-            counter = 0
             if not comment.score_hidden and comment.score <= 0:
+                counter += 1
                 self.save_downvoted(user, comment)
         self.logger.info(f"Found {counter} downvoted comments while scanning '{user}'.")
 
