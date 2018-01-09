@@ -3,6 +3,7 @@ import argparse
 import configparser
 import math
 import sqlite3
+import sys
 import time
 from contextlib import suppress
 
@@ -79,3 +80,12 @@ class RDACB:
                 continue
             for (user, hidden) in self.get_users():
                 self.scan_user(user)
+
+
+if __name__ == "__main__":
+    config = configparser.ConfigParser()
+    config.read(sys.argv[1])
+
+    bot = RDACB(config["Client"], config["Database"]["path"])
+    bot.init_db()
+    bot.run()
