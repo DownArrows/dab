@@ -42,7 +42,7 @@ class RDACB:
                 CREATE TABLE IF NOT EXISTS downvoted (
                     id TEXT PRIMARY KEY,
                     author TEXT NOT NULL,
-                    score INTEGER CHECK(score IS NOT NULL AND score <= 0),
+                    score INTEGER NOT NULL,
                     permalink TEXT NOT NULL,
                     sub_id TEXT NOT NULL,
                     created INTEGER NOT NULL,
@@ -64,26 +64,18 @@ class RDACB:
 
     def scan_user(self, user):
         self.logger.info(f"Scanning user '{user}'.")
-        counter = 0
         for comment in self.reddit.redditor(user).comments.new():
-            if not comment.score_hidden and comment.score <= 0:
-                counter += 1
-                self.save_downvoted(user, comment)
-        self.logger.info(f"Found {counter} downvoted comments while scanning '{user}'.")
+            self.logger.info(f"Saving comment {comment.id} from user '{user}'.")
+            if not comment.score_hidden:
+                self.save_comment(user, comment)
 
-    def save_downvoted(self, author, comment):
+    def save_comment(self, author, comment):
         with self.db:
             data = (comment.fullname, author, comment.score, comment.permalink,
                     comment.subreddit_id, comment.created_utc,
                     comment.body)
             query = "INSERT OR REPLACE INTO downvoted VALUES (?, ?, ?, ?, ?, ?, ?)"
             self.db.execute(query, data)
-
-    def cleanup(self, cutoff=0):
-        with self.db:
-            self.logger.info(f"Cleaning up the database with cutoff {cutoff}.")
-            self.db.execute("DELETE FROM downvoted WHERE score = ?", (cutoff,))
-            self.logger.info(f"Database clean-up done.")
 
     def run(self):
         while True:
