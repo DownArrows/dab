@@ -3,7 +3,6 @@ package main
 import (
 	"io"
 	"log"
-	"errors"
 )
 
 type UserAddStatus struct {
@@ -88,12 +87,9 @@ func (bot *Bot) addUser(username string, hidden bool) (bool, error) {
 	}
 	err := bot.GetAndSaveComments(username)
 	if err != nil {
-		if err == errors.New("bad status code: 404") {
-			bot.logger.Print("New user ", username, " not found")
-			return false, nil
-		}
 		return false, err
 	}
+
 	bot.Users = append(bot.Users, username)
 	bot.storage.Lock()
 	err = bot.storage.AddUser(username, hidden)
@@ -111,7 +107,6 @@ func (bot *Bot) hasUser(username string) bool {
 			return true
 		}
 	}
-	bot.logger.Print(username, " not found")
 	return false
 }
 
