@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"strconv"
 	"time"
 )
 
@@ -140,7 +141,7 @@ func (rc *RedditClient) RawRequest(verb string, path string, data io.Reader) ([]
 	}
 
 	if res.StatusCode != 200 {
-		return nil, errors.New("bad status code: " + string(res.StatusCode))
+		return nil, errors.New("bad status code: " + strconv.Itoa(res.StatusCode))
 	}
 
 	raw_data, read_err := ioutil.ReadAll(res.Body)
