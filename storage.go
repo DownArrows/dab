@@ -15,13 +15,21 @@ type Storage struct {
 }
 
 type Comment struct {
-	id string
-	author string
-	score int64
-	permalink string
-	sub_id string
-	created uint64
-	body string
+	Id string
+	Author string
+	Score int64
+	Permalink string
+	SubId string `json:"subreddit_id"`
+	Created float64 `json:"created_utc"`
+	Body string
+}
+
+type User struct {
+	Name string
+	Hidden bool
+	Deleted bool
+	EndReached bool
+	Added uint64
 }
 
 func NewStorage(db_path string, log_out io.Writer) (*Storage, error) {
@@ -42,6 +50,7 @@ func (storage *Storage) Init() error {
 	_, err := storage.db.Exec(`
 		CREATE TABLE IF NOT EXISTS tracked (
 			username TEXT PRIMARY KEY,
+			end_reached BOOLEAN DEFAULT 0,
 			added DATETIME DEFAULT CURRENT_TIMESTAMP,
 			hidden BOOLEAN NOT NULL,
 			deleted BOOLEAN DEFAULT 0)`)
@@ -124,8 +133,9 @@ func (storage *Storage) SaveComment(comments ...Comment) error {
 		return err
 	}
 	for _, comment := range comments {
-		_, err = stmt.Exec(comment.id, comment.author, comment.score,
-			comment.permalink, comment.sub_id, comment.created, comment.body)
+		_, err = stmt.Exec(comment.Id, comment.Author, comment.Score,
+			comment.Permalink, comment.SubId, uint64(comment.Created),
+			comment.Body)
 		if err != nil {
 			tx.Rollback()
 			return err

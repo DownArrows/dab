@@ -45,13 +45,13 @@ func TestCRUD(t *testing.T) {
 
 	t.Run("AddComments", func(t *testing.T) {
 		comment := Comment{
-			id: "t3_28df12",
-			author: "whoever",
-			score: -1039,
-			permalink: "/r/something/something",
-			sub_id: "t5_328fd1",
-			created: 1515624337,
-			body: "this is a test",
+			Id: "t3_28df12",
+			Author: "whoever",
+			Score: -1039,
+			Permalink: "/r/something/something",
+			SubId: "t5_328fd1",
+			Created: 1515624337,
+			Body: "this is a test",
 		}
 		err := storage.SaveComment(comment)
 		if err != nil {
