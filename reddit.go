@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"encoding/json"
 	"errors"
 	"io"
@@ -152,7 +151,7 @@ func (rc *RedditClient) RawRequest(verb string, path string, data io.Reader) ([]
 	return raw_data, nil
 }
 
-func (rc *RedditClient) FetchPosts(username string, after string) ([]Comment, error){
+func (rc *RedditClient) FetchComments(username string, after string) ([]Comment, error){
 	params := "?limit=100&after=" + after
 	res, err := rc.RawRequest("GET", "/u/" + username + params, nil)
 	if err != nil {
