@@ -38,7 +38,6 @@ type RedditAuth struct {
 
 type RedditClient struct {
 	Client *http.Client
-	RefreshClient *http.Client
 	Version string
 	OAuth OAuthResponse
 	Auth RedditAuth
@@ -51,15 +50,14 @@ type userComments struct {
 		Children []struct {
 			Data Comment
 		}
+		After string
 	}
 }
 
 func NewRedditClient(auth RedditAuth) (*RedditClient, error) {
 	http_client := &http.Client{}
-	refresh_client := &http.Client{}
 	var client = &RedditClient{
 		Client: http_client,
-		RefreshClient: refresh_client,
 		Version: "0.1.0",
 		ticker: time.NewTicker(time.Second),
 	}
@@ -90,7 +88,7 @@ func (rc *RedditClient) Connect(auth RedditAuth) error {
 	req.Header.Set("User-Agent", rc.UserAgent())
 	req.SetBasicAuth(rc.Auth.Id, rc.Auth.Key)
 
-	res, err := rc.RefreshClient.Do(req)
+	res, err := rc.Do(req)
 	if err != nil {
 		return err
 	}
@@ -149,17 +147,20 @@ func (rc *RedditClient) RawRequest(verb string, path string, data io.Reader) ([]
 	return raw_data, nil
 }
 
-func (rc *RedditClient) FetchComments(username string, after string) ([]Comment, error){
-	params := "?limit=100&after=" + after
+func (rc *RedditClient) FetchComments(username string, after string) ([]Comment, string, error){
+	params := "?sort=new&limit=100"
+	if after != "" {
+		params += "&after=" + after
+	}
 	res, err := rc.RawRequest("GET", "/u/" + username + params, nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	parsed := &userComments{}
 	err = json.Unmarshal(res, parsed)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	children := parsed.Data.Children
@@ -168,5 +169,5 @@ func (rc *RedditClient) FetchComments(username string, after string) ([]Comment,
 		comments[i] = child.Data
 	}
 
-	return comments, nil
+	return comments, parsed.Data.After, nil
 }

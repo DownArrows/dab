@@ -3,22 +3,25 @@ package main
 import (
 	"io"
 	"log"
+	"time"
 )
 
 type UserAddStatus struct {
 	User string
-	Ok bool
+	Ok   bool
 }
 
 type Bot struct {
-	Users []string
-	NewUsers chan (chan []UserAddStatus)
-	client *RedditClient
-	storage *Storage
-	logger *log.Logger
+	Users        []string
+	NewUsers     chan (chan []UserAddStatus)
+	prevComments map[string][]Comment
+	MaxAge       time.Duration
+	client       *RedditClient
+	storage      *Storage
+	logger       *log.Logger
 }
 
-func NewBot(auth RedditAuth, storage *Storage, log_out io.Writer,) (*Bot, error) {
+func NewBot(auth RedditAuth, storage *Storage, log_out io.Writer, max_age_hours int64) (*Bot, error) {
 	logger := log.New(log_out, "bot: ", log.LstdFlags)
 
 	reddit, err := NewRedditClient(auth)
@@ -34,11 +37,13 @@ func NewBot(auth RedditAuth, storage *Storage, log_out io.Writer,) (*Bot, error)
 	}
 
 	bot := &Bot{
-		Users: users,
-		NewUsers: make(chan (chan []UserAddStatus)),
-		client: reddit,
-		storage: storage,
-		logger: logger,
+		Users:        users,
+		NewUsers:     make(chan (chan []UserAddStatus)),
+		prevComments: make(map[string][]Comment),
+		MaxAge:       time.Duration(max_age_hours) * time.Hour,
+		client:       reddit,
+		storage:      storage,
+		logger:       logger,
 	}
 
 	return bot, nil
@@ -60,7 +65,7 @@ func (bot *Bot) Scan(end chan bool) {
 				if err != nil {
 					bot.logger.Print("Error when fetching and saving comments of user ", user, err)
 				}
-				done<- true
+				done <- true
 			}()
 
 			select {
@@ -70,7 +75,7 @@ func (bot *Bot) Scan(end chan bool) {
 			}
 		}
 	}
-	end<- true
+	end <- true
 }
 
 func (bot *Bot) newUserQuery(query_ch chan []UserAddStatus) {
@@ -90,7 +95,7 @@ func (bot *Bot) newUserQuery(query_ch chan []UserAddStatus) {
 		resp[i] = UserAddStatus{User: new_user, Ok: ok}
 	}
 
-	query_ch<- resp
+	query_ch <- resp
 }
 
 func (bot *Bot) addUser(username string, hidden bool) (bool, error) {
@@ -99,7 +104,7 @@ func (bot *Bot) addUser(username string, hidden bool) (bool, error) {
 		bot.logger.Print(username, " already exists")
 		return true, nil
 	}
-	_, err := bot.client.RawRequest("GET", "/u/" + username, nil)
+	_, err := bot.client.RawRequest("GET", "/u/"+username, nil)
 	if err != nil {
 		return false, err
 	}
@@ -125,13 +130,53 @@ func (bot *Bot) hasUser(username string) bool {
 }
 
 func (bot *Bot) GetAndSaveComments(user string) error {
-	bot.logger.Print("Fetching comments of ", user)
-	comments, err := bot.client.FetchComments(user, "")
-	if err != nil {
-		return err
+	bot.logger.Print("Fetching comments from ", user)
+
+	var comments []Comment
+	var err error = nil
+	var oldest time.Time
+	after := ""
+	overlaps := false
+	first := true
+
+	// Use time.Time.Round to remove the monotonic clock measurement, as
+	// we don't need it for the precision we want and one parameter depends
+	// on an external source (the comments' timestamps).
+	for now := time.Now().Round(0); !overlaps || now.Sub(oldest) < bot.MaxAge; {
+		if after != "" {
+			bot.logger.Print("Fetching another batch of comments from ", user, " after ", after)
+		}
+
+		comments, after, err = bot.client.FetchComments(user, after)
+		if err != nil {
+			return err
+		}
+		oldest = time.Unix(int64(comments[len(comments)-1].Created), 0)
+
+		bot.storage.Lock()
+		err = bot.storage.SaveComment(comments...)
+		bot.storage.Unlock()
+		if err != nil {
+			return err
+		}
+
+		overlaps = listingOverlap(bot.prevComments[user], comments)
+		if first {
+			bot.prevComments[user] = comments
+			first = false
+		} else if after == "" {
+			break
+		}
 	}
-	bot.storage.Lock()
-	err = bot.storage.SaveComment(comments...)
-	bot.storage.Unlock()
-	return err
+	return nil
+}
+
+func listingOverlap(prev, current []Comment) bool {
+	last := current[len(current)-1]
+	for _, comment := range prev {
+		if comment.Id == last.Id {
+			return true
+		}
+	}
+	return false
 }
