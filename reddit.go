@@ -68,23 +68,12 @@ func NewRedditClient(auth RedditAuth) (*RedditClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	go client.AutoRefresh()
 
 	return client, nil
 }
 
 func (rc *RedditClient) UserAgent() string {
 	return rc.Auth.Username + "-Bot/v" + rc.Version
-}
-
-func (rc *RedditClient) AutoRefresh() {
-	for {
-		<-time.After(time.Duration(rc.OAuth.Timeout) * time.Second - time.Minute)
-		err := rc.Connect(rc.Auth)
-		if err != nil {
-			panic(err)
-		}
-	}
 }
 
 func (rc *RedditClient) Connect(auth RedditAuth) error {
@@ -138,6 +127,14 @@ func (rc *RedditClient) RawRequest(verb string, path string, data io.Reader) ([]
 	res, res_err := rc.Client.Do(req)
 	if res_err != nil {
 		return nil, res_err
+	}
+
+	if res.StatusCode == 401 {
+		err = rc.Connect(rc.Auth)
+		if err != nil {
+			return nil, err
+		}
+		return rc.RawRequest(verb, path, data)
 	}
 
 	if res.StatusCode != 200 {
