@@ -1,35 +1,35 @@
 package main
 
 import (
-	"log"
-	"io"
-	"sync"
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
+	"io"
+	"log"
+	"sync"
 )
 
 type Storage struct {
 	sync.Mutex
-	db *sql.DB
+	db     *sql.DB
 	logger *log.Logger
 }
 
 type Comment struct {
-	Id string
-	Author string
-	Score int64
+	Id        string
+	Author    string
+	Score     int64
 	Permalink string
-	SubId string `json:"subreddit_id"`
-	Created float64 `json:"created_utc"`
-	Body string
+	SubId     string  `json:"subreddit_id"`
+	Created   float64 `json:"created_utc"`
+	Body      string
 }
 
 type User struct {
-	Name string
-	Hidden bool
-	Deleted bool
+	Name       string
+	Hidden     bool
+	Deleted    bool
 	EndReached bool
-	Added uint64
+	Added      uint64
 }
 
 func NewStorage(db_path string, log_out io.Writer) (*Storage, error) {
@@ -50,10 +50,11 @@ func (storage *Storage) Init() error {
 	_, err := storage.db.Exec(`
 		CREATE TABLE IF NOT EXISTS tracked (
 			username TEXT PRIMARY KEY,
-			end_reached BOOLEAN DEFAULT 0,
+			deleted BOOLEAN DEFAULT 0,
 			added DATETIME DEFAULT CURRENT_TIMESTAMP,
 			hidden BOOLEAN NOT NULL,
-			deleted BOOLEAN DEFAULT 0)`)
+			new BOOLEAN DEFAULT 0,
+			after TEXT DEFAULT "")`)
 
 	if err != nil {
 		return err
