@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"reflect"
 	"testing"
 )
 
@@ -18,14 +17,17 @@ func TestCRUD(t *testing.T) {
 	})
 
 	t.Run("ListUsers", func(t *testing.T) {
-		expected := []string{"whoever"}
 		users, err := storage.ListUsers()
 		if err != nil {
 			t.Error(err)
+			return
 		}
-		if !reflect.DeepEqual(users, expected) {
-			t.Error("expected:", expected, "actual:", users)
+		for _, user := range users {
+			if user.Name == "whoever" {
+				return
+			}
 		}
+		t.Error("previously added user not found in", users)
 	})
 
 	t.Run("DelUser", func(t *testing.T) {
@@ -45,15 +47,15 @@ func TestCRUD(t *testing.T) {
 
 	t.Run("AddComments", func(t *testing.T) {
 		comment := Comment{
-			Id: "t3_28df12",
-			Author: "whoever",
-			Score: -1039,
+			Id:        "t3_28df12",
+			Author:    "whoever",
+			Score:     -1039,
 			Permalink: "/r/something/something",
-			SubId: "t5_328fd1",
-			Created: 1515624337,
-			Body: "this is a test",
+			SubId:     "t5_328fd1",
+			Created:   1515624337,
+			Body:      "this is a test",
 		}
-		err := storage.SaveComment(comment)
+		err := storage.SaveCommentsPage([]Comment{comment}, "")
 		if err != nil {
 			t.Error(err)
 		}
