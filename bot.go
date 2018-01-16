@@ -35,10 +35,17 @@ func NewBot(
 }
 
 func (bot *Bot) Run() error {
-	for {
+	for i := 0; true; i++ {
 		err := bot.ScanOnce()
 		if err != nil {
 			return err
+		}
+
+		if i %= 10; i == 0 {
+			err = bot.storage.Vacuum()
+			if err != nil {
+				bot.logger.Print("Database vacuum error: ", err)
+			}
 		}
 	}
 	return nil

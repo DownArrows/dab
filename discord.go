@@ -139,6 +139,13 @@ func (bot *DiscordBot) OnMessage(msg *discordgo.MessageCreate) {
 			_, err = bot.client.ChannelMessageSend(msg.ChannelID, reply)
 		}
 	}
+	//	else if strings.HasPrefix("!register ") {
+	//		names := strings.Split(strings.TrimPrefix(content, "!register "))
+	//		bot.logger.Print(author, " wants to register ", names)
+	//		for _, name := range names {
+	//
+	//		}
+	//	}
 
 	if err != nil {
 		bot.logger.Print(err)

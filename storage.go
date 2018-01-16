@@ -307,3 +307,10 @@ func (storage *Storage) GetFortunes() ([]string, error) {
 	}
 	return fortunes, nil
 }
+
+func (storage *Storage) Vacuum() error {
+	storage.Lock()
+	_, err := storage.db.Exec("VACUUM")
+	storage.Unlock()
+	return err
+}
