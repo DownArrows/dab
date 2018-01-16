@@ -1,0 +1,10 @@
+[Unit]
+Description=DAB (Down Arrow Bot)
+After=network.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+ExecStart=/usr/local/bin/dab
+Restart=on-failure
