@@ -11,6 +11,7 @@ func TestCRUD(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	var whoever User
 
 	t.Run("AddUser", func(t *testing.T) {
 		storage.AddUser("whoever", false)
@@ -24,6 +25,7 @@ func TestCRUD(t *testing.T) {
 		}
 		for _, user := range users {
 			if user.Name == "whoever" {
+				whoever = user
 				return
 			}
 		}
@@ -55,7 +57,7 @@ func TestCRUD(t *testing.T) {
 			Created:   1515624337,
 			Body:      "this is a test",
 		}
-		err := storage.SaveCommentsPage([]Comment{comment}, "")
+		err := storage.SaveCommentsPage([]Comment{comment}, whoever)
 		if err != nil {
 			t.Error(err)
 		}

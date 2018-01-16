@@ -22,7 +22,9 @@ func main() {
 		log.Fatal("Error reading config file: ", err)
 	}
 
-	storage, err := NewStorage(viper.GetString("database.path"), os.Stdout)
+	db_path := viper.GetString("database.path")
+	log.Print("Using database ", db_path)
+	storage, err := NewStorage(db_path, os.Stdout)
 	if err != nil {
 		log.Fatal(err)
 	}
