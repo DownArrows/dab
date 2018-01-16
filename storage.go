@@ -129,26 +129,35 @@ func (storage *Storage) DelUser(username string) error {
 	return tx.Commit()
 }
 
-// Make sure the comments are all from the same author, it won't be checked
-func (storage *Storage) SaveCommentsPage(comments []Comment, position string) error {
+// Make sure the comments are all from the same user and its struct is up to date
+func (storage *Storage) SaveCommentsPage(comments []Comment, user User) error {
 	tx, err := storage.db.Begin()
 	if err != nil {
 		return err
 	}
 
-	username := comments[0].Author
-
-	err = storage.saveComments(tx, username, comments)
+	err = storage.saveComments(tx, user.Name, comments)
 	if err != nil {
 		return err
 	}
 
-	err = storage.savePosition(tx, username, position)
+	err = storage.savePosition(tx, user.Name, user.Position)
 	if err != nil {
 		return err
 	}
 
 	return tx.Commit()
+}
+
+func (storage *Storage) NotNewUser(username string) error {
+	stmt, err := storage.db.Prepare("UPDATE tracked SET new = 0 WHERE name = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(username)
+	return err
 }
 
 func (storage *Storage) saveComments(tx *sql.Tx, username string, comments []Comment) error {
@@ -185,4 +194,16 @@ func (storage *Storage) savePosition(tx *sql.Tx, username string, position strin
 	}
 
 	return nil
+}
+
+func (storage *Storage) ResetPosition(username string) error {
+	tx, err := storage.db.Begin()
+	if err != nil {
+		return err
+	}
+	err = storage.savePosition(tx, username, "")
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }

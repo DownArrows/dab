@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -54,7 +53,7 @@ type userComments struct {
 	}
 }
 
-func NewRedditClient(auth RedditAuth) (*RedditScanner, error) {
+func NewRedditClient(auth RedditAuth) (RedditScanner, error) {
 	http_client := &http.Client{}
 	var client = &RedditClient{
 		Client:  http_client,
@@ -118,26 +117,26 @@ func (rc *RedditClient) RawRequest(verb string, path string, data io.Reader) ([]
 
 	req, err := http.NewRequest(verb, request_base_url+path, data)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	rc.PrepareRequest(req)
 	res, res_err := rc.Client.Do(req)
 	if res_err != nil {
-		return nil, res_err
+		return nil, 0, res_err
 	}
 
 	if res.StatusCode == 401 {
 		err = rc.Connect(rc.Auth)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		return rc.RawRequest(verb, path, data)
 	}
 
 	raw_data, read_err := ioutil.ReadAll(res.Body)
 	if read_err != nil {
-		return nil, status, read_err
+		return nil, 0, read_err
 	}
 
 	return raw_data, res.StatusCode, nil
@@ -145,7 +144,7 @@ func (rc *RedditClient) RawRequest(verb string, path string, data io.Reader) ([]
 
 func (rc *RedditClient) UserComments(username string, position string) ([]Comment, string, error) {
 	params := "?sort=new&limit=100"
-	if after != "" {
+	if position != "" {
 		params += "&after=" + position
 	}
 
