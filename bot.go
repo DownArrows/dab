@@ -172,7 +172,11 @@ func (bot *Bot) AddUser(username string, hidden bool) (bool, error) {
 	}
 
 	exists, err := bot.scanner.UserExists(username)
-	if err != nil || !exists {
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		bot.logger.Print("User ", username, " not found")
 		return false, err
 	}
 
