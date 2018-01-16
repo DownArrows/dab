@@ -56,10 +56,10 @@ func (storage *Storage) Init() error {
 			hidden BOOLEAN NOT NULL,
 			new BOOLEAN DEFAULT 1,
 			position TEXT DEFAULT "")`)
-
 	if err != nil {
 		return err
 	}
+
 	_, err = storage.db.Exec(`
 		CREATE TABLE IF NOT EXISTS comments (
 			id TEXT PRIMARY KEY,
@@ -71,6 +71,26 @@ func (storage *Storage) Init() error {
 			body TEXT NOT NULL,
 			FOREIGN KEY (author) REFERENCES tracked(name)
 		) WITHOUT ROWID`)
+	if err != nil {
+		return err
+	}
+
+	_, err = storage.db.Exec(`
+		CREATE TABLE IF NOT EXISTS seen_posts (
+			id TEXT PRIMARY KEY,
+			sub TEXT NOT NULL,
+			created DATETIME NOT NULL
+		) WITHOUT ROWID`)
+	if err != nil {
+		return err
+	}
+
+	_, err = storage.db.Exec(`
+		CREATE TABLE IF NOT EXISTS fortunes (
+			id INTEGER PRIMARY KEY,
+			content TEXT NOT NULL,
+			added DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`)
 
 	return err
 }
@@ -136,7 +156,7 @@ func (storage *Storage) SaveCommentsPage(comments []Comment, user User) error {
 		return err
 	}
 
-	err = storage.saveComments(tx, user.Name, comments)
+	err = storage.saveComments(tx, comments)
 	if err != nil {
 		return err
 	}
@@ -160,7 +180,7 @@ func (storage *Storage) NotNewUser(username string) error {
 	return err
 }
 
-func (storage *Storage) saveComments(tx *sql.Tx, username string, comments []Comment) error {
+func (storage *Storage) saveComments(tx *sql.Tx, comments []Comment) error {
 	stmt, err := tx.Prepare("INSERT OR REPLACE INTO comments VALUES (?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		tx.Rollback()
@@ -206,4 +226,84 @@ func (storage *Storage) ResetPosition(username string) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+func (storage *Storage) SaveSubPostIDs(listing []Comment, sub string) error {
+	tx, err := storage.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	stmt, err := tx.Prepare("INSERT OR REPLACE INTO seen_posts(id, sub, created) VALUES (?, ?, ?)")
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	defer stmt.Close()
+
+	for _, post := range listing {
+		_, err = stmt.Exec(post.Id, sub, int64(post.Created))
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (storage *Storage) SeenPostIDs(sub string) ([]string, error) {
+	stmt, err := storage.db.Prepare("SELECT id FROM seen_posts WHERE sub = ?")
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(sub)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]string, 0, 100)
+	for rows.Next() {
+		var id string
+
+		err = rows.Scan(&id)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+func (storage *Storage) SaveFortune(fortune string) error {
+	stmt, err := storage.db.Prepare("INSERT INTO fortunes(content) VALUES (?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(fortune)
+	return err
+}
+
+func (storage *Storage) GetFortunes() ([]string, error) {
+	rows, err := storage.db.Query("SELECT content FROM fortunes")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	fortunes := make([]string, 0, 10)
+	for rows.Next() {
+		var fortune string
+
+		err = rows.Scan(&fortune)
+		if err != nil {
+			return nil, err
+		}
+		fortunes = append(fortunes, fortune)
+	}
+	return fortunes, nil
 }

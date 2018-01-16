@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -34,9 +35,11 @@ type RedditAuth struct {
 type RedditScanner interface {
 	UserExists(username string) (bool, error)
 	UserComments(username string, position string) ([]Comment, string, error)
+	SubPosts(sub string, position string) ([]Comment, string, error)
 }
 
 type RedditClient struct {
+	sync.Mutex
 	Client  *http.Client
 	Version string
 	OAuth   OAuthResponse
@@ -44,7 +47,7 @@ type RedditClient struct {
 	ticker  *time.Ticker
 }
 
-type userComments struct {
+type commentListing struct {
 	Data struct {
 		Children []struct {
 			Data Comment
@@ -112,6 +115,8 @@ func (rc *RedditClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 func (rc *RedditClient) RawRequest(verb string, path string, data io.Reader) ([]byte, int, error) {
+	rc.Lock()
+	defer rc.Unlock()
 
 	<-rc.ticker.C
 
@@ -143,23 +148,31 @@ func (rc *RedditClient) RawRequest(verb string, path string, data io.Reader) ([]
 }
 
 func (rc *RedditClient) UserComments(username string, position string) ([]Comment, string, error) {
+	return rc.getListing("/u/"+username, position)
+}
+
+func (rc *RedditClient) SubPosts(sub string, position string) ([]Comment, string, error) {
+	return rc.getListing("/r/"+sub+"/new", position)
+}
+
+func (rc *RedditClient) getListing(path string, position string) ([]Comment, string, error) {
 	params := "?sort=new&limit=100"
 	if position != "" {
 		params += "&after=" + position
 	}
 
-	res, status, err := rc.RawRequest("GET", "/u/"+username+params, nil)
+	res, status, err := rc.RawRequest("GET", path, nil)
 
 	if err != nil {
 		return nil, position, err
 	}
 	if status != 200 {
-		template := "Bad response status when fetching the comments of %s: %d"
-		msg := fmt.Sprintf(template, username, status)
+		template := "Bad response status when fetching the listing %s: %d"
+		msg := fmt.Sprintf(template, path, status)
 		return nil, position, errors.New(msg)
 	}
 
-	parsed := &userComments{}
+	parsed := &commentListing{}
 	err = json.Unmarshal(res, parsed)
 	if err != nil {
 		return nil, position, err

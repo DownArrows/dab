@@ -206,3 +206,58 @@ func (bot *Bot) HasUser(username string) (bool, error) {
 	}
 	return false, nil
 }
+
+func (bot *Bot) StreamSub(sub string, ch chan Comment) {
+	bot.storage.Lock()
+	seen, err := bot.storage.SeenPostIDs(sub)
+	bot.storage.Unlock()
+	if err != nil {
+		bot.logger.Fatal("event streamer: ", err)
+	}
+
+	first_time := len(seen) == 0
+
+	for {
+		posts, _, err := bot.scanner.SubPosts(sub, "")
+		if err != nil {
+			bot.logger.Print("event streamer: ", err)
+		}
+
+		bot.storage.Lock()
+		err = bot.storage.SaveSubPostIDs(posts, sub)
+		bot.storage.Unlock()
+		if err != nil {
+			bot.logger.Print("event streamer: ", err)
+		}
+
+		for _, post := range posts {
+			if first_time {
+				break
+			}
+			if !StringInSlice(post.Id, seen) {
+				ch <- post
+			} else {
+				break
+			}
+		}
+
+		ids := make([]string, 0, len(posts))
+		for _, post := range posts {
+			ids = append(ids, post.Id)
+		}
+
+		seen = append(seen, ids...)
+		first_time = false
+
+		time.Sleep(time.Duration(1) * time.Second)
+	}
+}
+
+func StringInSlice(str string, slice []string) bool {
+	for _, elem := range slice {
+		if str == elem {
+			return true
+		}
+	}
+	return false
+}

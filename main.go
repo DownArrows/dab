@@ -5,7 +5,9 @@ import (
 	"github.com/spf13/viper"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 )
 
 func main() {
@@ -40,6 +42,16 @@ func main() {
 	}
 
 	bot := NewBot(scanner, storage, os.Stdout, 24, 5)
+	discordbot, err := NewDiscordBot(
+		storage, os.Stdout,
+		viper.GetString("discord.token"),
+		viper.GetString("discord.general"),
+		viper.GetString("discord.log"),
+		viper.GetString("discord.admin"),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	useradd := flag.String("useradd", "", "Add one or multiple comma-separated users to be tracked.")
 	flag.Parse()
@@ -48,12 +60,26 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-	} else {
+		return
+	}
+
+	discord_kill := make(chan bool)
+	go discordbot.Run(discord_kill)
+	go func() {
 		err = bot.Run()
 		if err != nil {
 			log.Fatal(err)
 		}
-	}
+	}()
+
+	reddit_evts := make(chan Comment)
+	go discordbot.RedditEvents(reddit_evts)
+	go bot.StreamSub("DownvoteTrolling", reddit_evts)
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
+	<-sig
+	discord_kill <- true
 }
 
 func UserAdd(bot *Bot, arg string) error {
