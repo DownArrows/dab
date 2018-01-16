@@ -115,8 +115,6 @@ func (rc *RedditClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 func (rc *RedditClient) RawRequest(verb string, path string, data io.Reader) ([]byte, int, error) {
-	rc.Lock()
-	defer rc.Unlock()
 
 	<-rc.ticker.C
 
@@ -148,10 +146,14 @@ func (rc *RedditClient) RawRequest(verb string, path string, data io.Reader) ([]
 }
 
 func (rc *RedditClient) UserComments(username string, position string) ([]Comment, string, error) {
+	rc.Lock()
+	defer rc.Unlock()
 	return rc.getListing("/u/"+username+"/comments", position)
 }
 
 func (rc *RedditClient) SubPosts(sub string, position string) ([]Comment, string, error) {
+	rc.Lock()
+	defer rc.Unlock()
 	return rc.getListing("/r/"+sub+"/new", position)
 }
 
@@ -189,6 +191,8 @@ func (rc *RedditClient) getListing(path string, position string) ([]Comment, str
 }
 
 func (rc *RedditClient) UserExists(username string) (bool, error) {
+	rc.Lock()
+	defer rc.Unlock()
 	_, status, err := rc.RawRequest("GET", "/u/"+username, nil)
 
 	var exists bool
