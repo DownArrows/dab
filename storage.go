@@ -96,6 +96,9 @@ func (storage *Storage) Init() error {
 }
 
 func (storage *Storage) AddUser(username string, hidden bool) error {
+	storage.Lock()
+	defer storage.Unlock()
+
 	stmt, err := storage.db.Prepare("INSERT INTO tracked(name, hidden) VALUES (?, ?)")
 	if err != nil {
 		return err
@@ -106,6 +109,9 @@ func (storage *Storage) AddUser(username string, hidden bool) error {
 }
 
 func (storage *Storage) ListUsers() ([]User, error) {
+	storage.Lock()
+	defer storage.Unlock()
+
 	rows, err := storage.db.Query(`
 		SELECT name, hidden, new, added, position
 		FROM tracked
@@ -130,6 +136,9 @@ func (storage *Storage) ListUsers() ([]User, error) {
 }
 
 func (storage *Storage) DelUser(username string) error {
+	storage.Lock()
+	defer storage.Unlock()
+
 	tx, err := storage.db.Begin()
 	if err != nil {
 		return err
@@ -151,6 +160,9 @@ func (storage *Storage) DelUser(username string) error {
 
 // Make sure the comments are all from the same user and its struct is up to date
 func (storage *Storage) SaveCommentsPage(comments []Comment, user User) error {
+	storage.Lock()
+	defer storage.Unlock()
+
 	tx, err := storage.db.Begin()
 	if err != nil {
 		return err
@@ -170,6 +182,9 @@ func (storage *Storage) SaveCommentsPage(comments []Comment, user User) error {
 }
 
 func (storage *Storage) NotNewUser(username string) error {
+	storage.Lock()
+	defer storage.Unlock()
+
 	stmt, err := storage.db.Prepare("UPDATE tracked SET new = 0 WHERE name = ?")
 	if err != nil {
 		return err
@@ -217,6 +232,9 @@ func (storage *Storage) savePosition(tx *sql.Tx, username string, position strin
 }
 
 func (storage *Storage) ResetPosition(username string) error {
+	storage.Lock()
+	defer storage.Unlock()
+
 	tx, err := storage.db.Begin()
 	if err != nil {
 		return err
@@ -229,6 +247,9 @@ func (storage *Storage) ResetPosition(username string) error {
 }
 
 func (storage *Storage) SaveSubPostIDs(listing []Comment, sub string) error {
+	storage.Lock()
+	defer storage.Unlock()
+
 	tx, err := storage.db.Begin()
 	if err != nil {
 		return err
@@ -253,6 +274,9 @@ func (storage *Storage) SaveSubPostIDs(listing []Comment, sub string) error {
 }
 
 func (storage *Storage) SeenPostIDs(sub string) ([]string, error) {
+	storage.Lock()
+	defer storage.Unlock()
+
 	stmt, err := storage.db.Prepare("SELECT id FROM seen_posts WHERE sub = ?")
 	if err != nil {
 		return nil, err
@@ -279,6 +303,9 @@ func (storage *Storage) SeenPostIDs(sub string) ([]string, error) {
 }
 
 func (storage *Storage) SaveFortune(fortune string) error {
+	storage.Lock()
+	defer storage.Unlock()
+
 	stmt, err := storage.db.Prepare("INSERT INTO fortunes(content) VALUES (?)")
 	if err != nil {
 		return err
@@ -289,6 +316,9 @@ func (storage *Storage) SaveFortune(fortune string) error {
 }
 
 func (storage *Storage) GetFortunes() ([]string, error) {
+	storage.Lock()
+	defer storage.Unlock()
+
 	rows, err := storage.db.Query("SELECT content FROM fortunes")
 	if err != nil {
 		return nil, err
@@ -310,7 +340,8 @@ func (storage *Storage) GetFortunes() ([]string, error) {
 
 func (storage *Storage) Vacuum() error {
 	storage.Lock()
+	defer storage.Unlock()
+
 	_, err := storage.db.Exec("VACUUM")
-	storage.Unlock()
 	return err
 }

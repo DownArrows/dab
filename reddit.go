@@ -146,14 +146,10 @@ func (rc *RedditClient) RawRequest(verb string, path string, data io.Reader) ([]
 }
 
 func (rc *RedditClient) UserComments(username string, position string) ([]Comment, string, error) {
-	rc.Lock()
-	defer rc.Unlock()
 	return rc.getListing("/u/"+username+"/comments", position)
 }
 
 func (rc *RedditClient) SubPosts(sub string, position string) ([]Comment, string, error) {
-	rc.Lock()
-	defer rc.Unlock()
 	return rc.getListing("/r/"+sub+"/new", position)
 }
 
@@ -162,6 +158,9 @@ func (rc *RedditClient) getListing(path string, position string) ([]Comment, str
 	if position != "" {
 		params += "&after=" + position
 	}
+
+	rc.Lock()
+	defer rc.Unlock()
 
 	res, status, err := rc.RawRequest("GET", path+params, nil)
 

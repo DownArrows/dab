@@ -37,9 +37,7 @@ func NewDiscordBot(
 		return nil, err
 	}
 
-	storage.Lock()
 	fortunes, err := storage.GetFortunes()
-	storage.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -173,9 +171,7 @@ func (bot *DiscordBot) Fortune() error {
 }
 
 func (bot *DiscordBot) AddFortune(fortune string) error {
-	bot.storage.Lock()
 	err := bot.storage.SaveFortune(fortune)
-	bot.storage.Unlock()
 	if err != nil {
 		return err
 	}

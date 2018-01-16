@@ -71,9 +71,7 @@ func (bot *Bot) getUsersOrWait() ([]User, error) {
 	var users []User
 	var err error
 	for {
-		bot.storage.Lock()
 		users, err = bot.storage.ListUsers()
-		bot.storage.Unlock()
 		if err != nil {
 			return nil, err
 		}
@@ -113,18 +111,14 @@ func (bot *Bot) AllRelevantComments(user User) error {
 		}
 
 		if user.Position == "" && user.New {
-			bot.storage.Lock()
 			err = bot.storage.NotNewUser(user.Name)
-			bot.storage.Unlock()
 			if err != nil {
 				return err
 			}
 		}
 
 		if user.Position == "" {
-			bot.storage.Lock()
 			err = bot.storage.ResetPosition(user.Name)
-			bot.storage.Unlock()
 			if err != nil {
 				return err
 			}
@@ -142,9 +136,7 @@ func (bot *Bot) SaveCommentsPage(user User) (string, error) {
 		return "", err
 	}
 
-	bot.storage.Lock()
 	err = bot.storage.SaveCommentsPage(comments, user)
-	bot.storage.Unlock()
 	if err != nil {
 		return "", err
 	}
@@ -187,9 +179,7 @@ func (bot *Bot) AddUser(username string, hidden bool) (bool, error) {
 		return false, err
 	}
 
-	bot.storage.Lock()
 	err = bot.storage.AddUser(username, hidden)
-	bot.storage.Unlock()
 	if err != nil {
 		return false, err
 	}
@@ -199,9 +189,7 @@ func (bot *Bot) AddUser(username string, hidden bool) (bool, error) {
 }
 
 func (bot *Bot) HasUser(username string) (bool, error) {
-	bot.storage.Lock()
 	users, err := bot.storage.ListUsers()
-	bot.storage.Unlock()
 	if err != nil {
 		return false, err
 	}
@@ -215,9 +203,7 @@ func (bot *Bot) HasUser(username string) (bool, error) {
 }
 
 func (bot *Bot) StreamSub(sub string, ch chan Comment) {
-	bot.storage.Lock()
 	seen, err := bot.storage.SeenPostIDs(sub)
-	bot.storage.Unlock()
 	if err != nil {
 		bot.logger.Fatal("event streamer: ", err)
 	}
@@ -230,9 +216,7 @@ func (bot *Bot) StreamSub(sub string, ch chan Comment) {
 			bot.logger.Print("event streamer: ", err)
 		}
 
-		bot.storage.Lock()
 		err = bot.storage.SaveSubPostIDs(posts, sub)
-		bot.storage.Unlock()
 		if err != nil {
 			bot.logger.Print("event streamer: ", err)
 		}

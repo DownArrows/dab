@@ -28,6 +28,11 @@ func (ms *MockScanner) UserExists(username string) (bool, error) {
 	return true, nil
 }
 
+func (ms *MockScanner) SubPosts(sub string, position string) ([]Comment, string, error) {
+	posts := make([]Comment, 1)
+	return posts, "", nil
+}
+
 func TestScanner(t *testing.T) {
 	storage, err := NewStorage(":memory:", os.Stdout)
 	if err != nil {
