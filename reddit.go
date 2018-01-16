@@ -148,7 +148,7 @@ func (rc *RedditClient) RawRequest(verb string, path string, data io.Reader) ([]
 }
 
 func (rc *RedditClient) UserComments(username string, position string) ([]Comment, string, error) {
-	return rc.getListing("/u/"+username, position)
+	return rc.getListing("/u/"+username+"/comments", position)
 }
 
 func (rc *RedditClient) SubPosts(sub string, position string) ([]Comment, string, error) {
