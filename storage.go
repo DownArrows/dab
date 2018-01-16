@@ -109,8 +109,6 @@ func (storage *Storage) AddUser(username string, hidden bool) error {
 }
 
 func (storage *Storage) ListUsers() ([]User, error) {
-	storage.Lock()
-	defer storage.Unlock()
 
 	rows, err := storage.db.Query(`
 		SELECT name, hidden, new, added, position
@@ -274,8 +272,6 @@ func (storage *Storage) SaveSubPostIDs(listing []Comment, sub string) error {
 }
 
 func (storage *Storage) SeenPostIDs(sub string) ([]string, error) {
-	storage.Lock()
-	defer storage.Unlock()
 
 	stmt, err := storage.db.Prepare("SELECT id FROM seen_posts WHERE sub = ?")
 	if err != nil {
@@ -316,9 +312,6 @@ func (storage *Storage) SaveFortune(fortune string) error {
 }
 
 func (storage *Storage) GetFortunes() ([]string, error) {
-	storage.Lock()
-	defer storage.Unlock()
-
 	rows, err := storage.db.Query("SELECT content FROM fortunes")
 	if err != nil {
 		return nil, err
