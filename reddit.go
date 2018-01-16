@@ -161,7 +161,7 @@ func (rc *RedditClient) getListing(path string, position string) ([]Comment, str
 		params += "&after=" + position
 	}
 
-	res, status, err := rc.RawRequest("GET", path, nil)
+	res, status, err := rc.RawRequest("GET", path+params, nil)
 
 	if err != nil {
 		return nil, position, err
