@@ -53,7 +53,7 @@ func TestCRUD(t *testing.T) {
 			Author:    "whoever",
 			Score:     -1039,
 			Permalink: "/r/something/something",
-			SubId:     "t5_328fd1",
+			Sub:       "something",
 			Created:   1515624337,
 			Body:      "this is a test",
 		}

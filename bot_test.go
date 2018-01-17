@@ -46,7 +46,7 @@ func TestScanner(t *testing.T) {
 			Author:    "whoever",
 			Score:     -1000,
 			Permalink: "/r/whatever/something/something",
-			SubId:     "t5_adb1812",
+			Sub:       "whatever",
 			Created:   now,
 			Body:      "erf, whatever",
 		},

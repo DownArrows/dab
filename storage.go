@@ -20,7 +20,7 @@ type Comment struct {
 	Author    string
 	Score     int64
 	Permalink string
-	SubId     string  `json:"subreddit_id"`
+	Sub       string  `json:"subreddit"`
 	Created   float64 `json:"created_utc"`
 	Body      string
 }
@@ -66,7 +66,7 @@ func (storage *Storage) Init() error {
 			author TEXT NOT NULL,
 			score INTEGER NOT NULL,
 			permalink TEXT NOT NULL,
-			sub_id TEXT NOT NULL,
+			sub TEXT NOT NULL,
 			created INTEGER NOT NULL,
 			body TEXT NOT NULL,
 			FOREIGN KEY (author) REFERENCES tracked(name)
@@ -203,7 +203,7 @@ func (storage *Storage) saveComments(tx *sql.Tx, comments []Comment) error {
 
 	for _, comment := range comments {
 		_, err = stmt.Exec(comment.Id, comment.Author, comment.Score,
-			comment.Permalink, comment.SubId, comment.Created, comment.Body)
+			comment.Permalink, comment.Sub, comment.Created, comment.Body)
 		if err != nil {
 			tx.Rollback()
 			return err
