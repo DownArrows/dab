@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"io"
 	"log"
@@ -136,6 +137,8 @@ func (bot *DiscordBot) OnMessage(msg *discordgo.MessageCreate) {
 			reply := msg.Author.Mention() + " fortune saved."
 			_, err = bot.client.ChannelMessageSend(msg.ChannelID, reply)
 		}
+	} else if strings.HasPrefix(content, "!karma ") {
+		err = bot.Karma(channel, msg.Author, strings.TrimPrefix(content, "!karma "))
 	}
 	//	else if strings.HasPrefix("!register ") {
 	//		names := strings.Split(strings.TrimPrefix(content, "!register "))
@@ -187,6 +190,16 @@ func (bot *DiscordBot) getFortune() string {
 	}
 	bot.prevFortune = fortune
 	return fortune
+}
+
+func (bot *DiscordBot) Karma(channelID string, author *discordgo.User, username string) error {
+	total, negative, err := bot.storage.GetKarma(username)
+	if err != nil {
+		return err
+	}
+	reply := fmt.Sprintf("<@%s> karma for %s: %d / %d", author.ID, username, total, negative)
+	_, err = bot.client.ChannelMessageSend(channelID, reply)
+	return err
 }
 
 func (bot *DiscordBot) IsDMChannel(channelID string) (bool, error) {

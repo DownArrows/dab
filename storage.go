@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	_ "github.com/mattn/go-sqlite3"
 	"io"
 	"log"
@@ -329,6 +330,40 @@ func (storage *Storage) GetFortunes() ([]string, error) {
 		fortunes = append(fortunes, fortune)
 	}
 	return fortunes, nil
+}
+
+func (storage *Storage) GetKarma(username string) (int64, int64, error) {
+	stmt, err := storage.db.Prepare("SELECT score FROM comments WHERE author = ? COLLATE NOCASE")
+	if err != nil {
+		return 0, 0, err
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(username)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return 0, 0, errors.New("user " + username + " not found")
+	}
+
+	var total, negative int64
+	for rows.Next() {
+		var score int64
+
+		err = rows.Scan(&score)
+		if err != nil {
+			return 0, 0, err
+		}
+
+		total += int64(score)
+		if score < 0 {
+			negative += int64(score)
+		}
+	}
+	return total, negative, nil
 }
 
 func (storage *Storage) Vacuum() error {
