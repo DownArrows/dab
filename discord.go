@@ -139,6 +139,8 @@ func (bot *DiscordBot) OnMessage(msg *discordgo.MessageCreate) {
 		}
 	} else if strings.HasPrefix(content, "!karma ") {
 		err = bot.Karma(channel, msg.Author, strings.TrimPrefix(content, "!karma "))
+	} else if content == "!ping" && msg.Author.ID == bot.Admin.ID {
+		_, err = bot.client.ChannelMessageSend(msg.ChannelID, "pong")
 	}
 	//	else if strings.HasPrefix("!register ") {
 	//		names := strings.Split(strings.TrimPrefix(content, "!register "))
