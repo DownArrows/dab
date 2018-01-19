@@ -59,13 +59,7 @@ func (bot *Bot) ScanOnce() error {
 		return err
 	}
 
-	err = bot.ScanUsers(users)
-	if err != nil {
-		// That error is probably network-related, so just log it
-		// and wait for the network or reddit to work again.
-		bot.logger.Print("Error when fetching and saving comments: ", err)
-	}
-	return nil
+	return bot.ScanUsers(users)
 }
 
 func (bot *Bot) getUsersOrWait() ([]User, error) {
@@ -92,7 +86,9 @@ func (bot *Bot) ScanUsers(users []User) error {
 	for _, user := range users {
 		err := bot.AllRelevantComments(user)
 		if err != nil {
-			return err
+			// That error is probably network-related, so just log it
+			// and wait for the network or reddit to work again.
+			bot.logger.Print("Error when fetching and saving comments: ", err)
 		}
 	}
 	return nil
