@@ -138,7 +138,7 @@ func (bot *Bot) SaveCommentsPage(user User) (string, error) {
 		return "", err
 	}
 
-	if bot.maxAgeReached(comments) && !user.New {
+	if len(comments) > 0 && bot.maxAgeReached(comments) && !user.New {
 		return "", nil
 	}
 	return position, nil
