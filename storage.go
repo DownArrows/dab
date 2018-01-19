@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"io"
 	"log"
@@ -36,7 +37,7 @@ type User struct {
 
 func NewStorage(db_path string, log_out io.Writer) (*Storage, error) {
 	logger := log.New(log_out, "storage: ", log.LstdFlags)
-	db, err := sql.Open("sqlite3", db_path)
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=1", db_path))
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +53,7 @@ func (storage *Storage) Init() error {
 	_, err := storage.db.Exec(`
 		CREATE TABLE IF NOT EXISTS tracked (
 			name TEXT PRIMARY KEY,
+			created DATETIME NOT NULL,
 			deleted BOOLEAN DEFAULT 0,
 			added DATETIME DEFAULT CURRENT_TIMESTAMP,
 			hidden BOOLEAN NOT NULL,
@@ -96,16 +98,16 @@ func (storage *Storage) Init() error {
 	return err
 }
 
-func (storage *Storage) AddUser(username string, hidden bool) error {
+func (storage *Storage) AddUser(username string, hidden bool, created int64) error {
 	storage.Lock()
 	defer storage.Unlock()
 
-	stmt, err := storage.db.Prepare("INSERT INTO tracked(name, hidden) VALUES (?, ?)")
+	stmt, err := storage.db.Prepare("INSERT INTO tracked(name, hidden, created) VALUES (?, ?, ?)")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
-	_, err = stmt.Exec(username, hidden)
+	_, err = stmt.Exec(username, hidden, created)
 	return err
 }
 

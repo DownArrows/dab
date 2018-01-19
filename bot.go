@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -170,7 +171,7 @@ func (bot *Bot) AddUser(username string, hidden bool) (bool, error) {
 		return true, nil
 	}
 
-	exists, err := bot.scanner.UserExists(username)
+	exists, case_name, created, err := bot.scanner.AboutUser(username)
 	if err != nil {
 		return false, err
 	}
@@ -179,12 +180,12 @@ func (bot *Bot) AddUser(username string, hidden bool) (bool, error) {
 		return false, err
 	}
 
-	err = bot.storage.AddUser(username, hidden)
+	err = bot.storage.AddUser(case_name, hidden, created)
 	if err != nil {
 		return false, err
 	}
 
-	bot.logger.Print("New user ", username, " successfully added")
+	bot.logger.Print("New user ", case_name, " successfully added")
 	return true, nil
 }
 
@@ -195,7 +196,7 @@ func (bot *Bot) HasUser(username string) (bool, error) {
 	}
 
 	for _, user := range users {
-		if user.Name == username {
+		if strings.ToLower(user.Name) == username {
 			return true, nil
 		}
 	}
