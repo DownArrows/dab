@@ -29,6 +29,12 @@ func main() {
 		log.Fatal("Error reading config file: ", err)
 	}
 
+	useradd := flag.String("useradd", "", "Add one or multiple comma-separated users to be tracked.")
+	nodiscord := flag.Bool("nodiscord", false, "Don't connect to discord.")
+	noreddit := flag.Bool("noreddit", false, "Don't connect to reddit.")
+	flag.Parse()
+
+	// Storage
 	db_path := viper.GetString("database.path")
 	log.Print("Using database ", db_path)
 	storage, err := NewStorage(db_path, os.Stdout)
@@ -36,90 +42,90 @@ func main() {
 		log.Fatal(err)
 	}
 
-	scanner, err := NewRedditClient(RedditAuth{
-		Id:       viper.GetString("client.id"),
-		Key:      viper.GetString("client.secret"),
-		Username: viper.GetString("client.username"),
-		Password: viper.GetString("client.password"),
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
+	// Bots
+	var bot *Bot
+	var discordbot *DiscordBot
 
-	rt, err := NewReportTyper(
-		storage,
-		os.Stdout,
-		viper.GetString("report.timezone"),
-		viper.GetDuration("report.leeway"),
-		viper.GetInt64("report.cutoff"),
-		uint64(viper.GetInt64("report.maxlength")),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	bot := NewBot(scanner, storage, os.Stdout, 24, 5)
-
-	new_users := make(chan chan UserAddition)
-	discordbot, err := NewDiscordBot(
-		storage, os.Stdout,
-		viper.GetString("discord.token"),
-		viper.GetString("discord.general"),
-		viper.GetString("discord.log"),
-		viper.GetString("discord.admin"),
-		new_users,
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	useradd := flag.String("useradd", "", "Add one or multiple comma-separated users to be tracked.")
-	test := flag.Bool("test", false, "test")
-	flag.Parse()
-
-	if *test {
-		batches, err := rt.ReportLastWeek()
+	// Reddit bot or new users registration from the command line
+	if !*noreddit || *useradd != "" {
+		scanner, err := NewRedditClient(RedditAuth{
+			Id:       viper.GetString("client.id"),
+			Key:      viper.GetString("client.secret"),
+			Username: viper.GetString("client.username"),
+			Password: viper.GetString("client.password"),
+		})
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Print(batches)
-		return
+
+		bot = NewBot(scanner, storage, os.Stdout, 24, 5)
 	}
 
+	// Command line registration
 	if *useradd != "" {
 		err = UserAdd(bot, *useradd)
 		if err != nil {
 			log.Fatal(err)
 		}
+		log.Print("Done")
 		return
 	}
 
-	discord_kill := make(chan bool)
-	go discordbot.Run(discord_kill)
-	go func() {
-		err = bot.Run()
+	// Reddit bot
+	if !*noreddit {
+		//		rt, err := NewReportTyper(
+		//			storage,
+		//			os.Stdout,
+		//			viper.GetString("report.timezone"),
+		//			viper.GetDuration("report.leeway"),
+		//			viper.GetInt64("report.cutoff"),
+		//			uint64(viper.GetInt64("report.maxlength")),
+		//		)
+		//		if err != nil {
+		//			log.Fatal(err)
+		//		}
+
+		go bot.Run()
+	}
+
+	// Discord bot
+	if !*nodiscord {
+		discordbot, err = NewDiscordBot(
+			storage, os.Stdout,
+			viper.GetString("discord.token"),
+			viper.GetString("discord.general"),
+			viper.GetString("discord.log"),
+			viper.GetString("discord.admin"),
+		)
 		if err != nil {
 			log.Fatal(err)
 		}
-	}()
 
-	go bot.AddUserListen(new_users)
+		go discordbot.Run()
+	}
 
-	streamed := viper.Sub("new")
-	subs := streamed.AllKeys()
-	if len(subs) > 0 {
-		reddit_evts := make(chan Comment)
-		go discordbot.RedditEvents(reddit_evts)
-		for _, sub := range subs {
-			sleep := streamed.GetDuration(sub)
-			go bot.StreamSub(sub, reddit_evts, sleep)
-		}
+	// Reddit bot <-> Discord bot
+	if !*nodiscord && !*noreddit {
+		go bot.AddUserServer(discordbot.AddUser)
+		stream(viper.Sub("new"), bot, discordbot)
 	}
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sig
-	discord_kill <- true
+	log.Print("DAB stopped.")
+}
+
+func stream(config *viper.Viper, bot *Bot, discordbot *DiscordBot) {
+	subs := config.AllKeys()
+	if len(subs) > 0 {
+		reddit_evts := make(chan Comment)
+		go discordbot.RedditEvents(reddit_evts)
+		for _, sub := range subs {
+			sleep := config.GetDuration(sub)
+			go bot.StreamSub(sub, reddit_evts, sleep)
+		}
+	}
 }
 
 func UserAdd(bot *Bot, arg string) error {

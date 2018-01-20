@@ -24,6 +24,7 @@ func NewBot(
 	max_queries int,
 ) *Bot {
 	logger := log.New(log_out, "bot: ", log.LstdFlags)
+
 	bot := &Bot{
 		MaxAge:     time.Duration(max_age_hours) * time.Hour,
 		MaxQueries: max_queries,
@@ -35,21 +36,13 @@ func NewBot(
 	return bot
 }
 
-func (bot *Bot) Run() error {
+func (bot *Bot) Run() {
 	for i := 0; true; i++ {
 		err := bot.ScanOnce()
 		if err != nil {
-			return err
-		}
-
-		if i %= 10; i == 0 {
-			err = bot.storage.Vacuum()
-			if err != nil {
-				bot.logger.Print("Database vacuum error: ", err)
-			}
+			panic(err)
 		}
 	}
-	return nil
 }
 
 func (bot *Bot) ScanOnce() error {
@@ -84,6 +77,7 @@ func (bot *Bot) getUsersOrWait() ([]User, error) {
 
 func (bot *Bot) ScanUsers(users []User) error {
 	for _, user := range users {
+
 		err := bot.AllRelevantComments(user)
 		if err != nil {
 			// That error is probably network-related, so just log it
@@ -98,7 +92,6 @@ func (bot *Bot) AllRelevantComments(user User) error {
 	var err error
 
 	for i := 0; i < bot.MaxQueries; i++ {
-
 		template := "Fetching batch n°%d of comments from %s, position \"%s\""
 		bot.logger.Print(fmt.Sprintf(template, i+1, user.Name, user.Position))
 
@@ -155,14 +148,8 @@ func (bot *Bot) maxAgeReached(comments []Comment) bool {
 	return now.Sub(oldest) > bot.MaxAge
 }
 
-func (bot *Bot) AddUserListen(requests chan chan UserAddition) {
-	for query_chan := range requests {
-		bot.logger.Print("Init addition of new users.")
-		go bot.addUserServer(query_chan)
-	}
-}
-
-func (bot *Bot) addUserServer(queries chan UserAddition) {
+func (bot *Bot) AddUserServer(queries chan UserAddition) {
+	bot.logger.Print("Init addition of new users.")
 	for query := range queries {
 		bot.logger.Print("Received query to add a new user: ", query)
 

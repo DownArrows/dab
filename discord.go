@@ -21,7 +21,7 @@ type DiscordBot struct {
 	LogChan       *discordgo.Channel
 	Admin         *discordgo.User
 	Fortunes      []string
-	AddUser       chan chan UserAddition
+	AddUser       chan UserAddition
 }
 
 func NewDiscordBot(
@@ -31,7 +31,6 @@ func NewDiscordBot(
 	general string,
 	log_chan string,
 	admin string,
-	addUser chan chan UserAddition,
 ) (*DiscordBot, error) {
 	logger := log.New(log_out, "discordbot: ", log.LstdFlags)
 
@@ -52,7 +51,7 @@ func NewDiscordBot(
 		LinkReactions: []string{"👌", "💗", "🔥", "💯"},
 		redditLink:    regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
 		Fortunes:      fortunes,
-		AddUser:       addUser,
+		AddUser:       make(chan UserAddition),
 	}
 
 	session.AddHandler(func(s *discordgo.Session, msg *discordgo.MessageCreate) {
@@ -66,14 +65,11 @@ func NewDiscordBot(
 	return dbot, nil
 }
 
-func (bot *DiscordBot) Run(kill chan bool) {
+func (bot *DiscordBot) Run() {
 	err := bot.client.Open()
 	if err != nil {
-		bot.logger.Fatal(err)
+		panic(err)
 	}
-
-	<-kill
-	bot.client.Close()
 }
 
 func (bot *DiscordBot) RedditEvents(evts chan Comment) {
@@ -183,12 +179,9 @@ func (bot *DiscordBot) Register(msg *discordgo.MessageCreate) error {
 	}
 
 	statuses := make([]string, 0, len(names))
-	queries := make(chan UserAddition)
-	bot.AddUser <- queries
-
 	for _, name := range names {
-		queries <- UserAddition{Name: name, Hidden: false}
-		reply := <-queries
+		bot.AddUser <- UserAddition{Name: name, Hidden: false}
+		reply := <-bot.AddUser
 
 		var status string
 		if reply.Error != nil {
@@ -200,8 +193,6 @@ func (bot *DiscordBot) Register(msg *discordgo.MessageCreate) error {
 		}
 		statuses = append(statuses, status)
 	}
-
-	close(queries)
 
 	err = bot.client.UpdateStatus(0, "")
 	if err != nil {
