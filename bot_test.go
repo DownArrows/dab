@@ -21,11 +21,11 @@ func (ms *MockScanner) UserComments(username string, position string) ([]Comment
 	return comments, "t3_818dfe", nil
 }
 
-func (ms *MockScanner) AboutUser(username string) (bool, string, int64, error) {
+func (ms *MockScanner) AboutUser(username string) (bool, string, int64, bool, error) {
 	if username != ms.Comment.Author {
-		return false, "", 0, errors.New("user " + username + " not found")
+		return false, "", 0, false, errors.New("user " + username + " not found")
 	}
-	return true, username, time.Now().Unix(), nil
+	return true, username, time.Now().Unix(), false, nil
 }
 
 func (ms *MockScanner) SubPosts(sub string, position string) ([]Comment, string, error) {

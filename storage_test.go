@@ -14,7 +14,7 @@ func TestCRUD(t *testing.T) {
 	var whoever User
 
 	t.Run("AddUser", func(t *testing.T) {
-		storage.AddUser("whoever", false)
+		storage.AddUser("whoever", false, int64(1516433169))
 	})
 
 	t.Run("ListUsers", func(t *testing.T) {
