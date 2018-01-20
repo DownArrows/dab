@@ -59,12 +59,15 @@ func main() {
 	}
 
 	bot := NewBot(scanner, storage, os.Stdout, 24, 5)
+
+	new_users := make(chan chan UserAddition)
 	discordbot, err := NewDiscordBot(
 		storage, os.Stdout,
 		viper.GetString("discord.token"),
 		viper.GetString("discord.general"),
 		viper.GetString("discord.log"),
 		viper.GetString("discord.admin"),
+		new_users,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -99,6 +102,8 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
+
+	go bot.AddUserListen(new_users)
 
 	reddit_evts := make(chan Comment)
 	go discordbot.RedditEvents(reddit_evts)

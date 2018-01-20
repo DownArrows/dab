@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+type UserAddition struct {
+	Name   string
+	Hidden bool
+	Exists bool
+	Error  error
+}
+
 type Bot struct {
 	MaxAge     time.Duration
 	MaxQueries int
@@ -153,6 +160,33 @@ func (bot *Bot) maxAgeReached(comments []Comment) bool {
 	// on an external source (the comments' timestamps).
 	now := time.Now().Round(0)
 	return now.Sub(oldest) > bot.MaxAge
+}
+
+func (bot *Bot) AddUserListen(requests chan chan UserAddition) {
+	for query_chan := range requests {
+		bot.logger.Print("Init addition of new users.")
+		go bot.addUserServer(query_chan)
+	}
+}
+
+func (bot *Bot) addUserServer(queries chan UserAddition) {
+	for query := range queries {
+		bot.logger.Print("Received query to add a new user: ", query)
+
+		exists, err := bot.AddUser(query.Name, query.Hidden)
+		if err != nil {
+			bot.logger.Print("Error when adding the new user ", query.Name, err)
+		}
+
+		reply := UserAddition{
+			Name:   query.Name,
+			Hidden: query.Hidden,
+			Exists: exists,
+			Error:  err,
+		}
+
+		queries <- reply
+	}
 }
 
 func (bot *Bot) AddUser(username string, hidden bool) (bool, error) {

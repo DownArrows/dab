@@ -21,6 +21,7 @@ type DiscordBot struct {
 	LogChan       *discordgo.Channel
 	Admin         *discordgo.User
 	Fortunes      []string
+	AddUser       chan chan UserAddition
 }
 
 func NewDiscordBot(
@@ -30,6 +31,7 @@ func NewDiscordBot(
 	general string,
 	log_chan string,
 	admin string,
+	addUser chan chan UserAddition,
 ) (*DiscordBot, error) {
 	logger := log.New(log_out, "discordbot: ", log.LstdFlags)
 
@@ -50,6 +52,7 @@ func NewDiscordBot(
 		LinkReactions: []string{"👌", "💗", "🔥", "💯"},
 		redditLink:    regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
 		Fortunes:      fortunes,
+		AddUser:       addUser,
 	}
 
 	session.AddHandler(func(s *discordgo.Session, msg *discordgo.MessageCreate) {
@@ -141,18 +144,52 @@ func (bot *DiscordBot) OnMessage(msg *discordgo.MessageCreate) {
 		err = bot.Karma(channel, msg.Author, strings.TrimPrefix(content, "!karma "))
 	} else if content == "!ping" && msg.Author.ID == bot.Admin.ID {
 		_, err = bot.client.ChannelMessageSend(msg.ChannelID, "pong")
+	} else if strings.HasPrefix(content, "!register ") {
+		err = bot.Register(msg)
 	}
-	//	else if strings.HasPrefix("!register ") {
-	//		names := strings.Split(strings.TrimPrefix(content, "!register "))
-	//		bot.logger.Print(author, " wants to register ", names)
-	//		for _, name := range names {
-	//
-	//		}
-	//	}
 
 	if err != nil {
 		bot.logger.Print(err)
 	}
+}
+
+func (bot *DiscordBot) Register(msg *discordgo.MessageCreate) error {
+	names := strings.Split(strings.TrimPrefix(msg.Content, "!register "), " ")
+	bot.logger.Print(msg.Author.Username, " wants to register ", names)
+
+	err := bot.client.UpdateStatus(1, "")
+	if err != nil {
+		return err
+	}
+
+	statuses := make([]string, 0, len(names))
+	queries := make(chan UserAddition)
+	bot.AddUser <- queries
+
+	for _, name := range names {
+		queries <- UserAddition{Name: name, Hidden: false}
+		reply := <-queries
+
+		var status string
+		if reply.Error != nil {
+			status = fmt.Sprintf("%s: %s", reply.Name, reply.Error)
+		} else if !reply.Exists {
+			status = fmt.Sprintf("%s: not found", reply.Name)
+		} else {
+			status = fmt.Sprintf("%s: ok", reply.Name)
+		}
+		statuses = append(statuses, status)
+	}
+
+	err = bot.client.UpdateStatus(0, "")
+	if err != nil {
+		return err
+	}
+
+	status := strings.Join(statuses, ", ")
+	response := fmt.Sprintf("<@%s> registration: %s", msg.Author.ID, status)
+	_, err = bot.client.ChannelMessageSend(msg.ChannelID, response)
+	return err
 }
 
 func (bot *DiscordBot) RedditCommentLink(msg *discordgo.MessageCreate) error {
