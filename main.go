@@ -105,9 +105,16 @@ func main() {
 
 	go bot.AddUserListen(new_users)
 
-	reddit_evts := make(chan Comment)
-	go discordbot.RedditEvents(reddit_evts)
-	go bot.StreamSub("DownvoteTrolling", reddit_evts)
+	streamed := viper.Sub("new")
+	subs := streamed.AllKeys()
+	if len(subs) > 0 {
+		reddit_evts := make(chan Comment)
+		go discordbot.RedditEvents(reddit_evts)
+		for _, sub := range subs {
+			sleep := streamed.GetDuration(sub)
+			go bot.StreamSub(sub, reddit_evts, sleep)
+		}
+	}
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)

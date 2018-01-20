@@ -231,7 +231,8 @@ func (bot *Bot) HasUser(username string) (bool, error) {
 	return false, nil
 }
 
-func (bot *Bot) StreamSub(sub string, ch chan Comment) {
+func (bot *Bot) StreamSub(sub string, ch chan Comment, sleep time.Duration) {
+	bot.logger.Print("streaming new posts from ", sub)
 	seen, err := bot.storage.SeenPostIDs(sub)
 	if err != nil {
 		bot.logger.Fatal("event streamer: ", err)
@@ -269,7 +270,7 @@ func (bot *Bot) StreamSub(sub string, ch chan Comment) {
 		seen = append(seen, ids...)
 		first_time = false
 
-		time.Sleep(time.Duration(1) * time.Second)
+		time.Sleep(sleep)
 	}
 }
 
