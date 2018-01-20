@@ -146,11 +146,31 @@ func (bot *DiscordBot) OnMessage(msg *discordgo.MessageCreate) {
 		_, err = bot.client.ChannelMessageSend(msg.ChannelID, "pong")
 	} else if strings.HasPrefix(content, "!register ") {
 		err = bot.Register(msg)
+	} else if content == "!registered" {
+		log.Print(author + " asked for the list of registered users")
+		err = bot.ListRegistered(msg)
 	}
 
 	if err != nil {
 		bot.logger.Print(err)
 	}
+}
+
+func (bot *DiscordBot) ListRegistered(msg *discordgo.MessageCreate) error {
+	users, err := bot.storage.ListUsers()
+	if err != nil {
+		return err
+	}
+
+	usernames := make([]string, 0, len(users))
+	for _, user := range users {
+		usernames = append(usernames, user.Name)
+	}
+
+	list := strings.Join(usernames, ", ")
+	response := fmt.Sprintf("<@%s> registered users: %s", msg.Author.ID, list)
+	_, err = bot.client.ChannelMessageSend(msg.ChannelID, response)
+	return err
 }
 
 func (bot *DiscordBot) Register(msg *discordgo.MessageCreate) error {
