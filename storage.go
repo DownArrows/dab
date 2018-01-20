@@ -228,8 +228,7 @@ func (storage *Storage) GetCommentsBelowBetween(score int64, since, until time.T
 		WHERE
 			tracked.deleted = 0 AND comments.score <= ?
 			AND comments.created BETWEEN ? AND ?
-		ORDER BY comments.score ASC
-	`)
+		ORDER BY comments.score ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -239,11 +238,16 @@ func (storage *Storage) GetCommentsBelowBetween(score int64, since, until time.T
 		return nil, err
 	}
 
+	return storage.scanComments(rows)
+}
+
+func (storage *Storage) scanComments(rows *sql.Rows) ([]Comment, error) {
+	defer rows.Close()
 	comments := make([]Comment, 0, 100)
 	for rows.Next() {
 		var comment Comment
 
-		err = rows.Scan(&comment.Id, &comment.Author, &comment.Score,
+		err := rows.Scan(&comment.Id, &comment.Author, &comment.Score,
 			&comment.Sub, &comment.Permalink, &comment.Body, &comment.Created)
 		if err != nil {
 			return nil, err

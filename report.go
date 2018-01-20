@@ -105,6 +105,10 @@ func (rt *ReportTyper) Report(start, end time.Time) ([]string, error) {
 		return nil, err
 	}
 
+	return rt.typeComments(comments, averages)
+}
+
+func (rt *ReportTyper) typeComments(comments []Comment, averages map[string]float64) ([]string, error) {
 	nb_comments := len(comments)
 	batches := make([]string, nb_comments)
 
