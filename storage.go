@@ -159,6 +159,42 @@ func (storage *Storage) DelUser(username string) error {
 	return tx.Commit()
 }
 
+func (storage *Storage) Averages(since, until time.Time) (map[string]float64, error) {
+	storage.Lock()
+	defer storage.Unlock()
+
+	stmt, err := storage.db.Prepare(`
+		SELECT comments.author, AVG(comments.score)
+		FROM comments JOIN tracked
+		ON comments.author = tracked.name
+		WHERE
+			tracked.deleted = 0
+			AND comments.created BETWEEN ? AND ?
+		GROUP BY comments.author
+	`)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := stmt.Query(since.Unix(), until.Unix())
+	if err != nil {
+		return nil, err
+	}
+
+	results := make(map[string]float64)
+	for rows.Next() {
+		var name string
+		var average float64
+
+		err = rows.Scan(&name, &average)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return results, nil
+}
+
 // Make sure the comments are all from the same user and its struct is up to date
 func (storage *Storage) SaveCommentsPage(comments []Comment, user User) error {
 	storage.Lock()
@@ -180,6 +216,41 @@ func (storage *Storage) SaveCommentsPage(comments []Comment, user User) error {
 	}
 
 	return tx.Commit()
+}
+
+func (storage *Storage) GetCommentsBelowBetween(score int64, since, until time.Time) ([]Comment, error) {
+	stmt, err := storage.db.Prepare(`
+		SELECT
+			comments.id, comments.author, comments.score, comments.sub,
+			comments.permalink, comments.body, comments.created
+		FROM comments JOIN tracked
+		ON comments.author = tracked.name
+		WHERE
+			tracked.deleted = 0 AND comments.score <= ?
+			AND comments.created BETWEEN ? AND ?
+		ORDER BY comments.score ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := stmt.Query(score, since.Unix(), until.Unix())
+	if err != nil {
+		return nil, err
+	}
+
+	comments := make([]Comment, 0, 100)
+	for rows.Next() {
+		var comment Comment
+
+		err = rows.Scan(&comment.Id, &comment.Author, &comment.Score,
+			&comment.Sub, &comment.Permalink, &comment.Body, &comment.Created)
+		if err != nil {
+			return nil, err
+		}
+		comments = append(comments, comment)
+	}
+	return comments, nil
 }
 
 func (storage *Storage) NotNewUser(username string) error {

@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -18,6 +19,10 @@ func main() {
 	viper.AddConfigPath(".")
 
 	viper.SetDefault("database.path", "./dab.db")
+	viper.SetDefault("report.timezone", "UTC")
+	viper.SetDefault("report.leeway", time.Duration(12)*time.Hour)
+	viper.SetDefault("report.cutoff", -50)
+	viper.SetDefault("report.maxlength", 400000)
 
 	err := viper.ReadInConfig()
 	if err != nil {
@@ -41,6 +46,18 @@ func main() {
 		log.Fatal(err)
 	}
 
+	rt, err := NewReportTyper(
+		storage,
+		os.Stdout,
+		viper.GetString("report.timezone"),
+		viper.GetDuration("report.leeway"),
+		viper.GetInt64("report.cutoff"),
+		uint64(viper.GetInt64("report.maxlength")),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	bot := NewBot(scanner, storage, os.Stdout, 24, 5)
 	discordbot, err := NewDiscordBot(
 		storage, os.Stdout,
@@ -54,7 +71,18 @@ func main() {
 	}
 
 	useradd := flag.String("useradd", "", "Add one or multiple comma-separated users to be tracked.")
+	test := flag.Bool("test", false, "test")
 	flag.Parse()
+
+	if *test {
+		batches, err := rt.ReportLastWeek()
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Print(batches)
+		return
+	}
+
 	if *useradd != "" {
 		err = UserAdd(bot, *useradd)
 		if err != nil {
