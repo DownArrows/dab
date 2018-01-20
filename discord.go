@@ -201,6 +201,8 @@ func (bot *DiscordBot) Register(msg *discordgo.MessageCreate) error {
 		statuses = append(statuses, status)
 	}
 
+	close(queries)
+
 	err = bot.client.UpdateStatus(0, "")
 	if err != nil {
 		return err
