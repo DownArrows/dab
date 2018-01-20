@@ -252,10 +252,16 @@ func (bot *DiscordBot) getFortune() string {
 }
 
 func (bot *DiscordBot) Karma(channelID string, author *discordgo.User, username string) error {
-	total, negative, err := bot.storage.GetKarma(username)
+	total, err := bot.storage.GetTotalKarma(username)
 	if err != nil {
 		return err
 	}
+
+	negative, err := bot.storage.GetNegativeKarma(username)
+	if err != nil {
+		return err
+	}
+
 	reply := fmt.Sprintf("<@%s> karma for %s: %d / %d", author.ID, username, total, negative)
 	_, err = bot.client.ChannelMessageSend(channelID, reply)
 	return err

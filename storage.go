@@ -391,38 +391,35 @@ func (storage *Storage) GetFortunes() ([]string, error) {
 	return fortunes, nil
 }
 
-func (storage *Storage) GetKarma(username string) (int64, int64, error) {
-	stmt, err := storage.db.Prepare("SELECT score FROM comments WHERE author = ? COLLATE NOCASE")
+func (storage *Storage) GetTotalKarma(username string) (int64, error) {
+	return storage.getKarma(username, "")
+}
+
+func (storage *Storage) GetNegativeKarma(username string) (int64, error) {
+	return storage.getKarma(username, "score < 0 AND")
+}
+
+func (storage *Storage) getKarma(username, cond string) (int64, error) {
+	query := fmt.Sprintf("SELECT sum(score) FROM comments WHERE %s author = ? COLLATE NOCASE", cond)
+	stmt, err := storage.db.Prepare(query)
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 	defer stmt.Close()
 
 	rows, err := stmt.Query(username)
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 	defer rows.Close()
 
 	if !rows.Next() {
-		return 0, 0, errors.New("user " + username + " not found")
+		return 0, errors.New("user " + username + " not found")
 	}
 
-	var total, negative int64
-	for rows.Next() {
-		var score int64
-
-		err = rows.Scan(&score)
-		if err != nil {
-			return 0, 0, err
-		}
-
-		total += int64(score)
-		if score < 0 {
-			negative += int64(score)
-		}
-	}
-	return total, negative, nil
+	var karma int64
+	err = rows.Scan(&karma)
+	return karma, err
 }
 
 func (storage *Storage) Vacuum() error {
