@@ -33,7 +33,7 @@ type RedditAuth struct {
 }
 
 type RedditScanner interface {
-	AboutUser(username string) (bool, string, int64, error)
+	AboutUser(username string) (bool, string, int64, bool, error)
 	UserComments(username string, position string) ([]Comment, string, error)
 	SubPosts(sub string, position string) ([]Comment, string, error)
 }
@@ -197,33 +197,28 @@ func (rc *RedditClient) getListing(path string, position string) ([]Comment, str
 	return comments, new_position, nil
 }
 
-func (rc *RedditClient) AboutUser(username string) (bool, string, int64, error) {
+func (rc *RedditClient) AboutUser(username string) (bool, string, int64, bool, error) {
 	rc.Lock()
 	defer rc.Unlock()
 	res, status, err := rc.RawRequest("GET", "/u/"+username+"/about", nil)
 	if err != nil {
-		return false, "", 0, err
+		return false, "", 0, false, err
 	}
 
 	if status == 404 {
-		return false, "", 0, nil
+		return false, "", 0, false, nil
 	} else if status != 200 {
 		template := "Bad response status when looking up %s: %d"
 		msg := fmt.Sprintf(template, username, status)
 		err = errors.New(msg)
-		return false, "", 0, err
+		return false, "", 0, false, err
 	}
 
 	about := &aboutUser{}
 	err = json.Unmarshal(res, about)
 	if err != nil {
-		return false, "", 0, err
+		return false, "", 0, false, err
 	}
 
-	name := about.Data.Name
-	if about.Data.Suspended {
-		return true, name, 0, errors.New("User " + name + " has been suspended")
-	}
-
-	return true, name, int64(about.Data.Created), nil
+	return true, about.Data.Name, int64(about.Data.Created), about.Data.Suspended, nil
 }

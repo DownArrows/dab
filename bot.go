@@ -167,10 +167,15 @@ func (bot *Bot) AddUser(username string, hidden bool) (bool, error) {
 		return true, nil
 	}
 
-	exists, case_name, created, err := bot.scanner.AboutUser(username)
+	exists, case_name, created, suspended, err := bot.scanner.AboutUser(username)
 	if err != nil {
 		return false, err
 	}
+
+	if suspended {
+		bot.logger.Print("User ", username, " was suspended, adding anyway")
+	}
+
 	if !exists {
 		bot.logger.Print("User ", username, " not found")
 		return false, err
