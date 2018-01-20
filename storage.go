@@ -17,24 +17,6 @@ type Storage struct {
 	logger *log.Logger
 }
 
-type Comment struct {
-	Id        string
-	Author    string
-	Score     int64
-	Permalink string
-	Sub       string  `json:"subreddit"`
-	Created   float64 `json:"created_utc"`
-	Body      string
-}
-
-type User struct {
-	Name     string
-	Hidden   bool
-	New      bool
-	Added    time.Time
-	Position string
-}
-
 func NewStorage(db_path string, log_out io.Writer) (*Storage, error) {
 	logger := log.New(log_out, "storage: ", log.LstdFlags)
 	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=1", db_path))

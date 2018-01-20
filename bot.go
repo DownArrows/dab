@@ -8,13 +8,6 @@ import (
 	"time"
 )
 
-type UserAddition struct {
-	Name   string
-	Hidden bool
-	Exists bool
-	Error  error
-}
-
 type Bot struct {
 	MaxAge     time.Duration
 	MaxQueries int

@@ -25,13 +25,6 @@ type OAuthResponse struct {
 	Scope   string `json:"scope"`
 }
 
-type RedditAuth struct {
-	Username string
-	Password string
-	Id       string
-	Key      string
-}
-
 type RedditScanner interface {
 	AboutUser(username string) (bool, string, int64, bool, error)
 	UserComments(username string, position string) ([]Comment, string, error)
