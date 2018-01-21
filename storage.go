@@ -36,11 +36,12 @@ func (storage *Storage) Init() error {
 		CREATE TABLE IF NOT EXISTS tracked (
 			name TEXT PRIMARY KEY,
 			created DATETIME NOT NULL,
-			deleted BOOLEAN DEFAULT 0,
-			added DATETIME DEFAULT CURRENT_TIMESTAMP,
+			deleted BOOLEAN DEFAULT 0 NOT NULL,
+			added DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
 			hidden BOOLEAN NOT NULL,
-			new BOOLEAN DEFAULT 1,
-			position TEXT DEFAULT "")`)
+			new BOOLEAN DEFAULT 1 NOT NULL,
+			position TEXT DEFAULT "" NOT NULL
+		) WITHOUT ROWID`)
 	if err != nil {
 		return err
 	}
@@ -74,7 +75,7 @@ func (storage *Storage) Init() error {
 		CREATE TABLE IF NOT EXISTS fortunes (
 			id INTEGER PRIMARY KEY,
 			content TEXT NOT NULL,
-			added DATETIME DEFAULT CURRENT_TIMESTAMP
+			added DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
 		)`)
 	if err != nil {
 		return err
