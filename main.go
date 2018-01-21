@@ -45,7 +45,10 @@ func main() {
 
 	go func() {
 		time.Sleep(viper.GetDuration("database.cleanup_interval"))
-		storage.Vacuum()
+		err := storage.Vacuum()
+		if err != nil {
+			log.Fatal(err)
+		}
 	}()
 
 	// Bots
