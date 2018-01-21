@@ -211,7 +211,7 @@ func (bot *Bot) HasUser(username string) (bool, error) {
 	}
 
 	for _, user := range users {
-		if strings.ToLower(user.Name) == username {
+		if strings.ToLower(user.Name) == strings.ToLower(username) {
 			return true, nil
 		}
 	}
