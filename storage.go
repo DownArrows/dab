@@ -76,7 +76,17 @@ func (storage *Storage) Init() error {
 			content TEXT NOT NULL,
 			added DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`)
+	if err != nil {
+		return err
+	}
 
+	_, err = storage.db.Exec(`
+		CREATE VIEW IF NOT EXISTS
+			users(name, created, added, hidden, new, position)
+		AS
+			SELECT name, created, added, hidden, new, position
+			FROM tracked WHERE deleted = 0
+	`)
 	return err
 }
 
@@ -97,9 +107,7 @@ func (storage *Storage) ListUsers() ([]User, error) {
 
 	rows, err := storage.db.Query(`
 		SELECT name, hidden, new, added, position
-		FROM tracked
-		WHERE deleted = 0
-		ORDER BY name`)
+		FROM users ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -145,11 +153,9 @@ func (storage *Storage) DelUser(username string) error {
 func (storage *Storage) Averages(since, until time.Time) (map[string]float64, error) {
 	stmt, err := storage.db.Prepare(`
 		SELECT comments.author, AVG(comments.score)
-		FROM comments JOIN tracked
-		ON comments.author = tracked.name
-		WHERE
-			tracked.deleted = 0
-			AND comments.created BETWEEN ? AND ?
+		FROM comments JOIN users
+		ON comments.author = users.name
+		WHERE comments.created BETWEEN ? AND ?
 		GROUP BY comments.author
 	`)
 	if err != nil {
@@ -204,10 +210,10 @@ func (storage *Storage) GetCommentsBelowBetween(score int64, since, until time.T
 		SELECT
 			comments.id, comments.author, comments.score, comments.sub,
 			comments.permalink, comments.body, comments.created
-		FROM comments JOIN tracked
-		ON comments.author = tracked.name
+		FROM comments JOIN users
+		ON comments.author = users.name
 		WHERE
-			tracked.deleted = 0 AND comments.score <= ?
+			comments.score <= ?
 			AND comments.created BETWEEN ? AND ?
 		ORDER BY comments.score ASC`)
 	if err != nil {
@@ -403,11 +409,9 @@ func (storage *Storage) LowestAverageBetween(since, until time.Time) (string, fl
 		SELECT author, MIN(avg_score), count
 		FROM (
 			SELECT comments.author AS author, AVG(comments.score) AS avg_score, COUNT(comments.id) AS count
-			FROM comments JOIN tracked
-			ON comments.author = tracked.name
-			WHERE
-				tracked.deleted = 0
-				AND comments.created BETWEEN ? AND ?
+			FROM comments JOIN users
+			ON comments.author = users.name
+			WHERE comments.created BETWEEN ? AND ?
 			GROUP BY comments.author
 		)`)
 	if err != nil {
@@ -440,11 +444,9 @@ func (storage *Storage) LowestDeltaBetween(since, until time.Time) (string, int6
 				comments.author AS author,
 				SUM(comments.score) AS delta,
 				COUNT(comments.id) AS count
-			FROM comments JOIN tracked
-			ON comments.author = tracked.name
-			WHERE
-				tracked.deleted = 0
-				AND comments.created BETWEEN ? AND ?
+			FROM comments JOIN users
+			ON comments.author = users.name
+			WHERE comments.created BETWEEN ? AND ?
 			GROUP BY comments.author
 		)`)
 	if err != nil {
