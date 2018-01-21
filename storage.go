@@ -107,7 +107,7 @@ func (storage *Storage) AddUser(username string, hidden bool, created int64) err
 func (storage *Storage) ListUsers() ([]User, error) {
 
 	rows, err := storage.db.Query(`
-		SELECT name, hidden, new, added, position
+		SELECT name, hidden, new, created, added, position
 		FROM users ORDER BY name`)
 	if err != nil {
 		return nil, err
@@ -118,8 +118,8 @@ func (storage *Storage) ListUsers() ([]User, error) {
 	for rows.Next() {
 		var user User
 
-		err = rows.Scan(&user.Name, &user.Hidden,
-			&user.New, &user.Added, &user.Position)
+		err = rows.Scan(&user.Name, &user.Hidden, &user.New,
+			&user.Created, &user.Added, &user.Position)
 		if err != nil {
 			return nil, err
 		}

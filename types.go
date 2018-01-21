@@ -19,6 +19,7 @@ type User struct {
 	Name     string
 	Hidden   bool
 	New      bool
+	Created  time.Time
 	Added    time.Time
 	Position string
 }
