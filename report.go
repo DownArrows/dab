@@ -197,11 +197,12 @@ func (rt *ReportTyper) typeComments(comments []Comment, averages map[string]floa
 			return nil, err
 		}
 
-		total_len += uint64(len(formatted))
+		len_formatted := uint64(len(formatted))
+		total_len += len_formatted
 		if total_len > rt.MaxLength {
 			batches = append(batches, batch)
 			batch = make([]string, 0, nb_comments)
-			total_len = 0
+			total_len = len_formatted
 		}
 		batch = append(batch, formatted)
 	}
