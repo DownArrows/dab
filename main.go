@@ -123,14 +123,14 @@ func main() {
 }
 
 func stream(config *viper.Viper, bot *Bot, discordbot *DiscordBot) {
-	subs := config.AllKeys()
-	if len(subs) > 0 {
-		reddit_evts := make(chan Comment)
-		go discordbot.RedditEvents(reddit_evts)
-		for _, sub := range subs {
-			sleep := config.GetDuration(sub)
-			go bot.StreamSub(sub, reddit_evts, sleep)
-		}
+	if config == nil {
+		return
+	}
+	reddit_evts := make(chan Comment)
+	go discordbot.RedditEvents(reddit_evts)
+	for _, sub := range config.AllKeys() {
+		sleep := config.GetDuration(sub)
+		go bot.StreamSub(sub, reddit_evts, sleep)
 	}
 }
 
