@@ -173,13 +173,13 @@ func (bot *DiscordBot) Register(msg *discordgo.MessageCreate) error {
 	names := strings.Split(strings.TrimPrefix(msg.Content, "!register "), " ")
 	bot.logger.Print(msg.Author.Username, " wants to register ", names)
 
-	err := bot.client.UpdateStatus(1, "")
-	if err != nil {
-		return err
-	}
-
 	statuses := make([]string, 0, len(names))
 	for _, name := range names {
+		err := bot.client.ChannelTyping(msg.ChannelID)
+		if err != nil {
+			return err
+		}
+
 		bot.AddUser <- UserAddition{Name: name, Hidden: false}
 		reply := <-bot.AddUser
 
@@ -194,14 +194,12 @@ func (bot *DiscordBot) Register(msg *discordgo.MessageCreate) error {
 		statuses = append(statuses, status)
 	}
 
-	err = bot.client.UpdateStatus(0, "")
-	if err != nil {
-		return err
-	}
-
 	status := strings.Join(statuses, ", ")
+	if len(status) > 1900 {
+		status = "registrations done, check the logs for more details."
+	}
 	response := fmt.Sprintf("<@%s> registration: %s", msg.Author.ID, status)
-	_, err = bot.client.ChannelMessageSend(msg.ChannelID, response)
+	_, err := bot.client.ChannelMessageSend(msg.ChannelID, response)
 	return err
 }
 
