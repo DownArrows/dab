@@ -142,9 +142,9 @@ func (bot *DiscordBot) OnMessage(msg *discordgo.MessageCreate) {
 		_, err = bot.client.ChannelMessageSend(msg.ChannelID, "pong")
 	} else if strings.HasPrefix(content, "!register ") {
 		err = bot.Register(msg)
-	} else if content == "!registered" {
-		log.Print(author + " asked for the list of registered users")
-		err = bot.ListRegistered(msg)
+	} else if strings.HasPrefix(content, "!exists ") {
+		log.Print(author + " wants to check if a user is registered")
+		err = bot.UserExists(content, channel, msg)
 	}
 
 	if err != nil {
@@ -152,20 +152,25 @@ func (bot *DiscordBot) OnMessage(msg *discordgo.MessageCreate) {
 	}
 }
 
-func (bot *DiscordBot) ListRegistered(msg *discordgo.MessageCreate) error {
+func (bot *DiscordBot) UserExists(content, channel string, msg *discordgo.MessageCreate) error {
+	username := strings.TrimPrefix(content, "!exists ")
+
 	users, err := bot.storage.ListUsers()
 	if err != nil {
 		return err
 	}
 
-	usernames := make([]string, 0, len(users))
+	status := "not found"
 	for _, user := range users {
-		usernames = append(usernames, user.Name)
+		if user.Username(username) {
+			username = user.Name
+			status = fmt.Sprintf("found")
+			break
+		}
 	}
 
-	list := strings.Join(usernames, ", ")
-	response := fmt.Sprintf("<@%s> registered users: %s", msg.Author.ID, list)
-	_, err = bot.client.ChannelMessageSend(msg.ChannelID, response)
+	response := fmt.Sprintf("<@%s> User %s %s.", msg.Author.ID, username, status)
+	_, err = bot.client.ChannelMessageSend(channel, response)
 	return err
 }
 

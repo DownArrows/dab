@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"regexp"
-	"strings"
 	"time"
 )
 
@@ -223,7 +222,7 @@ func (bot *Bot) HasUser(username string) (bool, error) {
 	}
 
 	for _, user := range users {
-		if strings.ToLower(user.Name) == strings.ToLower(username) {
+		if user.Username(username) {
 			return true, nil
 		}
 	}

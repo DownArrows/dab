@@ -1,6 +1,9 @@
 package main
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type Comment struct {
 	Id        string
@@ -18,6 +21,10 @@ type User struct {
 	New      bool
 	Added    time.Time
 	Position string
+}
+
+func (user *User) Username(username string) bool {
+	return strings.ToLower(user.Name) == strings.ToLower(username)
 }
 
 type UserAddition struct {
