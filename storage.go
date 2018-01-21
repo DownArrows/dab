@@ -98,7 +98,8 @@ func (storage *Storage) ListUsers() ([]User, error) {
 	rows, err := storage.db.Query(`
 		SELECT name, hidden, new, added, position
 		FROM tracked
-		WHERE deleted = 0`)
+		WHERE deleted = 0
+		ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
