@@ -19,6 +19,7 @@ func main() {
 	viper.AddConfigPath(".")
 
 	viper.SetDefault("database.path", "./dab.db")
+	viper.SetDefault("database.cleanup_interval", time.Hour)
 	viper.SetDefault("report.timezone", "UTC")
 	viper.SetDefault("report.leeway", time.Duration(12)*time.Hour)
 	viper.SetDefault("report.cutoff", -50)
@@ -41,6 +42,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	go func() {
+		time.Sleep(viper.GetDuration("database.cleanup_interval"))
+		storage.Vacuum()
+	}()
 
 	// Bots
 	var bot *Bot
