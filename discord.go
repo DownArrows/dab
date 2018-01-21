@@ -218,8 +218,13 @@ func (bot *DiscordBot) RedditCommentLink(msg *discordgo.MessageCreate) error {
 }
 
 func (bot *DiscordBot) Fortune() error {
+	err := bot.client.ChannelTyping(bot.General.ID)
+	if err != nil {
+		return err
+	}
+
 	fortune := bot.getFortune()
-	_, err := bot.client.ChannelMessageSend(bot.General.ID, fortune)
+	_, err = bot.client.ChannelMessageSend(bot.General.ID, fortune)
 	return err
 }
 
@@ -243,6 +248,11 @@ func (bot *DiscordBot) getFortune() string {
 }
 
 func (bot *DiscordBot) Karma(channelID string, author *discordgo.User, username string) error {
+	err := bot.client.ChannelTyping(channelID)
+	if err != nil {
+		return err
+	}
+
 	total, err := bot.storage.GetTotalKarma(username)
 	if err != nil {
 		return err
