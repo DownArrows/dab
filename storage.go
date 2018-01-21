@@ -143,9 +143,6 @@ func (storage *Storage) DelUser(username string) error {
 }
 
 func (storage *Storage) Averages(since, until time.Time) (map[string]float64, error) {
-	storage.Lock()
-	defer storage.Unlock()
-
 	stmt, err := storage.db.Prepare(`
 		SELECT comments.author, AVG(comments.score)
 		FROM comments JOIN tracked
@@ -173,6 +170,7 @@ func (storage *Storage) Averages(since, until time.Time) (map[string]float64, er
 		if err != nil {
 			return nil, err
 		}
+		results[name] = average
 	}
 
 	return results, nil
@@ -398,6 +396,87 @@ func (storage *Storage) GetTotalKarma(username string) (int64, error) {
 
 func (storage *Storage) GetNegativeKarma(username string) (int64, error) {
 	return storage.getKarma(username, "score < 0 AND")
+}
+
+func (storage *Storage) LowestAverageBetween(since, until time.Time) (string, float64, uint64, error) {
+	stmt, err := storage.db.Prepare(`
+		SELECT author, MIN(avg_score), count
+		FROM (
+			SELECT comments.author, AVG(comments.score) AS avg_score, COUNT(comments.id) AS count
+			FROM comments JOIN tracked
+			ON comments.author = tracked.name
+			WHERE
+				tracked.deleted = 0
+				AND comments.created BETWEEN ? AND ?
+			GROUP BY comments.author
+		)`)
+	if err != nil {
+		return "", 0, 0, err
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(since.Unix(), until.Unix())
+	if err != nil {
+		return "", 0, 0, err
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return "", 0, 0, errors.New("No users registered")
+	}
+
+	var name string
+	var average float64
+	var count uint64
+
+	err = rows.Scan(&name, &average, &count)
+	return name, average, count, err
+}
+
+func (storage *Storage) LowestDeltaBetween(since, until time.Time) (string, int64, uint64, error) {
+	stmt, err := storage.db.Prepare(`
+		SELECT author, MIN(IFNULL(prev, 0) + interval), count
+		FROM (
+			SELECT author, SUM(score) AS interval, COUNT(comments.id) AS count
+			FROM comments JOIN tracked
+			ON comments.author = tracked.name
+			WHERE
+				tracked.deleted = 0
+				AND comments.created BETWEEN ? AND ?
+			GROUP BY comments.author
+		) LEFT JOIN (
+			SELECT author AS n_author, SUM(score) AS prev
+			FROM comments JOIN tracked
+			ON comments.author = tracked.name
+			WHERE
+				tracked.deleted = 0
+				AND comments.created < ?
+			GROUP BY comments.author
+		) ON author = n_author`)
+	if err != nil {
+		return "", 0, 0, err
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(since.Unix(), until.Unix(), since.Unix())
+	if err != nil {
+		return "", 0, 0, err
+	}
+	defer rows.Close()
+
+	var name string
+	var delta int64
+	var count uint64
+
+	// Because of the join we're always having at least one column.
+	// If there is no registered user, everything will be NULL,
+	// and this function will return a cryptic error about "unsupported Scan",
+	// but that's unto the user of this function to take care not to have an
+	// empty database.
+	// FIXME: if there is an ex æquo, only one of the result will be returned.
+	rows.Next()
+	err = rows.Scan(&name, &delta, &count)
+	return name, delta, count, err
 }
 
 func (storage *Storage) getKarma(username, cond string) (int64, error) {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/spf13/viper"
 	"log"
 	"os"
@@ -33,6 +34,7 @@ func main() {
 	useradd := flag.String("useradd", "", "Add one or multiple comma-separated users to be tracked.")
 	nodiscord := flag.Bool("nodiscord", false, "Don't connect to discord.")
 	noreddit := flag.Bool("noreddit", false, "Don't connect to reddit.")
+	report := flag.Bool("report", false, "Print the report for the last week.")
 	flag.Parse()
 
 	// Storage
@@ -50,6 +52,29 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
+
+	rt, err := NewReportTyper(
+		storage,
+		os.Stdout,
+		viper.GetString("report.timezone"),
+		viper.GetDuration("report.leeway"),
+		viper.GetInt64("report.cutoff"),
+		uint64(viper.GetInt64("report.maxlength")),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if *report {
+		report, err := rt.ReportLastWeek()
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, chunk := range report {
+			fmt.Println(chunk)
+		}
+		return
+	}
 
 	// Bots
 	var bot *Bot
@@ -82,18 +107,6 @@ func main() {
 
 	// Reddit bot
 	if !*noreddit {
-		//		rt, err := NewReportTyper(
-		//			storage,
-		//			os.Stdout,
-		//			viper.GetString("report.timezone"),
-		//			viper.GetDuration("report.leeway"),
-		//			viper.GetInt64("report.cutoff"),
-		//			uint64(viper.GetInt64("report.maxlength")),
-		//		)
-		//		if err != nil {
-		//			log.Fatal(err)
-		//		}
-
 		go bot.Run()
 	}
 
