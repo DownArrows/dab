@@ -402,7 +402,7 @@ func (storage *Storage) LowestAverageBetween(since, until time.Time) (string, fl
 	stmt, err := storage.db.Prepare(`
 		SELECT author, MIN(avg_score), count
 		FROM (
-			SELECT comments.author, AVG(comments.score) AS avg_score, COUNT(comments.id) AS count
+			SELECT comments.author AS author, AVG(comments.score) AS avg_score, COUNT(comments.id) AS count
 			FROM comments JOIN tracked
 			ON comments.author = tracked.name
 			WHERE
@@ -435,30 +435,24 @@ func (storage *Storage) LowestAverageBetween(since, until time.Time) (string, fl
 
 func (storage *Storage) LowestDeltaBetween(since, until time.Time) (string, int64, uint64, error) {
 	stmt, err := storage.db.Prepare(`
-		SELECT author, MIN(IFNULL(prev, 0) + interval), count
-		FROM (
-			SELECT author, SUM(score) AS interval, COUNT(comments.id) AS count
+		SELECT author, MIN(delta), count FROM (
+			SELECT
+				comments.author AS author,
+				SUM(comments.score) AS delta,
+				COUNT(comments.id) AS count
 			FROM comments JOIN tracked
 			ON comments.author = tracked.name
 			WHERE
 				tracked.deleted = 0
 				AND comments.created BETWEEN ? AND ?
 			GROUP BY comments.author
-		) LEFT JOIN (
-			SELECT author AS n_author, SUM(score) AS prev
-			FROM comments JOIN tracked
-			ON comments.author = tracked.name
-			WHERE
-				tracked.deleted = 0
-				AND comments.created < ?
-			GROUP BY comments.author
-		) ON author = n_author`)
+		)`)
 	if err != nil {
 		return "", 0, 0, err
 	}
 	defer stmt.Close()
 
-	rows, err := stmt.Query(since.Unix(), until.Unix(), since.Unix())
+	rows, err := stmt.Query(since.Unix(), until.Unix())
 	if err != nil {
 		return "", 0, 0, err
 	}
