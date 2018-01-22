@@ -70,6 +70,11 @@ func (bot *DiscordBot) Run() {
 	if err != nil {
 		panic(err)
 	}
+
+	err = bot.client.UpdateStatus(0, "Downvote Counter")
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (bot *DiscordBot) RedditEvents(evts chan Comment) {
