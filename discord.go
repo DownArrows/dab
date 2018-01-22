@@ -258,6 +258,17 @@ func (bot *DiscordBot) Karma(channelID string, author *discordgo.User, username 
 		return err
 	}
 
+	exists, err := bot.storage.HasUser(username)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		reply := fmt.Sprintf("<@%s> user %s not found.", author.ID, username)
+		_, err = bot.client.ChannelMessageSend(channelID, reply)
+		return err
+	}
+
 	total, err := bot.storage.GetTotalKarma(username)
 	if err != nil {
 		return err

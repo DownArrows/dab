@@ -183,7 +183,7 @@ func (bot *Bot) AddUser(username string, hidden bool) (bool, error) {
 		return false, errors.New(msg)
 	}
 
-	has_user, err := bot.HasUser(username)
+	has_user, err := bot.storage.HasUser(username)
 	if err != nil {
 		return false, err
 	}
@@ -213,20 +213,6 @@ func (bot *Bot) AddUser(username string, hidden bool) (bool, error) {
 
 	bot.logger.Print("New user ", case_name, " successfully added")
 	return true, nil
-}
-
-func (bot *Bot) HasUser(username string) (bool, error) {
-	users, err := bot.storage.ListUsers()
-	if err != nil {
-		return false, err
-	}
-
-	for _, user := range users {
-		if user.Username(username) {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 func (bot *Bot) StreamSub(sub string, ch chan Comment, sleep time.Duration) {

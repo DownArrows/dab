@@ -105,7 +105,6 @@ func (storage *Storage) AddUser(username string, hidden bool, created int64) err
 }
 
 func (storage *Storage) ListUsers() ([]User, error) {
-
 	rows, err := storage.db.Query(`
 		SELECT name, hidden, new, created, added, position
 		FROM users ORDER BY name`)
@@ -126,6 +125,29 @@ func (storage *Storage) ListUsers() ([]User, error) {
 		users = append(users, user)
 	}
 	return users, nil
+}
+
+func (storage *Storage) HasUser(username string) (bool, error) {
+	stmt, err := storage.db.Prepare("SELECT count(1) FROM users WHERE name = ? COLLATE NOCASE")
+	if err != nil {
+		return false, err
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(username)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	var exists int
+	rows.Next()
+	err = rows.Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+
+	return exists == 1, nil
 }
 
 func (storage *Storage) DelUser(username string) error {
@@ -490,11 +512,8 @@ func (storage *Storage) getKarma(username, cond string) (int64, error) {
 	}
 	defer rows.Close()
 
-	if !rows.Next() {
-		return 0, errors.New("user " + username + " not found")
-	}
-
 	var karma int64
+	rows.Next()
 	err = rows.Scan(&karma)
 	return karma, err
 }
