@@ -1,11 +1,9 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"log"
-	"regexp"
 	"time"
 )
 
@@ -172,16 +170,6 @@ func (bot *Bot) AddUserServer(queries chan UserAddition) {
 
 func (bot *Bot) AddUser(username string, hidden bool) (bool, error) {
 	bot.logger.Print("Trying to add user ", username)
-
-	sane, err := regexp.MatchString(`^[[:word:]-]+$`, username)
-	if err != nil {
-		return false, err
-	}
-
-	if !sane {
-		msg := "username contains forbidden characters or is empty"
-		return false, errors.New(msg)
-	}
 
 	has_user, err := bot.storage.HasUser(username)
 	if err != nil {

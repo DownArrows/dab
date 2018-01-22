@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -191,6 +192,14 @@ func (rc *RedditClient) getListing(path string, position string) ([]Comment, str
 }
 
 func (rc *RedditClient) AboutUser(username string) (bool, string, int64, bool, error) {
+	sane, err := regexp.MatchString(`^[[:word:]-]+$`, username)
+	if err != nil {
+		return false, "", 0, false, err
+	} else if !sane {
+		msg := fmt.Sprintf("username %s contains forbidden characters or is empty", username)
+		return false, "", 0, false, errors.New(msg)
+	}
+
 	rc.Lock()
 	defer rc.Unlock()
 	res, status, err := rc.RawRequest("GET", "/u/"+username+"/about", nil)
