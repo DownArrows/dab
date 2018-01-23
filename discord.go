@@ -21,7 +21,7 @@ type DiscordBot struct {
 	LogChan       *discordgo.Channel
 	Admin         *discordgo.User
 	Fortunes      []string
-	AddUser       chan UserAddition
+	AddUser       chan UserQuery
 }
 
 func NewDiscordBot(
@@ -51,7 +51,7 @@ func NewDiscordBot(
 		LinkReactions: []string{"👌", "💗", "🔥", "💯"},
 		redditLink:    regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
 		Fortunes:      fortunes,
-		AddUser:       make(chan UserAddition),
+		AddUser:       make(chan UserQuery),
 	}
 
 	session.AddHandler(func(s *discordgo.Session, msg *discordgo.MessageCreate) {
@@ -190,16 +190,16 @@ func (bot *DiscordBot) Register(msg *discordgo.MessageCreate) error {
 			return err
 		}
 
-		bot.AddUser <- UserAddition{Name: name, Hidden: false}
+		bot.AddUser <- UserQuery{User: User{Name: name, Hidden: false}}
 		reply := <-bot.AddUser
 
 		var status string
 		if reply.Error != nil {
-			status = fmt.Sprintf("%s: %s", reply.Name, reply.Error)
+			status = fmt.Sprintf("%s: %s", reply.User.Name, reply.Error)
 		} else if !reply.Exists {
-			status = fmt.Sprintf("%s: not found", reply.Name)
+			status = fmt.Sprintf("%s: not found", reply.User.Name)
 		} else {
-			status = fmt.Sprintf("%s: ok", reply.Name)
+			status = fmt.Sprintf("%s: ok", reply.User.Name)
 		}
 		statuses = append(statuses, status)
 	}
@@ -263,12 +263,12 @@ func (bot *DiscordBot) Karma(channelID string, author *discordgo.User, username 
 		return err
 	}
 
-	exists, err := bot.storage.HasUser(username)
-	if err != nil {
-		return err
+	res := bot.storage.GetUser(username)
+	if res.Error != nil {
+		return res.Error
 	}
 
-	if !exists {
+	if !res.Exists {
 		reply := fmt.Sprintf("<@%s> user %s not found.", author.ID, username)
 		_, err = bot.client.ChannelMessageSend(channelID, reply)
 		return err
@@ -284,7 +284,7 @@ func (bot *DiscordBot) Karma(channelID string, author *discordgo.User, username 
 		return err
 	}
 
-	reply := fmt.Sprintf("<@%s> karma for %s: %d / %d", author.ID, username, total, negative)
+	reply := fmt.Sprintf("<@%s> karma for %s: %d / %d", author.ID, res.User.Name, total, negative)
 	_, err = bot.client.ChannelMessageSend(channelID, reply)
 	return err
 }

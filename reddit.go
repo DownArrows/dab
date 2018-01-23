@@ -27,7 +27,7 @@ type OAuthResponse struct {
 }
 
 type RedditScanner interface {
-	AboutUser(username string) (bool, string, int64, bool, error)
+	AboutUser(username string) UserQuery
 	UserComments(username string, position string) ([]Comment, string, error)
 	SubPosts(sub string, position string) ([]Comment, string, error)
 }
@@ -191,36 +191,46 @@ func (rc *RedditClient) getListing(path string, position string) ([]Comment, str
 	return comments, new_position, nil
 }
 
-func (rc *RedditClient) AboutUser(username string) (bool, string, int64, bool, error) {
+func (rc *RedditClient) AboutUser(username string) UserQuery {
+	query := UserQuery{User: User{Name: username}}
 	sane, err := regexp.MatchString(`^[[:word:]-]+$`, username)
 	if err != nil {
-		return false, "", 0, false, err
+		query.Error = err
+		return query
 	} else if !sane {
 		msg := fmt.Sprintf("username %s contains forbidden characters or is empty", username)
-		return false, "", 0, false, errors.New(msg)
+		query.Error = errors.New(msg)
+		return query
 	}
 
 	rc.Lock()
 	defer rc.Unlock()
 	res, status, err := rc.RawRequest("GET", "/u/"+username+"/about", nil)
 	if err != nil {
-		return false, "", 0, false, err
+		query.Error = err
+		return query
 	}
 
 	if status == 404 {
-		return false, "", 0, false, nil
+		return query
 	} else if status != 200 {
 		template := "Bad response status when looking up %s: %d"
 		msg := fmt.Sprintf(template, username, status)
 		err = errors.New(msg)
-		return false, "", 0, false, err
+		query.Error = err
+		return query
 	}
 
 	about := &aboutUser{}
 	err = json.Unmarshal(res, about)
 	if err != nil {
-		return false, "", 0, false, err
+		query.Error = err
+		return query
 	}
 
-	return true, about.Data.Name, int64(about.Data.Created), about.Data.Suspended, nil
+	query.Exists = true
+	query.User.Name = about.Data.Name
+	query.User.Created = time.Unix(int64(about.Data.Created), 0)
+	query.User.Suspended = about.Data.Suspended
+	return query
 }

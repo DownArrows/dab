@@ -16,21 +16,21 @@ type Comment struct {
 }
 
 type User struct {
-	Name     string
-	Hidden   bool
-	New      bool
-	Created  time.Time
-	Added    time.Time
-	Position string
+	Name      string
+	Hidden    bool
+	New       bool
+	Suspended bool
+	Created   time.Time
+	Added     time.Time
+	Position  string
 }
 
 func (user *User) Username(username string) bool {
 	return strings.ToLower(user.Name) == strings.ToLower(username)
 }
 
-type UserAddition struct {
-	Name   string
-	Hidden bool
+type UserQuery struct {
+	User   User
 	Exists bool
 	Error  error
 }

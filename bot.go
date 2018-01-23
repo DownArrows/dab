@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -147,60 +148,62 @@ func (bot *Bot) maxAgeReached(comments []Comment) bool {
 	return now.Sub(oldest) > bot.MaxAge
 }
 
-func (bot *Bot) AddUserServer(queries chan UserAddition) {
+func (bot *Bot) AddUserServer(queries chan UserQuery) {
 	bot.logger.Print("Init addition of new users.")
 	for query := range queries {
 		bot.logger.Print("Received query to add a new user: ", query)
 
-		exists, err := bot.AddUser(query.Name, query.Hidden)
-		if err != nil {
-			bot.logger.Print("Error when adding the new user ", query.Name, err)
+		query = bot.AddUser(query.User.Name, query.User.Hidden, false)
+		if query.Error != nil {
+			msg := "Error when adding the new user "
+			bot.logger.Print(msg, query.User.Name, query.Error)
 		}
 
-		reply := UserAddition{
-			Name:   query.Name,
-			Hidden: query.Hidden,
-			Exists: exists,
-			Error:  err,
-		}
-
-		queries <- reply
+		queries <- query
 	}
 }
 
-func (bot *Bot) AddUser(username string, hidden bool) (bool, error) {
+func (bot *Bot) AddUser(username string, hidden bool, force_suspended bool) UserQuery {
 	bot.logger.Print("Trying to add user ", username)
+	query := UserQuery{User: User{Name: username}}
 
-	has_user, err := bot.storage.HasUser(username)
-	if err != nil {
-		return false, err
-	}
-	if has_user {
-		bot.logger.Print(username, " already exists")
-		return true, nil
-	}
-
-	exists, case_name, created, suspended, err := bot.scanner.AboutUser(username)
-	if err != nil {
-		return false, err
+	query = bot.storage.GetUser(username)
+	if query.Error != nil {
+		return query
+	} else if query.Exists {
+		msg := username + " already exists"
+		bot.logger.Print(msg)
+		query.Error = errors.New(msg)
+		return query
 	}
 
-	if suspended {
-		bot.logger.Print("User ", username, " was suspended, adding anyway")
+	query = bot.scanner.AboutUser(username)
+	if query.Error != nil {
+		return query
 	}
 
-	if !exists {
+	if !query.Exists {
 		bot.logger.Print("User ", username, " not found")
-		return false, err
+		return query
 	}
 
-	err = bot.storage.AddUser(case_name, hidden, created)
+	if query.User.Suspended {
+		bot.logger.Print("User ", query.User.Name, " was suspended")
+		if !force_suspended {
+			err := errors.New("User " + query.User.Name + " can't be added, forced mode not enabled")
+			query.Error = err
+			return query
+		}
+	}
+
+	err := bot.storage.AddUser(query.User.Name, hidden, query.User.Created.Unix())
 	if err != nil {
-		return false, err
+		query.Error = err
+		return query
 	}
 
-	bot.logger.Print("New user ", case_name, " successfully added")
-	return true, nil
+	bot.logger.Print("New user ", query.User.Name, " successfully added")
+	return query
 }
 
 func (bot *Bot) StreamSub(sub string, ch chan Comment, sleep time.Duration) {

@@ -153,9 +153,9 @@ func stream(config *viper.Viper, bot *Bot, discordbot *DiscordBot) {
 func UserAdd(bot *Bot, arg string) error {
 	usernames := strings.Split(arg, ",")
 	for _, username := range usernames {
-		_, err := bot.AddUser(username, false)
-		if err != nil {
-			return err
+		res := bot.AddUser(username, false, true)
+		if res.Error != nil {
+			return res.Error
 		}
 	}
 	log.Print("done")

@@ -127,27 +127,38 @@ func (storage *Storage) ListUsers() ([]User, error) {
 	return users, nil
 }
 
-func (storage *Storage) HasUser(username string) (bool, error) {
-	stmt, err := storage.db.Prepare("SELECT count(1) FROM users WHERE name = ? COLLATE NOCASE")
+func (storage *Storage) GetUser(username string) UserQuery {
+	query := UserQuery{User: User{Name: username}}
+
+	stmt, err := storage.db.Prepare(`
+		SELECT name, hidden, new, created, added, position
+		FROM users WHERE name = ? COLLATE NOCASE`)
 	if err != nil {
-		return false, err
+		query.Error = err
+		return query
 	}
 	defer stmt.Close()
 
 	rows, err := stmt.Query(username)
 	if err != nil {
-		return false, err
+		query.Error = err
+		return query
 	}
 	defer rows.Close()
 
-	var exists int
-	rows.Next()
-	err = rows.Scan(&exists)
-	if err != nil {
-		return false, err
+	if !rows.Next() {
+		return query
 	}
 
-	return exists == 1, nil
+	err = rows.Scan(&query.User.Name, &query.User.Hidden, &query.User.New,
+		&query.User.Created, &query.User.Added, &query.User.Position)
+	if err != nil {
+		query.Error = err
+		return query
+	}
+
+	query.Exists = true
+	return query
 }
 
 func (storage *Storage) DelUser(username string) error {
