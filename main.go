@@ -24,7 +24,7 @@ func main() {
 	viper.SetDefault("report.timezone", "UTC")
 	viper.SetDefault("report.leeway", time.Duration(12)*time.Hour)
 	viper.SetDefault("report.cutoff", -50)
-	viper.SetDefault("report.maxlength", 400000)
+	viper.SetDefault("report.max_length", 400000)
 	viper.SetDefault("scanner.max_batches", 5)
 	viper.SetDefault("scanner.max_age", 24*time.Hour)
 
