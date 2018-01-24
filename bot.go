@@ -20,14 +20,14 @@ func NewBot(
 	scanner RedditScanner,
 	storage *Storage,
 	log_out io.Writer,
-	max_age_hours int64,
-	max_queries int,
+	maxAge time.Duration,
+	maxBatches int,
 ) *Bot {
 	logger := log.New(log_out, "bot: ", log.LstdFlags)
 
 	bot := &Bot{
-		MaxAge:     time.Duration(max_age_hours) * time.Hour,
-		MaxQueries: max_queries,
+		MaxAge:     maxAge,
+		MaxQueries: maxBatches,
 		scanner:    scanner,
 		storage:    storage,
 		logger:     logger,

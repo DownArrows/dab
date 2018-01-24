@@ -25,6 +25,8 @@ func main() {
 	viper.SetDefault("report.leeway", time.Duration(12)*time.Hour)
 	viper.SetDefault("report.cutoff", -50)
 	viper.SetDefault("report.maxlength", 400000)
+	viper.SetDefault("scanner.max_batches", 5)
+	viper.SetDefault("scanner.max_age", 24*time.Hour)
 
 	err := viper.ReadInConfig()
 	if err != nil {
@@ -83,16 +85,20 @@ func main() {
 	// Reddit bot or new users registration from the command line
 	if !*noreddit || *useradd != "" {
 		scanner, err := NewRedditClient(RedditAuth{
-			Id:       viper.GetString("client.id"),
-			Key:      viper.GetString("client.secret"),
-			Username: viper.GetString("client.username"),
-			Password: viper.GetString("client.password"),
+			Id:       viper.GetString("scanner.id"),
+			Key:      viper.GetString("scanner.secret"),
+			Username: viper.GetString("scanner.username"),
+			Password: viper.GetString("scanner.password"),
 		})
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		bot = NewBot(scanner, storage, os.Stdout, 24, 5)
+		bot = NewBot(
+			scanner, storage, os.Stdout,
+			viper.GetDuration("scanner.max_age"),
+			viper.GetInt("scanner.max_batches"),
+		)
 	}
 
 	// Command line registration
