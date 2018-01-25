@@ -98,37 +98,22 @@ func (bot *Bot) ScanUsers(users []User) error {
 
 func (bot *Bot) AllRelevantComments(user User) error {
 	var err error
-	var forbidden bool
+	var status int
 
 	for i := 0; i < bot.MaxQueries; i++ {
 		template := "Fetching batch n°%d of comments from %s, position \"%s\""
 		bot.logger.Print(fmt.Sprintf(template, i+1, user.Name, user.Position))
 
-		user.Position, forbidden, err = bot.SaveCommentsPage(user)
+		user.Position, status, err = bot.SaveCommentsPage(user)
 		if err != nil {
 			return err
 		}
 
-		if forbidden {
-			bot.logger.Print("trying to fetch " + user.Name + " resulted in a 403 error")
-			result := bot.scanner.AboutUser(user.Name)
-			if result.Error != nil {
-				return result.Error
-			}
-
-			if result.User.Suspended {
-				err = bot.storage.SetSuspended(user.Name, true)
-				if err != nil {
-					return err
-				}
-
-				if bot.Suspended != nil {
-					bot.logger.Print("User " + user.Name + " has been suspended")
-					bot.Suspended <- result.User
-				}
-
-				break
-			}
+		suspended, err := bot.ifSuspended(user, status)
+		if err != nil {
+			return err
+		} else if suspended {
+			break
 		}
 
 		if user.Position == "" && user.New {
@@ -151,24 +136,59 @@ func (bot *Bot) AllRelevantComments(user User) error {
 	return nil
 }
 
-func (bot *Bot) SaveCommentsPage(user User) (string, bool, error) {
-	comments, position, forbidden, err := bot.scanner.UserComments(user.Name, user.Position)
-	if err != nil {
-		return "", false, err
-	}
+func (bot *Bot) ifSuspended(user User, status int) (bool, error) {
+	gone := status == 404
+	forbidden := status == 403
+
 	if forbidden {
-		return position, true, nil
+		bot.logger.Print("trying to fetch " + user.Name + " resulted in a 403 error")
+	} else if gone {
+		bot.logger.Print(user.Name + " not found")
+	}
+
+	var about UserQuery
+	if forbidden {
+		about := bot.scanner.AboutUser(user.Name)
+		if about.Error != nil {
+			return false, about.Error
+		}
+	}
+
+	if gone || about.User.Suspended {
+		err := bot.storage.SetSuspended(user.Name, true)
+		if err != nil {
+			return false, err
+		}
+
+		if bot.Suspended != nil {
+			bot.logger.Print("User " + user.Name + " has been suspended or shadowbanned")
+			bot.Suspended <- about.User
+		}
+
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (bot *Bot) SaveCommentsPage(user User) (string, int, error) {
+	comments, position, status, err := bot.scanner.UserComments(user.Name, user.Position)
+	if err != nil {
+		return "", status, err
+	}
+	if status == 403 || status == 404 {
+		return position, status, nil
 	}
 
 	err = bot.storage.SaveCommentsPage(comments, user)
 	if err != nil {
-		return "", false, err
+		return "", status, err
 	}
 
 	if len(comments) > 0 && bot.maxAgeReached(comments) && !user.New {
-		return "", false, nil
+		return "", status, nil
 	}
-	return position, false, nil
+	return position, status, nil
 }
 
 func (bot *Bot) maxAgeReached(comments []Comment) bool {
