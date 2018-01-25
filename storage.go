@@ -190,23 +190,20 @@ func (storage *Storage) DelUser(username string) error {
 	storage.Lock()
 	defer storage.Unlock()
 
-	tx, err := storage.db.Begin()
+	stmt, err := storage.db.Prepare("UPDATE tracked SET deleted = 1 WHERE name = ?")
 	if err != nil {
-		return err
-	}
-	stmt, err := tx.Prepare("UPDATE tracked SET deleted = 1 WHERE name = ?")
-	if err != nil {
-		tx.Rollback()
 		return err
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(username)
+	result, err := stmt.Exec(username)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
-	return tx.Commit()
+	if nb, _ := result.RowsAffected(); nb == 0 {
+		return errors.New("No user named " + username)
+	}
+	return nil
 }
 
 func (storage *Storage) SetSuspended(username string, suspended bool) error {
