@@ -27,6 +27,7 @@ func main() {
 	viper.SetDefault("report.max_length", 400000)
 	viper.SetDefault("scanner.max_batches", 5)
 	viper.SetDefault("scanner.max_age", 24*time.Hour)
+	viper.SetDefault("scanner.unsuspension_interval", 15*time.Minute)
 
 	err := viper.ReadInConfig()
 	if err != nil {
@@ -144,6 +145,10 @@ func main() {
 
 		suspensions := bot.Suspensions()
 		go discordbot.SignalSuspensions(suspensions)
+
+		interval := viper.GetDuration("scanner.unsuspension_interval")
+		unsuspensions := bot.CheckUnsuspended(interval)
+		go discordbot.SignalUnsuspensions(unsuspensions)
 	}
 
 	sig := make(chan os.Signal, 1)

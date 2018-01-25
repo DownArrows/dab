@@ -53,6 +53,47 @@ func (bot *Bot) Run() {
 	}
 }
 
+func (bot *Bot) CheckUnsuspended(delay time.Duration) chan User {
+	ch := make(chan User)
+
+	go func() {
+
+		for {
+
+			time.Sleep(delay)
+
+			suspended, err := bot.storage.ListSuspended()
+			if err != nil {
+				bot.logger.Print("Unsuspension checker, (re-)starting : ", err)
+				continue
+			}
+
+			for _, user := range suspended {
+				res := bot.scanner.AboutUser(user.Name)
+				if res.Error != nil {
+					bot.logger.Print("Unsuspension checker, while checking ", user.Name, ": ", res.Error)
+					continue
+				}
+
+				if res.Exists && !res.User.Suspended {
+					err := bot.storage.SetSuspended(user.Name, false)
+					if err != nil {
+						bot.logger.Print("Unsuspension checker, while checking ", user.Name, ": ", res)
+						continue
+					}
+
+					bot.logger.Print(user.Name, " has been unsuspended")
+					ch <- user
+				}
+			}
+
+		}
+
+	}()
+
+	return ch
+}
+
 func (bot *Bot) ScanOnce() error {
 	bot.logger.Print("Scanning all known users")
 	users, err := bot.getUsersOrWait()
@@ -148,7 +189,7 @@ func (bot *Bot) ifSuspended(user User, status int) (bool, error) {
 
 	var about UserQuery
 	if forbidden {
-		about := bot.scanner.AboutUser(user.Name)
+		about = bot.scanner.AboutUser(user.Name)
 		if about.Error != nil {
 			return false, about.Error
 		}
