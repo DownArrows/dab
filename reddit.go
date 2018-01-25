@@ -34,11 +34,11 @@ type RedditScanner interface {
 
 type RedditClient struct {
 	sync.Mutex
-	Client  *http.Client
-	Version string
-	OAuth   OAuthResponse
-	Auth    RedditAuth
-	ticker  *time.Ticker
+	Client    *http.Client
+	UserAgent string
+	OAuth     OAuthResponse
+	Auth      RedditAuth
+	ticker    *time.Ticker
 }
 
 type commentListing struct {
@@ -58,12 +58,12 @@ type aboutUser struct {
 	}
 }
 
-func NewRedditClient(auth RedditAuth) (RedditScanner, error) {
+func NewRedditClient(auth RedditAuth, userAgent string) (RedditScanner, error) {
 	http_client := &http.Client{}
 	var client = &RedditClient{
-		Client:  http_client,
-		Version: "0.1.0",
-		ticker:  time.NewTicker(time.Second),
+		Client:    http_client,
+		ticker:    time.NewTicker(time.Second),
+		UserAgent: userAgent,
 	}
 
 	err := client.Connect(auth)
@@ -72,10 +72,6 @@ func NewRedditClient(auth RedditAuth) (RedditScanner, error) {
 	}
 
 	return client, nil
-}
-
-func (rc *RedditClient) UserAgent() string {
-	return rc.Auth.Username + "-Bot/v" + rc.Version
 }
 
 func (rc *RedditClient) Connect(auth RedditAuth) error {
@@ -89,7 +85,7 @@ func (rc *RedditClient) Connect(auth RedditAuth) error {
 
 	req, _ := http.NewRequest("POST", access_token_url, auth_form)
 
-	req.Header.Set("User-Agent", rc.UserAgent())
+	req.Header.Set("User-Agent", rc.UserAgent)
 	req.SetBasicAuth(rc.Auth.Id, rc.Auth.Key)
 
 	res, err := rc.Do(req)
@@ -107,7 +103,7 @@ func (rc *RedditClient) Connect(auth RedditAuth) error {
 }
 
 func (rc *RedditClient) PrepareRequest(req *http.Request) *http.Request {
-	req.Header.Set("User-Agent", rc.UserAgent())
+	req.Header.Set("User-Agent", rc.UserAgent)
 	req.Header.Set("Authorization", "bearer "+rc.OAuth.Token)
 	return req
 }

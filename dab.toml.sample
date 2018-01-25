@@ -8,6 +8,7 @@ id = "skCmCZTiGxol8N"
 secret = "8F5TxSqLlUH1-JgyMC-Q5PF"
 username = "coolusername1"
 password = "qwerty12345"
+user_agent = "linux:dab-bot:v0.5 (by /u/coolusername1)"
 # Posts older than this duration may not be saved
 max_age = "48h"
 # Max number of sucessive requests to a single user's comment history

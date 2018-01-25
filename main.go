@@ -86,12 +86,15 @@ func main() {
 
 	// Reddit bot or new users registration from the command line
 	if !*noreddit || *useradd != "" {
-		scanner, err := NewRedditClient(RedditAuth{
+		auth := RedditAuth{
 			Id:       viper.GetString("scanner.id"),
 			Key:      viper.GetString("scanner.secret"),
 			Username: viper.GetString("scanner.username"),
 			Password: viper.GetString("scanner.password"),
-		})
+		}
+		ua := viper.GetString("scanner.user_agent")
+
+		scanner, err := NewRedditClient(auth, ua)
 		if err != nil {
 			log.Fatal(err)
 		}
