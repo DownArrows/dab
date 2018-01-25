@@ -13,6 +13,8 @@ user_agent = "linux:dab-bot:v0.5 (by /u/coolusername1)"
 max_age = "48h"
 # Max number of sucessive requests to a single user's comment history
 max_batches = 10
+# Interval between each check of suspend users' status
+unsuspended_interval = "15m"
 
 [report]
 # Must follows the format of https://golang.org/pkg/time/#LoadLocation
