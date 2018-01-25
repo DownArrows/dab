@@ -48,10 +48,12 @@ func main() {
 	}
 
 	go func() {
-		time.Sleep(viper.GetDuration("database.cleanup_interval"))
-		err := storage.Vacuum()
-		if err != nil {
-			log.Fatal(err)
+		for {
+			time.Sleep(viper.GetDuration("database.cleanup_interval"))
+			err := storage.Vacuum()
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
 	}()
 
