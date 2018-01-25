@@ -36,6 +36,7 @@ func (storage *Storage) Init() error {
 		CREATE TABLE IF NOT EXISTS tracked (
 			name TEXT PRIMARY KEY,
 			created DATETIME NOT NULL,
+			suspended BOOLEAN DEFAULT 0 NOT NULL,
 			deleted BOOLEAN DEFAULT 0 NOT NULL,
 			added DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
 			hidden BOOLEAN NOT NULL,
@@ -86,7 +87,7 @@ func (storage *Storage) Init() error {
 			users(name, created, added, hidden, new, position)
 		AS
 			SELECT name, created, added, hidden, new, position
-			FROM tracked WHERE deleted = 0
+			FROM tracked WHERE deleted = 0 AND suspended = 0
 	`)
 	return err
 }
@@ -182,6 +183,22 @@ func (storage *Storage) DelUser(username string) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+func (storage *Storage) SetSuspended(username string, suspended bool) error {
+	stmt, err := storage.db.Prepare("UPDATE tracked SET suspended = ? WHERE name = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	val := 0
+	if suspended {
+		val = 1
+	}
+
+	_, err = stmt.Exec(val, username)
+	return err
 }
 
 func (storage *Storage) Averages(since, until time.Time) (map[string]float64, error) {

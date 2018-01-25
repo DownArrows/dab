@@ -11,6 +11,7 @@ import (
 type Bot struct {
 	MaxAge     time.Duration
 	MaxQueries int
+	Suspended  chan User
 	scanner    RedditScanner
 	storage    *Storage
 	logger     *log.Logger
@@ -34,6 +35,13 @@ func NewBot(
 	}
 
 	return bot
+}
+
+func (bot *Bot) Suspensions() chan User {
+	if bot.Suspended == nil {
+		bot.Suspended = make(chan User)
+	}
+	return bot.Suspended
 }
 
 func (bot *Bot) Run() {
@@ -90,14 +98,35 @@ func (bot *Bot) ScanUsers(users []User) error {
 
 func (bot *Bot) AllRelevantComments(user User) error {
 	var err error
+	var forbidden bool
 
 	for i := 0; i < bot.MaxQueries; i++ {
 		template := "Fetching batch n°%d of comments from %s, position \"%s\""
 		bot.logger.Print(fmt.Sprintf(template, i+1, user.Name, user.Position))
 
-		user.Position, err = bot.SaveCommentsPage(user)
+		user.Position, forbidden, err = bot.SaveCommentsPage(user)
 		if err != nil {
 			return err
+		}
+
+		if forbidden {
+			result := bot.scanner.AboutUser(user.Name)
+			if result.Error != nil {
+				return result.Error
+			}
+
+			if result.User.Suspended {
+				err = bot.storage.SetSuspended(user.Name, true)
+				if err != nil {
+					return err
+				}
+
+				if bot.Suspended != nil {
+					bot.Suspended <- result.User
+				}
+
+				break
+			}
 		}
 
 		if user.Position == "" && user.New {
@@ -120,21 +149,24 @@ func (bot *Bot) AllRelevantComments(user User) error {
 	return nil
 }
 
-func (bot *Bot) SaveCommentsPage(user User) (string, error) {
-	comments, position, err := bot.scanner.UserComments(user.Name, user.Position)
+func (bot *Bot) SaveCommentsPage(user User) (string, bool, error) {
+	comments, position, forbidden, err := bot.scanner.UserComments(user.Name, user.Position)
 	if err != nil {
-		return "", err
+		return "", false, err
+	}
+	if forbidden {
+		return position, true, nil
 	}
 
 	err = bot.storage.SaveCommentsPage(comments, user)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	if len(comments) > 0 && bot.maxAgeReached(comments) && !user.New {
-		return "", nil
+		return "", false, nil
 	}
-	return position, nil
+	return position, false, nil
 }
 
 func (bot *Bot) maxAgeReached(comments []Comment) bool {

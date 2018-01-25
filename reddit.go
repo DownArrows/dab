@@ -28,7 +28,7 @@ type OAuthResponse struct {
 
 type RedditScanner interface {
 	AboutUser(username string) UserQuery
-	UserComments(username string, position string) ([]Comment, string, error)
+	UserComments(username string, position string) ([]Comment, string, bool, error)
 	SubPosts(sub string, position string) ([]Comment, string, error)
 }
 
@@ -147,15 +147,16 @@ func (rc *RedditClient) RawRequest(verb string, path string, data io.Reader) ([]
 	return raw_data, res.StatusCode, nil
 }
 
-func (rc *RedditClient) UserComments(username string, position string) ([]Comment, string, error) {
+func (rc *RedditClient) UserComments(username string, position string) ([]Comment, string, bool, error) {
 	return rc.getListing("/u/"+username+"/comments", position)
 }
 
 func (rc *RedditClient) SubPosts(sub string, position string) ([]Comment, string, error) {
-	return rc.getListing("/r/"+sub+"/new", position)
+	comments, position, _, err := rc.getListing("/r/"+sub+"/new", position)
+	return comments, position, err
 }
 
-func (rc *RedditClient) getListing(path string, position string) ([]Comment, string, error) {
+func (rc *RedditClient) getListing(path string, position string) ([]Comment, string, bool, error) {
 	params := "?sort=new&limit=100"
 	if position != "" {
 		params += "&after=" + position
@@ -165,20 +166,24 @@ func (rc *RedditClient) getListing(path string, position string) ([]Comment, str
 	defer rc.Unlock()
 
 	res, status, err := rc.RawRequest("GET", path+params, nil)
-
 	if err != nil {
-		return nil, position, err
+		return nil, position, false, err
 	}
+
+	if strings.HasPrefix(path, "/u/") && status == 403 {
+		return nil, position, true, nil
+	}
+
 	if status != 200 {
 		template := "Bad response status when fetching the listing %s: %d"
 		msg := fmt.Sprintf(template, path, status)
-		return nil, position, errors.New(msg)
+		return nil, position, false, errors.New(msg)
 	}
 
 	parsed := &commentListing{}
 	err = json.Unmarshal(res, parsed)
 	if err != nil {
-		return nil, position, err
+		return nil, position, false, err
 	}
 
 	children := parsed.Data.Children
@@ -188,7 +193,7 @@ func (rc *RedditClient) getListing(path string, position string) ([]Comment, str
 	}
 
 	new_position := parsed.Data.After
-	return comments, new_position, nil
+	return comments, new_position, false, nil
 }
 
 func (rc *RedditClient) AboutUser(username string) UserQuery {

@@ -93,6 +93,16 @@ func (bot *DiscordBot) RedditEvents(evts chan Comment) {
 	}
 }
 
+func (bot *DiscordBot) SignalSuspensions(suspensions chan User) {
+	for user := range suspensions {
+		msg := fmt.Sprintf("RIP %s 🙏", user.Name)
+		_, err := bot.client.ChannelMessageSend(bot.General.ID, msg)
+		if err != nil {
+			bot.logger.Print("Suspensions listener: ", err)
+		}
+	}
+}
+
 func (bot *DiscordBot) OnReady(admin, general, log_chan string) {
 	var err error
 	bot.General, err = bot.client.Channel(general)

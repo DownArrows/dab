@@ -136,6 +136,9 @@ func main() {
 	if !*nodiscord && !*noreddit {
 		go bot.AddUserServer(discordbot.AddUser)
 		stream(viper.Sub("new"), bot, discordbot)
+
+		suspensions := bot.Suspensions()
+		go discordbot.SignalSuspensions(suspensions)
 	}
 
 	sig := make(chan os.Signal, 1)
