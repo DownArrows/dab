@@ -110,6 +110,7 @@ func (bot *Bot) AllRelevantComments(user User) error {
 		}
 
 		if forbidden {
+			bot.logger.Print("trying to fetch " + user.Name + " resulted in a 403 error")
 			result := bot.scanner.AboutUser(user.Name)
 			if result.Error != nil {
 				return result.Error
@@ -122,6 +123,7 @@ func (bot *Bot) AllRelevantComments(user User) error {
 				}
 
 				if bot.Suspended != nil {
+					bot.logger.Print("User " + user.Name + " has been suspended")
 					bot.Suspended <- result.User
 				}
 
