@@ -127,7 +127,7 @@ func (bot *Bot) AddUser(username string, hidden bool, force_suspended bool) User
 		}
 	}
 
-	err := bot.storage.AddUser(query.User.Name, hidden, query.User.Created.Unix())
+	err := bot.storage.AddUser(query.User.Name, hidden, query.User.Created)
 	if err != nil {
 		query.Error = err
 		return query
@@ -335,7 +335,7 @@ func (bot *Bot) saveCommentsPage(user User) (string, int, error) {
 func (bot *Bot) maxAgeReached(comments []Comment) bool {
 	last_comment := comments[len(comments)-1]
 
-	oldest := time.Unix(int64(last_comment.Created), 0)
+	oldest := last_comment.Created
 	// Use time.Time.Round to remove the monotonic clock measurement, as
 	// we don't need it for the precision we want and one parameter depends
 	// on an external source (the comments' timestamps).

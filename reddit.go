@@ -188,7 +188,7 @@ func (rc *redditClient) getListing(path string, position string) ([]Comment, str
 	children := parsed.Data.Children
 	comments := make([]Comment, len(children))
 	for i, child := range children {
-		comments[i] = child.Data
+		comments[i] = child.Data.FinishDecoding()
 	}
 
 	new_position := parsed.Data.After

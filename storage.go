@@ -35,10 +35,10 @@ func (storage *Storage) Init() error {
 	_, err := storage.db.Exec(`
 		CREATE TABLE IF NOT EXISTS tracked (
 			name TEXT PRIMARY KEY,
-			created DATETIME NOT NULL,
+			created TIMESTAMP NOT NULL,
 			suspended BOOLEAN DEFAULT 0 NOT NULL,
 			deleted BOOLEAN DEFAULT 0 NOT NULL,
-			added DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+			added TIMESTAMP NOT NULL,
 			hidden BOOLEAN NOT NULL,
 			new BOOLEAN DEFAULT 1 NOT NULL,
 			position TEXT DEFAULT "" NOT NULL
@@ -54,7 +54,7 @@ func (storage *Storage) Init() error {
 			score INTEGER NOT NULL,
 			permalink TEXT NOT NULL,
 			sub TEXT NOT NULL,
-			created INTEGER NOT NULL,
+			created TIMESTAMP NOT NULL,
 			body TEXT NOT NULL,
 			FOREIGN KEY (author) REFERENCES tracked(name)
 		) WITHOUT ROWID`)
@@ -66,7 +66,7 @@ func (storage *Storage) Init() error {
 		CREATE TABLE IF NOT EXISTS seen_posts (
 			id TEXT PRIMARY KEY,
 			sub TEXT NOT NULL,
-			created DATETIME NOT NULL
+			created TIMESTAMP NOT NULL
 		) WITHOUT ROWID`)
 	if err != nil {
 		return err
@@ -76,7 +76,7 @@ func (storage *Storage) Init() error {
 		CREATE TABLE IF NOT EXISTS fortunes (
 			id INTEGER PRIMARY KEY,
 			content TEXT NOT NULL,
-			added DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+			added TIMESTAMP NOT NULL
 		)`)
 	if err != nil {
 		return err
@@ -104,16 +104,18 @@ func (storage *Storage) Vacuum() error {
  Users
 ******/
 
-func (storage *Storage) AddUser(username string, hidden bool, created int64) error {
+func (storage *Storage) AddUser(username string, hidden bool, created time.Time) error {
 	storage.Lock()
 	defer storage.Unlock()
 
-	stmt, err := storage.db.Prepare("INSERT INTO tracked(name, hidden, created) VALUES (?, ?, ?)")
+	stmt, err := storage.db.Prepare(`
+		INSERT INTO tracked(name, hidden, created, added)
+		VALUES (?, ?, ?, strftime("%s", CURRENT_TIMESTAMP))`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
-	_, err = stmt.Exec(username, hidden, created)
+	_, err = stmt.Exec(username, hidden, created.Unix())
 	return err
 }
 
@@ -334,7 +336,7 @@ func (storage *Storage) saveComments(tx *sql.Tx, comments []Comment) error {
 
 	for _, comment := range comments {
 		_, err = stmt.Exec(comment.Id, comment.Author, comment.Score,
-			comment.Permalink, comment.Sub, comment.Created, comment.Body)
+			comment.Permalink, comment.Sub, comment.Created.Unix(), comment.Body)
 		if err != nil {
 			tx.Rollback()
 			return err
@@ -516,7 +518,7 @@ func (storage *Storage) SaveSubPostIDs(listing []Comment, sub string) error {
 	defer stmt.Close()
 
 	for _, post := range listing {
-		_, err = stmt.Exec(post.Id, sub, int64(post.Created))
+		_, err = stmt.Exec(post.Id, sub, post.Created.Unix())
 		if err != nil {
 			tx.Rollback()
 			return err
@@ -561,7 +563,9 @@ func (storage *Storage) SaveFortune(fortune string) error {
 	storage.Lock()
 	defer storage.Unlock()
 
-	stmt, err := storage.db.Prepare("INSERT INTO fortunes(content) VALUES (?)")
+	stmt, err := storage.db.Prepare(`
+		INSERT INTO fortunes(content)
+		VALUES (?, strftime("%s", CURRENT_TIMESTAMP))`)
 	if err != nil {
 		return err
 	}

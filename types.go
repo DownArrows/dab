@@ -10,9 +10,17 @@ type Comment struct {
 	Author    string
 	Score     int64
 	Permalink string
-	Sub       string  `json:"subreddit"`
-	Created   float64 `json:"created_utc"`
-	Body      string
+	Sub       string `json:"subreddit"`
+	// This is only used for decoding JSON, otherwise user Created
+	RawCreated float64   `json:"created_utc"`
+	Created    time.Time `json:"-"` // This field exists in reddit's JSON with another type and meaning
+	Body       string
+}
+
+func (comment Comment) FinishDecoding() Comment {
+	comment.Created = time.Unix(int64(comment.RawCreated), 0)
+	comment.RawCreated = 0
+	return comment
 }
 
 type User struct {
