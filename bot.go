@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"time"
@@ -115,12 +114,12 @@ func (bot *Bot) AddUser(username string, hidden bool, force_suspended bool) User
 	}
 
 	if !query.Exists {
-		bot.logger.Print("User ", username, " not found")
+		bot.logger.Printf("User \"%s\" not found", username)
 		return query
 	}
 
 	if query.User.Suspended {
-		bot.logger.Print("User ", query.User.Name, " was suspended")
+		bot.logger.Printf("User \"%s\" was suspended", query.User.Name)
 		if !force_suspended {
 			err := errors.New("User " + query.User.Name + " can't be added, forced mode not enabled")
 			query.Error = err
@@ -134,7 +133,7 @@ func (bot *Bot) AddUser(username string, hidden bool, force_suspended bool) User
 		return query
 	}
 
-	bot.logger.Print("New user ", query.User.Name, " successfully added")
+	bot.logger.Printf("New user \"%s\" sucessfully added", query.User.Name)
 	return query
 }
 
@@ -163,14 +162,14 @@ func (bot *Bot) CheckUnsuspended(delay time.Duration) chan User {
 			for _, user := range suspended {
 				res := bot.scanner.AboutUser(user.Name)
 				if res.Error != nil {
-					bot.logger.Print("Unsuspension checker, while checking ", user.Name, ": ", res.Error)
+					bot.logger.Printf("Unsuspension checker, while checking \"%s\": %s", user.Name, res.Error)
 					continue
 				}
 
 				if res.Exists && !res.User.Suspended {
 					err := bot.storage.SetSuspended(user.Name, false)
 					if err != nil {
-						bot.logger.Print("Unsuspension checker, while checking ", user.Name, ": ", res)
+						bot.logger.Printf("Unsuspension checker, while checking \"%s\": %s", user.Name, res)
 						continue
 					}
 
@@ -244,7 +243,7 @@ func (bot *Bot) allRelevantComments(user User) error {
 
 	for i := 0; i < bot.MaxQueries; i++ {
 		template := "Fetching batch n°%d of comments from %s, position \"%s\""
-		bot.logger.Print(fmt.Sprintf(template, i+1, user.Name, user.Position))
+		bot.logger.Printf(template, i+1, user.Name, user.Position)
 
 		user.Position, status, err = bot.saveCommentsPage(user)
 		if err != nil {
