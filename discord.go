@@ -26,13 +26,13 @@ type DiscordBot struct {
 
 func NewDiscordBot(
 	storage *Storage,
-	log_out io.Writer,
+	logOut io.Writer,
 	token string,
 	general string,
-	log_chan string,
+	logChan string,
 	admin string,
 ) (*DiscordBot, error) {
-	logger := log.New(log_out, "discordbot: ", log.LstdFlags)
+	logger := log.New(logOut, "discordbot: ", log.LstdFlags)
 
 	session, err := discordgo.New("Bot " + token)
 	if err != nil {
@@ -55,11 +55,11 @@ func NewDiscordBot(
 	}
 
 	session.AddHandler(func(s *discordgo.Session, msg *discordgo.MessageCreate) {
-		dbot.OnMessage(msg)
+		dbot.onMessage(msg)
 	})
 
 	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
-		dbot.OnReady(admin, general, log_chan)
+		dbot.onReady(admin, general, logChan)
 	})
 
 	return dbot, nil
@@ -113,14 +113,14 @@ func (bot *DiscordBot) SignalUnsuspensions(ch chan User) {
 	}
 }
 
-func (bot *DiscordBot) OnReady(admin, general, log_chan string) {
+func (bot *DiscordBot) onReady(admin, general, logChan string) {
 	var err error
 	bot.General, err = bot.client.Channel(general)
 	if err != nil {
 		bot.logger.Fatal(err)
 	}
 
-	bot.LogChan, err = bot.client.Channel(log_chan)
+	bot.LogChan, err = bot.client.Channel(logChan)
 	if err != nil {
 		bot.logger.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func (bot *DiscordBot) OnReady(admin, general, log_chan string) {
 	bot.logger.Print("Initialization ok")
 }
 
-func (bot *DiscordBot) OnMessage(msg *discordgo.MessageCreate) {
+func (bot *DiscordBot) onMessage(msg *discordgo.MessageCreate) {
 	var err error
 	if msg.Author.ID == bot.client.State.User.ID {
 		return
@@ -140,8 +140,8 @@ func (bot *DiscordBot) OnMessage(msg *discordgo.MessageCreate) {
 
 	content := msg.Content
 	channel := msg.ChannelID
-	author := FullAuthorName(msg)
-	private, err := bot.IsDMChannel(channel)
+	author := fullAuthorName(msg)
+	private, err := bot.isDMChannel(channel)
 	if err != nil {
 		bot.logger.Print(err)
 		return
@@ -149,29 +149,29 @@ func (bot *DiscordBot) OnMessage(msg *discordgo.MessageCreate) {
 
 	if channel == bot.General.ID && bot.redditLink.MatchString(content) && !strings.Contains(content, "!nolog") {
 		bot.logger.Print("Link to a comment on reddit posted by ", author)
-		err = bot.RedditCommentLink(msg)
+		err = bot.redditCommentLink(msg)
 	} else if private && content == "!fortune" {
 		bot.logger.Print(author, " has asked for a fortune")
-		err = bot.Fortune()
+		err = bot.fortune()
 	} else if private && msg.Author.ID == bot.Admin.ID && strings.HasPrefix(content, "!addfortune ") {
 		bot.logger.Print(author, " wants to add a fortune")
 		fortune := strings.TrimPrefix(content, "!addfortune ")
-		err = bot.AddFortune(fortune)
+		err = bot.addFortune(fortune)
 		if err == nil {
 			reply := msg.Author.Mention() + " fortune saved."
 			_, err = bot.client.ChannelMessageSend(msg.ChannelID, reply)
 		}
 	} else if strings.HasPrefix(content, "!karma ") {
-		err = bot.Karma(channel, msg.Author, strings.TrimPrefix(content, "!karma "))
+		err = bot.karma(channel, msg.Author, strings.TrimPrefix(content, "!karma "))
 	} else if content == "!ping" && msg.Author.ID == bot.Admin.ID {
 		_, err = bot.client.ChannelMessageSend(msg.ChannelID, "pong")
 	} else if strings.HasPrefix(content, "!register ") {
-		err = bot.Register(msg)
+		err = bot.register(msg)
 	} else if strings.HasPrefix(content, "!unregister ") && msg.Author.ID == bot.Admin.ID {
-		err = bot.Unregister(msg)
+		err = bot.unregister(msg)
 	} else if strings.HasPrefix(content, "!exists ") {
 		log.Print(author + " wants to check if a user is registered")
-		err = bot.UserExists(content, channel, msg)
+		err = bot.userExists(content, channel, msg)
 	}
 
 	if err != nil {
@@ -179,29 +179,21 @@ func (bot *DiscordBot) OnMessage(msg *discordgo.MessageCreate) {
 	}
 }
 
-func (bot *DiscordBot) UserExists(content, channel string, msg *discordgo.MessageCreate) error {
-	username := strings.TrimPrefix(content, "!exists ")
+func (bot *DiscordBot) redditCommentLink(msg *discordgo.MessageCreate) error {
+	response := fullAuthorName(msg) + ": " + msg.Content
 
-	users, err := bot.storage.ListUsers()
+	i := rand.Int31n(int32(len(bot.LinkReactions)))
+	reaction := bot.LinkReactions[i]
+	err := bot.client.MessageReactionAdd(msg.ChannelID, msg.ID, reaction)
 	if err != nil {
 		return err
 	}
 
-	status := "not found"
-	for _, user := range users {
-		if user.Username(username) {
-			username = user.Name
-			status = fmt.Sprintf("found")
-			break
-		}
-	}
-
-	response := fmt.Sprintf("<@%s> User %s %s.", msg.Author.ID, username, status)
-	_, err = bot.client.ChannelMessageSend(channel, response)
+	_, err = bot.client.ChannelMessageSend(bot.LogChan.ID, response)
 	return err
 }
 
-func (bot *DiscordBot) Register(msg *discordgo.MessageCreate) error {
+func (bot *DiscordBot) register(msg *discordgo.MessageCreate) error {
 	names := strings.Split(strings.TrimPrefix(msg.Content, "!register "), " ")
 	bot.logger.Print(msg.Author.Username, " wants to register ", names)
 
@@ -235,7 +227,7 @@ func (bot *DiscordBot) Register(msg *discordgo.MessageCreate) error {
 	return err
 }
 
-func (bot *DiscordBot) Unregister(msg *discordgo.MessageCreate) error {
+func (bot *DiscordBot) unregister(msg *discordgo.MessageCreate) error {
 	names := strings.Split(strings.TrimPrefix(msg.Content, "!unregister "), " ")
 	bot.logger.Print(msg.Author.Username, " wants to unregister ", names)
 
@@ -255,21 +247,38 @@ func (bot *DiscordBot) Unregister(msg *discordgo.MessageCreate) error {
 	return err
 }
 
-func (bot *DiscordBot) RedditCommentLink(msg *discordgo.MessageCreate) error {
-	response := FullAuthorName(msg) + ": " + msg.Content
+func (bot *DiscordBot) userExists(content, channel string, msg *discordgo.MessageCreate) error {
+	username := strings.TrimPrefix(content, "!exists ")
 
-	i := rand.Int31n(int32(len(bot.LinkReactions)))
-	reaction := bot.LinkReactions[i]
-	err := bot.client.MessageReactionAdd(msg.ChannelID, msg.ID, reaction)
+	users, err := bot.storage.ListUsers()
 	if err != nil {
 		return err
 	}
 
-	_, err = bot.client.ChannelMessageSend(bot.LogChan.ID, response)
+	status := "not found"
+	for _, user := range users {
+		if user.Username(username) {
+			username = user.Name
+			status = fmt.Sprintf("found")
+			break
+		}
+	}
+
+	response := fmt.Sprintf("<@%s> User %s %s.", msg.Author.ID, username, status)
+	_, err = bot.client.ChannelMessageSend(channel, response)
 	return err
 }
 
-func (bot *DiscordBot) Fortune() error {
+func (bot *DiscordBot) addFortune(fortune string) error {
+	err := bot.storage.SaveFortune(fortune)
+	if err != nil {
+		return err
+	}
+	bot.Fortunes = append(bot.Fortunes, fortune)
+	return nil
+}
+
+func (bot *DiscordBot) fortune() error {
 	err := bot.client.ChannelTyping(bot.General.ID)
 	if err != nil {
 		return err
@@ -278,15 +287,6 @@ func (bot *DiscordBot) Fortune() error {
 	fortune := bot.getFortune()
 	_, err = bot.client.ChannelMessageSend(bot.General.ID, fortune)
 	return err
-}
-
-func (bot *DiscordBot) AddFortune(fortune string) error {
-	err := bot.storage.SaveFortune(fortune)
-	if err != nil {
-		return err
-	}
-	bot.Fortunes = append(bot.Fortunes, fortune)
-	return nil
 }
 
 func (bot *DiscordBot) getFortune() string {
@@ -299,7 +299,7 @@ func (bot *DiscordBot) getFortune() string {
 	return fortune
 }
 
-func (bot *DiscordBot) Karma(channelID string, author *discordgo.User, username string) error {
+func (bot *DiscordBot) karma(channelID string, author *discordgo.User, username string) error {
 	err := bot.client.ChannelTyping(channelID)
 	if err != nil {
 		return err
@@ -331,7 +331,7 @@ func (bot *DiscordBot) Karma(channelID string, author *discordgo.User, username 
 	return err
 }
 
-func (bot *DiscordBot) IsDMChannel(channelID string) (bool, error) {
+func (bot *DiscordBot) isDMChannel(channelID string) (bool, error) {
 	channel, err := bot.client.Channel(channelID)
 	if err != nil {
 		return false, err
@@ -339,6 +339,6 @@ func (bot *DiscordBot) IsDMChannel(channelID string) (bool, error) {
 	return channel.Type == discordgo.ChannelTypeDM, nil
 }
 
-func FullAuthorName(msg *discordgo.MessageCreate) string {
+func fullAuthorName(msg *discordgo.MessageCreate) string {
 	return msg.Author.Username + "#" + msg.Author.Discriminator
 }

@@ -32,7 +32,7 @@ type RedditScanner interface {
 	SubPosts(sub string, position string) ([]Comment, string, error)
 }
 
-type RedditClient struct {
+type redditClient struct {
 	sync.Mutex
 	Client    *http.Client
 	UserAgent string
@@ -60,13 +60,13 @@ type aboutUser struct {
 
 func NewRedditClient(auth RedditAuth, userAgent string) (RedditScanner, error) {
 	http_client := &http.Client{}
-	var client = &RedditClient{
+	var client = &redditClient{
 		Client:    http_client,
 		ticker:    time.NewTicker(time.Second),
 		UserAgent: userAgent,
 	}
 
-	err := client.Connect(auth)
+	err := client.connect(auth)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,60 @@ func NewRedditClient(auth RedditAuth, userAgent string) (RedditScanner, error) {
 	return client, nil
 }
 
-func (rc *RedditClient) Connect(auth RedditAuth) error {
+func (rc *redditClient) UserComments(username string, position string) ([]Comment, string, int, error) {
+	return rc.getListing("/u/"+username+"/comments", position)
+}
+
+func (rc *redditClient) AboutUser(username string) UserQuery {
+	query := UserQuery{User: User{Name: username}}
+	sane, err := regexp.MatchString(`^[[:word:]-]+$`, username)
+	if err != nil {
+		query.Error = err
+		return query
+	} else if !sane {
+		msg := fmt.Sprintf("username %s contains forbidden characters or is empty", username)
+		query.Error = errors.New(msg)
+		return query
+	}
+
+	rc.Lock()
+	defer rc.Unlock()
+	res, status, err := rc.rawRequest("GET", "/u/"+username+"/about", nil)
+	if err != nil {
+		query.Error = err
+		return query
+	}
+
+	if status == 404 {
+		return query
+	} else if status != 200 {
+		template := "Bad response status when looking up %s: %d"
+		msg := fmt.Sprintf(template, username, status)
+		err = errors.New(msg)
+		query.Error = err
+		return query
+	}
+
+	about := &aboutUser{}
+	err = json.Unmarshal(res, about)
+	if err != nil {
+		query.Error = err
+		return query
+	}
+
+	query.Exists = true
+	query.User.Name = about.Data.Name
+	query.User.Created = time.Unix(int64(about.Data.Created), 0)
+	query.User.Suspended = about.Data.Suspended
+	return query
+}
+
+func (rc *redditClient) SubPosts(sub string, position string) ([]Comment, string, error) {
+	comments, position, _, err := rc.getListing("/r/"+sub+"/new", position)
+	return comments, position, err
+}
+
+func (rc *redditClient) connect(auth RedditAuth) error {
 	rc.Auth = auth
 
 	var auth_conf = url.Values{
@@ -88,7 +141,7 @@ func (rc *RedditClient) Connect(auth RedditAuth) error {
 	req.Header.Set("User-Agent", rc.UserAgent)
 	req.SetBasicAuth(rc.Auth.Id, rc.Auth.Key)
 
-	res, err := rc.Do(req)
+	res, err := rc.do(req)
 	if err != nil {
 		return err
 	}
@@ -102,57 +155,7 @@ func (rc *RedditClient) Connect(auth RedditAuth) error {
 	return err
 }
 
-func (rc *RedditClient) PrepareRequest(req *http.Request) *http.Request {
-	req.Header.Set("User-Agent", rc.UserAgent)
-	req.Header.Set("Authorization", "bearer "+rc.OAuth.Token)
-	return req
-}
-
-func (rc *RedditClient) Do(req *http.Request) (*http.Response, error) {
-	return rc.Client.Do(req)
-}
-
-func (rc *RedditClient) RawRequest(verb string, path string, data io.Reader) ([]byte, int, error) {
-
-	<-rc.ticker.C
-
-	req, err := http.NewRequest(verb, request_base_url+path, data)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	rc.PrepareRequest(req)
-	res, res_err := rc.Client.Do(req)
-	if res_err != nil {
-		return nil, 0, res_err
-	}
-
-	if res.StatusCode == 401 {
-		err = rc.Connect(rc.Auth)
-		if err != nil {
-			return nil, 0, err
-		}
-		return rc.RawRequest(verb, path, data)
-	}
-
-	raw_data, read_err := ioutil.ReadAll(res.Body)
-	if read_err != nil {
-		return nil, 0, read_err
-	}
-
-	return raw_data, res.StatusCode, nil
-}
-
-func (rc *RedditClient) UserComments(username string, position string) ([]Comment, string, int, error) {
-	return rc.getListing("/u/"+username+"/comments", position)
-}
-
-func (rc *RedditClient) SubPosts(sub string, position string) ([]Comment, string, error) {
-	comments, position, _, err := rc.getListing("/r/"+sub+"/new", position)
-	return comments, position, err
-}
-
-func (rc *RedditClient) getListing(path string, position string) ([]Comment, string, int, error) {
+func (rc *redditClient) getListing(path string, position string) ([]Comment, string, int, error) {
 	params := "?sort=new&limit=100"
 	if position != "" {
 		params += "&after=" + position
@@ -161,7 +164,7 @@ func (rc *RedditClient) getListing(path string, position string) ([]Comment, str
 	rc.Lock()
 	defer rc.Unlock()
 
-	res, status, err := rc.RawRequest("GET", path+params, nil)
+	res, status, err := rc.rawRequest("GET", path+params, nil)
 	if err != nil {
 		return nil, position, 0, err
 	}
@@ -192,46 +195,43 @@ func (rc *RedditClient) getListing(path string, position string) ([]Comment, str
 	return comments, new_position, status, nil
 }
 
-func (rc *RedditClient) AboutUser(username string) UserQuery {
-	query := UserQuery{User: User{Name: username}}
-	sane, err := regexp.MatchString(`^[[:word:]-]+$`, username)
+func (rc *redditClient) rawRequest(verb string, path string, data io.Reader) ([]byte, int, error) {
+
+	<-rc.ticker.C
+
+	req, err := http.NewRequest(verb, request_base_url+path, data)
 	if err != nil {
-		query.Error = err
-		return query
-	} else if !sane {
-		msg := fmt.Sprintf("username %s contains forbidden characters or is empty", username)
-		query.Error = errors.New(msg)
-		return query
+		return nil, 0, err
 	}
 
-	rc.Lock()
-	defer rc.Unlock()
-	res, status, err := rc.RawRequest("GET", "/u/"+username+"/about", nil)
-	if err != nil {
-		query.Error = err
-		return query
+	rc.prepareRequest(req)
+	res, res_err := rc.Client.Do(req)
+	if res_err != nil {
+		return nil, 0, res_err
 	}
 
-	if status == 404 {
-		return query
-	} else if status != 200 {
-		template := "Bad response status when looking up %s: %d"
-		msg := fmt.Sprintf(template, username, status)
-		err = errors.New(msg)
-		query.Error = err
-		return query
+	if res.StatusCode == 401 {
+		err = rc.connect(rc.Auth)
+		if err != nil {
+			return nil, 0, err
+		}
+		return rc.rawRequest(verb, path, data)
 	}
 
-	about := &aboutUser{}
-	err = json.Unmarshal(res, about)
-	if err != nil {
-		query.Error = err
-		return query
+	raw_data, read_err := ioutil.ReadAll(res.Body)
+	if read_err != nil {
+		return nil, 0, read_err
 	}
 
-	query.Exists = true
-	query.User.Name = about.Data.Name
-	query.User.Created = time.Unix(int64(about.Data.Created), 0)
-	query.User.Suspended = about.Data.Suspended
-	return query
+	return raw_data, res.StatusCode, nil
+}
+
+func (rc *redditClient) prepareRequest(req *http.Request) *http.Request {
+	req.Header.Set("User-Agent", rc.UserAgent)
+	req.Header.Set("Authorization", "bearer "+rc.OAuth.Token)
+	return req
+}
+
+func (rc *redditClient) do(req *http.Request) (*http.Response, error) {
+	return rc.Client.Do(req)
 }

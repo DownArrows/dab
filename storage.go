@@ -17,8 +17,8 @@ type Storage struct {
 	logger *log.Logger
 }
 
-func NewStorage(db_path string, log_out io.Writer) (*Storage, error) {
-	logger := log.New(log_out, "storage: ", log.LstdFlags)
+func NewStorage(db_path string, logOut io.Writer) (*Storage, error) {
+	logger := log.New(logOut, "storage: ", log.LstdFlags)
 	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=1", db_path))
 	if err != nil {
 		return nil, err
@@ -92,6 +92,18 @@ func (storage *Storage) Init() error {
 	return err
 }
 
+func (storage *Storage) Vacuum() error {
+	storage.Lock()
+	defer storage.Unlock()
+
+	_, err := storage.db.Exec("VACUUM")
+	return err
+}
+
+/*****
+ Users
+******/
+
 func (storage *Storage) AddUser(username string, hidden bool, created int64) error {
 	storage.Lock()
 	defer storage.Unlock()
@@ -103,53 +115,6 @@ func (storage *Storage) AddUser(username string, hidden bool, created int64) err
 	defer stmt.Close()
 	_, err = stmt.Exec(username, hidden, created)
 	return err
-}
-
-func (storage *Storage) ListUsers() ([]User, error) {
-	rows, err := storage.db.Query(`
-		SELECT name, hidden, new, created, added, position
-		FROM users ORDER BY name`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	users := make([]User, 0, 100)
-	for rows.Next() {
-		var user User
-
-		err = rows.Scan(&user.Name, &user.Hidden, &user.New,
-			&user.Created, &user.Added, &user.Position)
-		if err != nil {
-			return nil, err
-		}
-		users = append(users, user)
-	}
-	return users, nil
-}
-
-func (storage *Storage) ListSuspended() ([]User, error) {
-	rows, err := storage.db.Query(`
-		SELECT name, hidden, new, created, added, position
-		FROM tracked WHERE suspended = 1 AND deleted = 0
-		ORDER BY name`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	users := make([]User, 0, 100)
-	for rows.Next() {
-		var user User
-
-		err = rows.Scan(&user.Name, &user.Hidden, &user.New,
-			&user.Created, &user.Added, &user.Position)
-		if err != nil {
-			return nil, err
-		}
-		users = append(users, user)
-	}
-	return users, nil
 }
 
 func (storage *Storage) GetUser(username string) UserQuery {
@@ -206,6 +171,53 @@ func (storage *Storage) DelUser(username string) error {
 	return nil
 }
 
+func (storage *Storage) ListUsers() ([]User, error) {
+	rows, err := storage.db.Query(`
+		SELECT name, hidden, new, created, added, position
+		FROM users ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := make([]User, 0, 100)
+	for rows.Next() {
+		var user User
+
+		err = rows.Scan(&user.Name, &user.Hidden, &user.New,
+			&user.Created, &user.Added, &user.Position)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
+func (storage *Storage) ListSuspended() ([]User, error) {
+	rows, err := storage.db.Query(`
+		SELECT name, hidden, new, created, added, position
+		FROM tracked WHERE suspended = 1 AND deleted = 0
+		ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := make([]User, 0, 100)
+	for rows.Next() {
+		var user User
+
+		err = rows.Scan(&user.Name, &user.Hidden, &user.New,
+			&user.Created, &user.Added, &user.Position)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
 func (storage *Storage) SetSuspended(username string, suspended bool) error {
 	stmt, err := storage.db.Prepare("UPDATE tracked SET suspended = ? WHERE name = ?")
 	if err != nil {
@@ -217,39 +229,40 @@ func (storage *Storage) SetSuspended(username string, suspended bool) error {
 	return err
 }
 
-func (storage *Storage) Averages(since, until time.Time) (map[string]float64, error) {
-	stmt, err := storage.db.Prepare(`
-		SELECT comments.author, AVG(comments.score)
-		FROM comments JOIN users
-		ON comments.author = users.name
-		WHERE comments.created BETWEEN ? AND ?
-		GROUP BY comments.author
-	`)
+func (storage *Storage) NotNewUser(username string) error {
+	storage.Lock()
+	defer storage.Unlock()
+
+	stmt, err := storage.db.Prepare("UPDATE tracked SET new = 0 WHERE name = ?")
 	if err != nil {
-		return nil, err
+		return err
 	}
+	defer stmt.Close()
 
-	rows, err := stmt.Query(since.Unix(), until.Unix())
-	if err != nil {
-		return nil, err
-	}
-
-	results := make(map[string]float64)
-	for rows.Next() {
-		var name string
-		var average float64
-
-		err = rows.Scan(&name, &average)
-		if err != nil {
-			return nil, err
-		}
-		results[name] = average
-	}
-
-	return results, nil
+	_, err = stmt.Exec(username)
+	return err
 }
 
+/********
+ Comments
+*********/
+
 // Make sure the comments are all from the same user and its struct is up to date
+func (storage *Storage) ResetPosition(username string) error {
+	storage.Lock()
+	defer storage.Unlock()
+
+	tx, err := storage.db.Begin()
+	if err != nil {
+		return err
+	}
+	err = storage.savePosition(tx, username, "")
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (storage *Storage) SaveCommentsPage(comments []Comment, user User) error {
 	storage.Lock()
 	defer storage.Unlock()
@@ -311,20 +324,6 @@ func (storage *Storage) scanComments(rows *sql.Rows) ([]Comment, error) {
 	return comments, nil
 }
 
-func (storage *Storage) NotNewUser(username string) error {
-	storage.Lock()
-	defer storage.Unlock()
-
-	stmt, err := storage.db.Prepare("UPDATE tracked SET new = 0 WHERE name = ?")
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	_, err = stmt.Exec(username)
-	return err
-}
-
 func (storage *Storage) saveComments(tx *sql.Tx, comments []Comment) error {
 	stmt, err := tx.Prepare("INSERT OR REPLACE INTO comments VALUES (?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
@@ -361,107 +360,9 @@ func (storage *Storage) savePosition(tx *sql.Tx, username string, position strin
 	return nil
 }
 
-func (storage *Storage) ResetPosition(username string) error {
-	storage.Lock()
-	defer storage.Unlock()
-
-	tx, err := storage.db.Begin()
-	if err != nil {
-		return err
-	}
-	err = storage.savePosition(tx, username, "")
-	if err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-func (storage *Storage) SaveSubPostIDs(listing []Comment, sub string) error {
-	storage.Lock()
-	defer storage.Unlock()
-
-	tx, err := storage.db.Begin()
-	if err != nil {
-		return err
-	}
-
-	stmt, err := tx.Prepare("INSERT OR REPLACE INTO seen_posts(id, sub, created) VALUES (?, ?, ?)")
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-	defer stmt.Close()
-
-	for _, post := range listing {
-		_, err = stmt.Exec(post.Id, sub, int64(post.Created))
-		if err != nil {
-			tx.Rollback()
-			return err
-		}
-	}
-
-	return tx.Commit()
-}
-
-func (storage *Storage) SeenPostIDs(sub string) ([]string, error) {
-
-	stmt, err := storage.db.Prepare("SELECT id FROM seen_posts WHERE sub = ?")
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-
-	rows, err := stmt.Query(sub)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	ids := make([]string, 0, 100)
-	for rows.Next() {
-		var id string
-
-		err = rows.Scan(&id)
-		if err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	return ids, nil
-}
-
-func (storage *Storage) SaveFortune(fortune string) error {
-	storage.Lock()
-	defer storage.Unlock()
-
-	stmt, err := storage.db.Prepare("INSERT INTO fortunes(content) VALUES (?)")
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec(fortune)
-	return err
-}
-
-func (storage *Storage) GetFortunes() ([]string, error) {
-	rows, err := storage.db.Query("SELECT content FROM fortunes")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	fortunes := make([]string, 0, 10)
-	for rows.Next() {
-		var fortune string
-
-		err = rows.Scan(&fortune)
-		if err != nil {
-			return nil, err
-		}
-		fortunes = append(fortunes, fortune)
-	}
-	return fortunes, nil
-}
+/**********
+ Statistics
+***********/
 
 func (storage *Storage) GetTotalKarma(username string) (int64, error) {
 	return storage.getKarma(username, "")
@@ -469,6 +370,58 @@ func (storage *Storage) GetTotalKarma(username string) (int64, error) {
 
 func (storage *Storage) GetNegativeKarma(username string) (int64, error) {
 	return storage.getKarma(username, "score < 0 AND")
+}
+
+func (storage *Storage) getKarma(username, cond string) (int64, error) {
+	query := fmt.Sprintf("SELECT sum(score) FROM comments WHERE %s author = ? COLLATE NOCASE", cond)
+	stmt, err := storage.db.Prepare(query)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(username)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	var karma int64
+	rows.Next()
+	err = rows.Scan(&karma)
+	return karma, err
+}
+
+func (storage *Storage) Averages(since, until time.Time) (map[string]float64, error) {
+	stmt, err := storage.db.Prepare(`
+		SELECT comments.author, AVG(comments.score)
+		FROM comments JOIN users
+		ON comments.author = users.name
+		WHERE comments.created BETWEEN ? AND ?
+		GROUP BY comments.author
+	`)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := stmt.Query(since.Unix(), until.Unix())
+	if err != nil {
+		return nil, err
+	}
+
+	results := make(map[string]float64)
+	for rows.Next() {
+		var name string
+		var average float64
+
+		err = rows.Scan(&name, &average)
+		if err != nil {
+			return nil, err
+		}
+		results[name] = average
+	}
+
+	return results, nil
 }
 
 func (storage *Storage) LowestAverageBetween(since, until time.Time) (string, float64, uint64, error) {
@@ -542,30 +495,97 @@ func (storage *Storage) LowestDeltaBetween(since, until time.Time) (string, int6
 	return name, delta, count, err
 }
 
-func (storage *Storage) getKarma(username, cond string) (int64, error) {
-	query := fmt.Sprintf("SELECT sum(score) FROM comments WHERE %s author = ? COLLATE NOCASE", cond)
-	stmt, err := storage.db.Prepare(query)
-	if err != nil {
-		return 0, err
-	}
-	defer stmt.Close()
+/*****
+ Posts
+******/
 
-	rows, err := stmt.Query(username)
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-
-	var karma int64
-	rows.Next()
-	err = rows.Scan(&karma)
-	return karma, err
-}
-
-func (storage *Storage) Vacuum() error {
+func (storage *Storage) SaveSubPostIDs(listing []Comment, sub string) error {
 	storage.Lock()
 	defer storage.Unlock()
 
-	_, err := storage.db.Exec("VACUUM")
+	tx, err := storage.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	stmt, err := tx.Prepare("INSERT OR REPLACE INTO seen_posts(id, sub, created) VALUES (?, ?, ?)")
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	defer stmt.Close()
+
+	for _, post := range listing {
+		_, err = stmt.Exec(post.Id, sub, int64(post.Created))
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (storage *Storage) SeenPostIDs(sub string) ([]string, error) {
+
+	stmt, err := storage.db.Prepare("SELECT id FROM seen_posts WHERE sub = ?")
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(sub)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]string, 0, 100)
+	for rows.Next() {
+		var id string
+
+		err = rows.Scan(&id)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+/********
+ Fortunes
+*********/
+
+func (storage *Storage) SaveFortune(fortune string) error {
+	storage.Lock()
+	defer storage.Unlock()
+
+	stmt, err := storage.db.Prepare("INSERT INTO fortunes(content) VALUES (?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(fortune)
 	return err
+}
+
+func (storage *Storage) GetFortunes() ([]string, error) {
+	rows, err := storage.db.Query("SELECT content FROM fortunes")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	fortunes := make([]string, 0, 10)
+	for rows.Next() {
+		var fortune string
+
+		err = rows.Scan(&fortune)
+		if err != nil {
+			return nil, err
+		}
+		fortunes = append(fortunes, fortune)
+	}
+	return fortunes, nil
 }
