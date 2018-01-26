@@ -213,12 +213,7 @@ func (storage *Storage) SetSuspended(username string, suspended bool) error {
 	}
 	defer stmt.Close()
 
-	val := 0
-	if suspended {
-		val = 1
-	}
-
-	_, err = stmt.Exec(val, username)
+	_, err = stmt.Exec(suspended, username)
 	return err
 }
 
