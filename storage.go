@@ -394,107 +394,38 @@ func (storage *Storage) getKarma(username, cond string) (int64, error) {
 	return karma, err
 }
 
-func (storage *Storage) Averages(since, until time.Time) (map[string]float64, error) {
+func (storage *Storage) StatsBetween(since, until time.Time) (Stats, error) {
 	stmt, err := storage.db.Prepare(`
-		SELECT comments.author, AVG(comments.score)
+		SELECT
+			comments.author AS author,
+			AVG(comments.score) AS average,
+			SUM(comments.score) AS delta,
+			COUNT(comments.id) AS count
 		FROM comments JOIN users
 		ON comments.author = users.name
 		WHERE comments.created BETWEEN ? AND ?
-		GROUP BY comments.author
-	`)
+		GROUP BY comments.author`)
 	if err != nil {
 		return nil, err
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(since.Unix(), until.Unix())
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
-	results := make(map[string]float64)
+	stats := make(Stats)
 	for rows.Next() {
-		var name string
-		var average float64
-
-		err = rows.Scan(&name, &average)
+		var data UserStats
+		err = rows.Scan(&data.Author, &data.Average, &data.Delta, &data.Count)
 		if err != nil {
 			return nil, err
 		}
-		results[name] = average
+		stats[data.Author] = data
 	}
-
-	return results, nil
-}
-
-func (storage *Storage) LowestAverageBetween(since, until time.Time) (string, float64, uint64, error) {
-	stmt, err := storage.db.Prepare(`
-		SELECT author, MIN(avg_score), count
-		FROM (
-			SELECT comments.author AS author, AVG(comments.score) AS avg_score, COUNT(comments.id) AS count
-			FROM comments JOIN users
-			ON comments.author = users.name
-			WHERE comments.created BETWEEN ? AND ?
-			GROUP BY comments.author
-		)`)
-	if err != nil {
-		return "", 0, 0, err
-	}
-	defer stmt.Close()
-
-	rows, err := stmt.Query(since.Unix(), until.Unix())
-	if err != nil {
-		return "", 0, 0, err
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		return "", 0, 0, errors.New("No users registered")
-	}
-
-	var name string
-	var average float64
-	var count uint64
-
-	err = rows.Scan(&name, &average, &count)
-	return name, average, count, err
-}
-
-func (storage *Storage) LowestDeltaBetween(since, until time.Time) (string, int64, uint64, error) {
-	stmt, err := storage.db.Prepare(`
-		SELECT author, MIN(delta), count FROM (
-			SELECT
-				comments.author AS author,
-				SUM(comments.score) AS delta,
-				COUNT(comments.id) AS count
-			FROM comments JOIN users
-			ON comments.author = users.name
-			WHERE comments.created BETWEEN ? AND ?
-			GROUP BY comments.author
-		)`)
-	if err != nil {
-		return "", 0, 0, err
-	}
-	defer stmt.Close()
-
-	rows, err := stmt.Query(since.Unix(), until.Unix())
-	if err != nil {
-		return "", 0, 0, err
-	}
-	defer rows.Close()
-
-	var name string
-	var delta int64
-	var count uint64
-
-	// Because of the join we're always having at least one column.
-	// If there is no registered user, everything will be NULL,
-	// and this function will return a cryptic error about "unsupported Scan",
-	// but that's unto the user of this function to take care not to have an
-	// empty database.
-	// FIXME: if there is an ex æquo, only one of the result will be returned.
-	rows.Next()
-	err = rows.Scan(&name, &delta, &count)
-	return name, delta, count, err
+	return stats, nil
 }
 
 /*****

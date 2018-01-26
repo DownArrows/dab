@@ -25,6 +25,7 @@ func main() {
 	viper.SetDefault("report.leeway", time.Duration(12)*time.Hour)
 	viper.SetDefault("report.cutoff", -50)
 	viper.SetDefault("report.max_length", 400000)
+	viper.SetDefault("report.nb_top", 5)
 	viper.SetDefault("scanner.max_batches", 5)
 	viper.SetDefault("scanner.max_age", 24*time.Hour)
 	viper.SetDefault("scanner.unsuspension_interval", 15*time.Minute)
@@ -65,6 +66,7 @@ func main() {
 		viper.GetDuration("report.leeway"),
 		viper.GetInt64("report.cutoff"),
 		uint64(viper.GetInt64("report.maxlength")),
+		viper.GetInt("report.nb_top"),
 	)
 	if err != nil {
 		log.Fatal(err)
