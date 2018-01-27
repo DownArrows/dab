@@ -218,7 +218,8 @@ Top {{ .Avg | len}} lowest average karma per comment:
 {{ . }}
 {{ end }}`
 
-const commentTmpl = `#\#{{ .Number }}
+const commentTmpl = `
+#\#{{ .Number }}
 
 Author: [/u/{{ .Author }}](https://reddit.com/user/{{ .Author }})^(Avg. this week = {{ .Average }} per comment)
 
