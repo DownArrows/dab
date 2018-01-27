@@ -22,7 +22,7 @@ func main() {
 	viper.SetDefault("database.path", "./dab.db")
 	viper.SetDefault("database.cleanup_interval", time.Hour)
 	viper.SetDefault("report.timezone", "UTC")
-	viper.SetDefault("report.leeway", time.Duration(12)*time.Hour)
+	viper.SetDefault("report.leeway", 12*time.Hour)
 	viper.SetDefault("report.cutoff", -50)
 	viper.SetDefault("report.max_length", 400000)
 	viper.SetDefault("report.nb_top", 5)
