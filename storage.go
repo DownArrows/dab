@@ -84,10 +84,10 @@ func (storage *Storage) Init() error {
 
 	_, err = storage.db.Exec(`
 		CREATE VIEW IF NOT EXISTS
-			users(name, created, added, hidden, new, position)
+			users(name, created, added, suspended, hidden, new, position)
 		AS
-			SELECT name, created, added, hidden, new, position
-			FROM tracked WHERE deleted = 0 AND suspended = 0
+			SELECT name, created, added, suspended, hidden, new, position
+			FROM tracked WHERE deleted = 0
 	`)
 	return err
 }
@@ -123,7 +123,7 @@ func (storage *Storage) GetUser(username string) UserQuery {
 	query := UserQuery{User: User{Name: username}}
 
 	stmt, err := storage.db.Prepare(`
-		SELECT name, hidden, new, created, added, position
+		SELECT name, hidden, suspended, new, created, added, position
 		FROM users WHERE name = ? COLLATE NOCASE`)
 	if err != nil {
 		query.Error = err
@@ -142,8 +142,8 @@ func (storage *Storage) GetUser(username string) UserQuery {
 		return query
 	}
 
-	err = rows.Scan(&query.User.Name, &query.User.Hidden, &query.User.New,
-		&query.User.Created, &query.User.Added, &query.User.Position)
+	err = rows.Scan(&query.User.Name, &query.User.Hidden, &query.User.Suspended,
+		&query.User.New, &query.User.Created, &query.User.Added, &query.User.Position)
 	if err != nil {
 		query.Error = err
 		return query
@@ -176,7 +176,7 @@ func (storage *Storage) DelUser(username string) error {
 func (storage *Storage) ListUsers() ([]User, error) {
 	rows, err := storage.db.Query(`
 		SELECT name, hidden, new, created, added, position
-		FROM users ORDER BY name`)
+		FROM users WHERE suspended = 0 ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
