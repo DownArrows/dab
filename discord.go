@@ -172,7 +172,7 @@ func (bot *DiscordBot) onMessage(msg *discordgo.MessageCreate) {
 			_, err = bot.client.ChannelMessageSend(msg.ChannelID, reply)
 		}
 	} else if strings.HasPrefix(content, "!karma ") {
-		err = bot.karma(channel, msg.Author, strings.TrimPrefix(content, "!karma "))
+		err = bot.karma(msg, strings.TrimPrefix(content, "!karma "))
 	} else if content == "!ping" && msg.Author.ID == bot.Admin.ID {
 		_, err = bot.client.ChannelMessageSend(msg.ChannelID, "pong")
 	} else if strings.HasPrefix(content, "!register ") {
@@ -182,9 +182,6 @@ func (bot *DiscordBot) onMessage(msg *discordgo.MessageCreate) {
 	} else if strings.HasPrefix(content, "!exists ") {
 		log.Print(author + " wants to check if a user is registered")
 		err = bot.userExists(content, channel, msg)
-	} else if content == "!crash" {
-		defer bot.reportCrash(msg)
-		panic("test")
 	}
 
 	if err != nil {
@@ -207,6 +204,8 @@ func (bot *DiscordBot) redditCommentLink(msg *discordgo.MessageCreate) error {
 }
 
 func (bot *DiscordBot) register(msg *discordgo.MessageCreate) error {
+	defer bot.reportCrash(msg)
+
 	names := strings.Split(strings.TrimPrefix(msg.Content, "!register "), " ")
 	bot.logger.Print(msg.Author.Username, " wants to register ", names)
 
@@ -241,6 +240,8 @@ func (bot *DiscordBot) register(msg *discordgo.MessageCreate) error {
 }
 
 func (bot *DiscordBot) unregister(msg *discordgo.MessageCreate) error {
+	defer bot.reportCrash(msg)
+
 	names := strings.Split(strings.TrimPrefix(msg.Content, "!unregister "), " ")
 	bot.logger.Print(msg.Author.Username, " wants to unregister ", names)
 
@@ -261,6 +262,8 @@ func (bot *DiscordBot) unregister(msg *discordgo.MessageCreate) error {
 }
 
 func (bot *DiscordBot) userExists(content, channel string, msg *discordgo.MessageCreate) error {
+	defer bot.reportCrash(msg)
+
 	username := strings.TrimPrefix(content, "!exists ")
 
 	users, err := bot.storage.ListUsers()
@@ -312,8 +315,10 @@ func (bot *DiscordBot) getFortune() string {
 	return fortune
 }
 
-func (bot *DiscordBot) karma(channelID string, author *discordgo.User, username string) error {
-	err := bot.client.ChannelTyping(channelID)
+func (bot *DiscordBot) karma(msg *discordgo.MessageCreate, username string) error {
+	defer bot.reportCrash(msg)
+
+	err := bot.client.ChannelTyping(msg.ChannelID)
 	if err != nil {
 		return err
 	}
@@ -324,8 +329,8 @@ func (bot *DiscordBot) karma(channelID string, author *discordgo.User, username 
 	}
 
 	if !res.Exists {
-		reply := fmt.Sprintf("<@%s> user %s not found.", author.ID, username)
-		_, err = bot.client.ChannelMessageSend(channelID, reply)
+		reply := fmt.Sprintf("<@%s> user %s not found.", msg.Author.ID, username)
+		_, err = bot.client.ChannelMessageSend(msg.ChannelID, reply)
 		return err
 	}
 
@@ -339,8 +344,8 @@ func (bot *DiscordBot) karma(channelID string, author *discordgo.User, username 
 		return err
 	}
 
-	reply := fmt.Sprintf("<@%s> karma for %s: %d / %d", author.ID, res.User.Name, total, negative)
-	_, err = bot.client.ChannelMessageSend(channelID, reply)
+	reply := fmt.Sprintf("<@%s> karma for %s: %d / %d", msg.Author.ID, res.User.Name, total, negative)
+	_, err = bot.client.ChannelMessageSend(msg.ChannelID, reply)
 	return err
 }
 
