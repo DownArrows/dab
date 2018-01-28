@@ -202,14 +202,14 @@ func StartOfFirstWeek(year int, location *time.Location) time.Time {
 const reportHeadTmpl = `Top {{ .Delta | len }} negative **Δk** for this week:
 ^([**Δk** or "delta k" refers to the total change in karma])
 {{ range .Delta }}
-	- **{{ .Score }}** with {{ .Count }} posts,
-	  by [/u/{{ .Author }}](https://reddit.com/user/{{ .Author }})
+ - **{{ .Score }}** with {{ .Count }} posts,
+   by [/u/{{ .Author }}](https://reddit.com/user/{{ .Author }})
 {{- end }}
 
 Top {{ .Avg | len}} lowest average karma per comment: 
 {{ range .Avg }}
-	- **{{ .Score }}** with {{ .Count }} posts,
-	  by [/u/{{ .Author }}](https://reddit.com/user/{{ .Author }})
+ - **{{ .Score }}** with {{ .Count }} posts,
+   by [/u/{{ .Author }}](https://reddit.com/user/{{ .Author }})
 {{- end }}
 
 * * *
