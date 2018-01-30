@@ -394,7 +394,7 @@ func (storage *Storage) GetNegativeKarma(username string) (int64, error) {
 }
 
 func (storage *Storage) getKarma(username, cond string) (int64, error) {
-	query := fmt.Sprintf("SELECT sum(score) FROM comments WHERE %s author = ? COLLATE NOCASE", cond)
+	query := fmt.Sprintf("SELECT SUM(score) FROM comments WHERE %s author = ? COLLATE NOCASE", cond)
 	stmt, err := storage.db.Prepare(query)
 	if err != nil {
 		return 0, err
@@ -407,10 +407,17 @@ func (storage *Storage) getKarma(username, cond string) (int64, error) {
 	}
 	defer rows.Close()
 
-	var karma int64
 	rows.Next()
+	if err = rows.Err(); err != nil {
+		return 0, err
+	}
+
+	var karma sql.NullInt64
 	err = rows.Scan(&karma)
-	return karma, err
+	if !karma.Valid {
+		return 0, errors.New("No comments from user " + username + " found")
+	}
+	return karma.Int64, err
 }
 
 func (storage *Storage) StatsBetween(since, until time.Time) (Stats, error) {
