@@ -186,7 +186,7 @@ func (bot *Bot) CheckUnsuspended(delay time.Duration) chan User {
 }
 
 func (bot *Bot) Run() {
-	for i := 0; true; i++ {
+	for {
 		err := bot.scanOnce()
 		if err != nil {
 			panic(err)
