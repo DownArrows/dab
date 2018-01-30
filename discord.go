@@ -157,9 +157,9 @@ func (bot *DiscordBot) onMessage(msg *discordgo.MessageCreate) {
 		return
 	}
 
-	if channel == bot.General.ID && bot.redditLink.MatchString(content) && !strings.Contains(content, "!nolog") {
+	if bot.isLoggableRedditLink(channel, content) {
 		bot.logger.Print("Link to a comment on reddit posted by ", author)
-		err = bot.redditCommentLink(msg)
+		err = bot.processRedditLink(msg)
 	} else if private && content == "!fortune" {
 		bot.logger.Print(author, " has asked for a fortune")
 		err = bot.fortune()
@@ -189,17 +189,29 @@ func (bot *DiscordBot) onMessage(msg *discordgo.MessageCreate) {
 	}
 }
 
-func (bot *DiscordBot) redditCommentLink(msg *discordgo.MessageCreate) error {
-	response := fullAuthorName(msg) + ": " + msg.Content
+func (bot *DiscordBot) isLoggableRedditLink(channel, content string) bool {
+	return (channel == bot.General.ID &&
+		bot.redditLink.MatchString(content) &&
+		!strings.Contains(content, "!nolog"))
+}
 
-	i := rand.Int31n(int32(len(bot.LinkReactions)))
-	reaction := bot.LinkReactions[i]
-	err := bot.client.MessageReactionAdd(msg.ChannelID, msg.ID, reaction)
+func (bot *DiscordBot) processRedditLink(msg *discordgo.MessageCreate) error {
+	err := bot.addRandomReactionTo(msg)
 	if err != nil {
 		return err
 	}
+	return bot.postInLogChannel(fullAuthorName(msg) + ": " + msg.Content)
+}
 
-	_, err = bot.client.ChannelMessageSend(bot.LogChan.ID, response)
+func (bot *DiscordBot) addRandomReactionTo(msg *discordgo.MessageCreate) error {
+	nb_reactions := len(bot.LinkReactions)
+	rand_index := rand.Int31n(int32(nb_reactions))
+	reaction := bot.LinkReactions[rand_index]
+	return bot.client.MessageReactionAdd(msg.ChannelID, msg.ID, reaction)
+}
+
+func (bot *DiscordBot) postInLogChannel(response string) error {
+	_, err := bot.client.ChannelMessageSend(bot.LogChan.ID, response)
 	return err
 }
 
