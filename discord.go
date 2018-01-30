@@ -77,16 +77,6 @@ func (bot *DiscordBot) Run() {
 	}
 }
 
-func (bot *DiscordBot) reportCrash(orig_msg *discordgo.MessageCreate) {
-	if r := recover(); r != nil {
-		report := fmt.Sprintf("<@%s> crash report: %s", orig_msg.Author.ID, r)
-		_, err := bot.client.ChannelMessageSend(orig_msg.ChannelID, report)
-		if err != nil {
-			bot.logger.Print(err)
-		}
-	}
-}
-
 func (bot *DiscordBot) RedditEvents(evts chan Comment) {
 	var err error
 	for comment := range evts {
