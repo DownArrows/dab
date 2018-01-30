@@ -249,7 +249,6 @@ func (storage *Storage) NotNewUser(username string) error {
  Comments
 *********/
 
-// Make sure the comments are all from the same user and its struct is up to date
 func (storage *Storage) ResetPosition(username string) error {
 	storage.Lock()
 	defer storage.Unlock()
@@ -265,6 +264,7 @@ func (storage *Storage) ResetPosition(username string) error {
 	return tx.Commit()
 }
 
+// Make sure the comments are all from the same user and its struct is up to date
 func (storage *Storage) SaveCommentsPage(comments []Comment, user User) error {
 	storage.Lock()
 	defer storage.Unlock()
