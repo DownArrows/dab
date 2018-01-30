@@ -182,7 +182,7 @@ func (bot *DiscordBot) onMessage(msg *discordgo.MessageCreate) {
 func (bot *DiscordBot) isLoggableRedditLink(channel, content string) bool {
 	return (channel == bot.General.ID &&
 		bot.redditLink.MatchString(content) &&
-		!strings.Contains(content, "!nolog"))
+		!strings.Contains(strings.ToLower(content), "!nolog"))
 }
 
 func (bot *DiscordBot) processRedditLink(msg *discordgo.MessageCreate) error {
