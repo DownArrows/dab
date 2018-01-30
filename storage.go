@@ -32,7 +32,12 @@ func NewStorage(db_path string, logOut io.Writer) (*Storage, error) {
 }
 
 func (storage *Storage) Init() error {
-	_, err := storage.db.Exec(`
+	err := storage.EnableWAL()
+	if err != nil {
+		return err
+	}
+
+	_, err = storage.db.Exec(`
 		CREATE TABLE IF NOT EXISTS tracked (
 			name TEXT PRIMARY KEY,
 			created TIMESTAMP NOT NULL,
@@ -90,6 +95,21 @@ func (storage *Storage) Init() error {
 			FROM tracked WHERE deleted = 0
 	`)
 	return err
+}
+
+func (storage *Storage) EnableWAL() error {
+	var journal_mode string
+
+	err := storage.db.QueryRow("PRAGMA journal_mode=WAL").Scan(&journal_mode)
+	if err != nil {
+		return err
+	}
+
+	if journal_mode != "wal" {
+		return errors.New("Failed to set journal mode to Write-Ahead Log (WAL)")
+	}
+
+	return nil
 }
 
 func (storage *Storage) Vacuum() error {
