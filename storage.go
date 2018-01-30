@@ -141,6 +141,10 @@ func (storage *Storage) GetUser(username string) UserQuery {
 	if !rows.Next() {
 		return query
 	}
+	if err = rows.Err(); err != nil {
+		query.Error = err
+		return query
+	}
 
 	err = rows.Scan(&query.User.Name, &query.User.Hidden, &query.User.Suspended,
 		&query.User.New, &query.User.Created, &query.User.Added, &query.User.Position)
@@ -193,6 +197,11 @@ func (storage *Storage) ListUsers() ([]User, error) {
 		}
 		users = append(users, user)
 	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return users, nil
 }
 
@@ -217,6 +226,11 @@ func (storage *Storage) ListSuspended() ([]User, error) {
 		}
 		users = append(users, user)
 	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return users, nil
 }
 
@@ -323,6 +337,11 @@ func (storage *Storage) scanComments(rows *sql.Rows) ([]Comment, error) {
 		}
 		comments = append(comments, comment)
 	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return comments, nil
 }
 
@@ -425,6 +444,11 @@ func (storage *Storage) StatsBetween(since, until time.Time) (Stats, error) {
 		}
 		stats[data.Author] = data
 	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return stats, nil
 }
 
@@ -483,6 +507,11 @@ func (storage *Storage) SeenPostIDs(sub string) ([]string, error) {
 		}
 		ids = append(ids, id)
 	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return ids, nil
 }
 
@@ -522,5 +551,10 @@ func (storage *Storage) GetFortunes() ([]string, error) {
 		}
 		fortunes = append(fortunes, fortune)
 	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return fortunes, nil
 }
