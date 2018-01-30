@@ -216,8 +216,6 @@ func (bot *DiscordBot) postInLogChannel(response string) error {
 }
 
 func (bot *DiscordBot) register(msg *discordgo.MessageCreate) error {
-	defer bot.reportCrash(msg)
-
 	names := strings.Split(strings.TrimPrefix(msg.Content, "!register "), " ")
 	bot.logger.Print(msg.Author.Username, " wants to register ", names)
 
@@ -252,8 +250,6 @@ func (bot *DiscordBot) register(msg *discordgo.MessageCreate) error {
 }
 
 func (bot *DiscordBot) unregister(msg *discordgo.MessageCreate) error {
-	defer bot.reportCrash(msg)
-
 	names := strings.Split(strings.TrimPrefix(msg.Content, "!unregister "), " ")
 	bot.logger.Print(msg.Author.Username, " wants to unregister ", names)
 
@@ -274,8 +270,6 @@ func (bot *DiscordBot) unregister(msg *discordgo.MessageCreate) error {
 }
 
 func (bot *DiscordBot) userExists(content, channel string, msg *discordgo.MessageCreate) error {
-	defer bot.reportCrash(msg)
-
 	username := strings.TrimPrefix(content, "!exists ")
 
 	users, err := bot.storage.ListUsers()
@@ -328,8 +322,6 @@ func (bot *DiscordBot) getFortune() string {
 }
 
 func (bot *DiscordBot) karma(msg *discordgo.MessageCreate, username string) error {
-	defer bot.reportCrash(msg)
-
 	err := bot.client.ChannelTyping(msg.ChannelID)
 	if err != nil {
 		return err
