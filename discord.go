@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type DiscordBot struct {
@@ -71,9 +72,16 @@ func (bot *DiscordBot) Run() {
 		panic(err)
 	}
 
-	err = bot.client.UpdateStatus(0, "Downvote Counter")
-	if err != nil {
-		panic(err)
+	go bot.setPlayingStatus()
+}
+
+func (bot *DiscordBot) setPlayingStatus() {
+	for {
+		err := bot.client.UpdateStatus(0, "Downvote Counter")
+		if err != nil {
+			bot.logger.Print("Couldn't set status on discord")
+		}
+		time.Sleep(time.Hour)
 	}
 }
 
