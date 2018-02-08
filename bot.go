@@ -303,7 +303,7 @@ func (bot *Bot) ifSuspended(user User, status int) (bool, error) {
 
 		if bot.Suspended != nil {
 			bot.logger.Print("User " + user.Name + " has been suspended or shadowbanned")
-			bot.Suspended <- about.User
+			bot.Suspended <- user
 		}
 
 		return true, nil
