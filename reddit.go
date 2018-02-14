@@ -26,13 +26,7 @@ type OAuthResponse struct {
 	Scope   string `json:"scope"`
 }
 
-type RedditScanner interface {
-	AboutUser(username string) UserQuery
-	UserComments(username string, position string) ([]Comment, string, int, error)
-	SubPosts(sub string, position string) ([]Comment, string, error)
-}
-
-type redditClient struct {
+type RedditClient struct {
 	sync.Mutex
 	Client    *http.Client
 	UserAgent string
@@ -58,9 +52,9 @@ type aboutUser struct {
 	}
 }
 
-func NewRedditClient(auth RedditAuth, userAgent string) (RedditScanner, error) {
+func NewRedditClient(auth RedditAuth, userAgent string) (*RedditClient, error) {
 	http_client := &http.Client{}
-	var client = &redditClient{
+	var client = &RedditClient{
 		Client:    http_client,
 		ticker:    time.NewTicker(time.Second),
 		UserAgent: userAgent,
@@ -74,11 +68,11 @@ func NewRedditClient(auth RedditAuth, userAgent string) (RedditScanner, error) {
 	return client, nil
 }
 
-func (rc *redditClient) UserComments(username string, position string) ([]Comment, string, int, error) {
+func (rc *RedditClient) UserComments(username string, position string) ([]Comment, string, int, error) {
 	return rc.getListing("/u/"+username+"/comments", position)
 }
 
-func (rc *redditClient) AboutUser(username string) UserQuery {
+func (rc *RedditClient) AboutUser(username string) UserQuery {
 	query := UserQuery{User: User{Name: username}}
 	sane, err := regexp.MatchString(`^[[:word:]-]+$`, username)
 	if err != nil {
@@ -122,12 +116,12 @@ func (rc *redditClient) AboutUser(username string) UserQuery {
 	return query
 }
 
-func (rc *redditClient) SubPosts(sub string, position string) ([]Comment, string, error) {
+func (rc *RedditClient) SubPosts(sub string, position string) ([]Comment, string, error) {
 	comments, position, _, err := rc.getListing("/r/"+sub+"/new", position)
 	return comments, position, err
 }
 
-func (rc *redditClient) connect(auth RedditAuth) error {
+func (rc *RedditClient) connect(auth RedditAuth) error {
 	rc.Auth = auth
 
 	var auth_conf = url.Values{
@@ -155,7 +149,7 @@ func (rc *redditClient) connect(auth RedditAuth) error {
 	return err
 }
 
-func (rc *redditClient) getListing(path string, position string) ([]Comment, string, int, error) {
+func (rc *RedditClient) getListing(path string, position string) ([]Comment, string, int, error) {
 	params := "?sort=new&limit=100"
 	if position != "" {
 		params += "&after=" + position
@@ -195,7 +189,7 @@ func (rc *redditClient) getListing(path string, position string) ([]Comment, str
 	return comments, new_position, status, nil
 }
 
-func (rc *redditClient) rawRequest(verb string, path string, data io.Reader) ([]byte, int, error) {
+func (rc *RedditClient) rawRequest(verb string, path string, data io.Reader) ([]byte, int, error) {
 
 	<-rc.ticker.C
 
@@ -226,12 +220,12 @@ func (rc *redditClient) rawRequest(verb string, path string, data io.Reader) ([]
 	return raw_data, res.StatusCode, nil
 }
 
-func (rc *redditClient) prepareRequest(req *http.Request) *http.Request {
+func (rc *RedditClient) prepareRequest(req *http.Request) *http.Request {
 	req.Header.Set("User-Agent", rc.UserAgent)
 	req.Header.Set("Authorization", "bearer "+rc.OAuth.Token)
 	return req
 }
 
-func (rc *redditClient) do(req *http.Request) (*http.Response, error) {
+func (rc *RedditClient) do(req *http.Request) (*http.Response, error) {
 	return rc.Client.Do(req)
 }

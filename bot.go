@@ -11,13 +11,13 @@ type Bot struct {
 	MaxAge     time.Duration
 	MaxQueries int
 	Suspended  chan User
-	scanner    RedditScanner
+	scanner    *RedditClient
 	storage    *Storage
 	logger     *log.Logger
 }
 
 func NewBot(
-	scanner RedditScanner,
+	scanner *RedditClient,
 	storage *Storage,
 	logOut io.Writer,
 	maxAge time.Duration,
