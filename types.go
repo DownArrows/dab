@@ -78,7 +78,7 @@ func (s Stats) AveragesToScores() Scores {
 	for name, data := range s {
 		result = append(result, GenStats{
 			Author: name,
-			Score:  round(data.Average),
+			Score:  int64(math.Round(data.Average)),
 			Count:  data.Count,
 		})
 	}
@@ -111,15 +111,4 @@ func (s Scores) Swap(i, j int) {
 func (s Scores) Sort() []GenStats {
 	sort.Sort(s)
 	return s.v
-}
-
-// TODO: wait until Go 1.10 to (finally...) have a built-in rounding function
-func round(val float64) int64 {
-	var rounded int64
-	if val < 0 {
-		rounded = int64(math.Ceil(val - 0.5))
-	} else {
-		rounded = int64(math.Floor(val + 0.5))
-	}
-	return rounded
 }

@@ -5,6 +5,7 @@ import (
 	"html"
 	"io"
 	"log"
+	"math"
 	"strings"
 	"text/template"
 	"time"
@@ -171,7 +172,7 @@ func (rt *ReportTyper) CommentToString(number uint64, comment Comment, average f
 
 	data := reportComment{
 		Number:     number,
-		Average:    round(average),
+		Average:    int64(math.Round(average)),
 		Author:     comment.Author,
 		Score:      comment.Score,
 		Sub:        comment.Sub,
