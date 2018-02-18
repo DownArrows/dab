@@ -220,7 +220,7 @@ Top {{ .Avg | len}} lowest average karma per comment:
 {{ end }}`
 
 const commentTmpl = `
-#\#{{ .Number }}
+# \#{{ .Number }}
 
 Author: [/u/{{ .Author }}](https://reddit.com/user/{{ .Author }})^(Avg. this week = {{ .Average }} per comment)
 
@@ -232,4 +232,6 @@ Link: [{{ .Permalink }}](https://reddit.com{{ .Permalink }})
 
 Post text:
 
-{{ .QuotedBody }}`
+{{ .QuotedBody }}
+
+`

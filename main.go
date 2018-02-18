@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/spf13/viper"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -152,6 +153,11 @@ func main() {
 		unsuspensions := bot.CheckUnsuspended(interval)
 		go discordbot.SignalUnsuspensions(unsuspensions)
 	}
+
+	http.HandleFunc("/reports/", MakeReportHandler("/reports/", rt))
+	go func() {
+		log.Fatal(http.ListenAndServe(":12345", nil))
+	}()
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
