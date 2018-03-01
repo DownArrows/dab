@@ -307,7 +307,7 @@ func (bot *DiscordBot) karma(msg *discordgo.MessageCreate, username string) erro
 }
 
 func (bot *DiscordBot) separator(msg *discordgo.MessageCreate) error {
-	_, err := bot.client.ChannelMessageSend(msg.ChannelID, "══════════════════════════════")
+	_, err := bot.client.ChannelMessageSend(msg.ChannelID, "══════════════════")
 	if err != nil {
 		return err
 	}
