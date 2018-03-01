@@ -160,6 +160,9 @@ func (bot *DiscordBot) onMessage(msg *discordgo.MessageCreate) {
 	} else if strings.HasPrefix(content, "!exists ") {
 		log.Print(author + " wants to check if a user is registered")
 		err = bot.userExists(content, channel, msg)
+	} else if content == "!sip" || content == "!sipthebep" {
+		response := `More like N0000 1 cares 🔥 This shitpost is horrible 👎👎👎`
+		_, err = bot.client.ChannelMessageSend(msg.ChannelID, response)
 	}
 
 	if err != nil {
