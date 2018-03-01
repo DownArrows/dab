@@ -163,6 +163,8 @@ func (bot *DiscordBot) onMessage(msg *discordgo.MessageCreate) {
 	} else if content == "!sip" || content == "!sipthebep" {
 		response := `More like N0000 1 cares 🔥 This shitpost is horrible 👎👎👎`
 		_, err = bot.client.ChannelMessageSend(msg.ChannelID, response)
+	} else if content == "!sep" || content == "!separator" {
+		err = bot.separator(msg)
 	}
 
 	if err != nil {
@@ -302,6 +304,14 @@ func (bot *DiscordBot) karma(msg *discordgo.MessageCreate, username string) erro
 	reply := fmt.Sprintf("<@%s> karma for %s: %d / %d", msg.Author.ID, res.User.Name, total, negative)
 	_, err = bot.client.ChannelMessageSend(msg.ChannelID, reply)
 	return err
+}
+
+func (bot *DiscordBot) separator(msg *discordgo.MessageCreate) error {
+	_, err := bot.client.ChannelMessageSend(msg.ChannelID, "══════════════════════════════")
+	if err != nil {
+		return err
+	}
+	return bot.client.ChannelMessageDelete(msg.ChannelID, msg.ID)
 }
 
 func (bot *DiscordBot) isDMChannel(channelID string) (bool, error) {
