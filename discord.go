@@ -16,12 +16,10 @@ type DiscordBot struct {
 	storage       *Storage
 	client        *discordgo.Session
 	LinkReactions []string
-	prevFortune   string
 	redditLink    *regexp.Regexp
 	General       *discordgo.Channel
 	LogChan       *discordgo.Channel
 	Admin         *discordgo.User
-	Fortunes      []string
 	AddUser       chan UserQuery
 }
 
@@ -40,18 +38,12 @@ func NewDiscordBot(
 		return nil, err
 	}
 
-	fortunes, err := storage.GetFortunes()
-	if err != nil {
-		return nil, err
-	}
-
 	dbot := &DiscordBot{
 		client:        session,
 		logger:        logger,
 		storage:       storage,
 		LinkReactions: []string{"👌", "💗", "🔥", "💯"},
 		redditLink:    regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
-		Fortunes:      fortunes,
 		AddUser:       make(chan UserQuery),
 	}
 
@@ -149,7 +141,6 @@ func (bot *DiscordBot) onMessage(msg *discordgo.MessageCreate) {
 	content := msg.Content
 	channel := msg.ChannelID
 	author := fullAuthorName(msg)
-	private, err := bot.isDMChannel(channel)
 	if err != nil {
 		bot.logger.Print(err)
 		return
@@ -158,17 +149,6 @@ func (bot *DiscordBot) onMessage(msg *discordgo.MessageCreate) {
 	if bot.isLoggableRedditLink(channel, content) {
 		bot.logger.Print("Link to a comment on reddit posted by ", author)
 		err = bot.processRedditLink(msg)
-	} else if private && content == "!fortune" {
-		bot.logger.Print(author, " has asked for a fortune")
-		err = bot.fortune()
-	} else if private && msg.Author.ID == bot.Admin.ID && strings.HasPrefix(content, "!addfortune ") {
-		bot.logger.Print(author, " wants to add a fortune")
-		fortune := strings.TrimPrefix(content, "!addfortune ")
-		err = bot.addFortune(fortune)
-		if err == nil {
-			reply := msg.Author.Mention() + " fortune saved."
-			_, err = bot.client.ChannelMessageSend(msg.ChannelID, reply)
-		}
 	} else if strings.HasPrefix(content, "!karma ") {
 		err = bot.karma(msg, strings.TrimPrefix(content, "!karma "))
 	} else if content == "!ping" && msg.Author.ID == bot.Admin.ID {
@@ -287,36 +267,6 @@ func (bot *DiscordBot) userExists(content, channel string, msg *discordgo.Messag
 	response := fmt.Sprintf("<@%s> User %s %s.", msg.Author.ID, username, status)
 	_, err = bot.client.ChannelMessageSend(channel, response)
 	return err
-}
-
-func (bot *DiscordBot) addFortune(fortune string) error {
-	err := bot.storage.SaveFortune(fortune)
-	if err != nil {
-		return err
-	}
-	bot.Fortunes = append(bot.Fortunes, fortune)
-	return nil
-}
-
-func (bot *DiscordBot) fortune() error {
-	err := bot.client.ChannelTyping(bot.General.ID)
-	if err != nil {
-		return err
-	}
-
-	fortune := bot.getFortune()
-	_, err = bot.client.ChannelMessageSend(bot.General.ID, fortune)
-	return err
-}
-
-func (bot *DiscordBot) getFortune() string {
-	i := rand.Int31n(int32(len(bot.Fortunes)))
-	fortune := bot.Fortunes[i]
-	if fortune == bot.prevFortune {
-		return bot.getFortune()
-	}
-	bot.prevFortune = fortune
-	return fortune
 }
 
 func (bot *DiscordBot) karma(msg *discordgo.MessageCreate, username string) error {

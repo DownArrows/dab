@@ -78,16 +78,6 @@ func (storage *Storage) Init() error {
 	}
 
 	_, err = storage.db.Exec(`
-		CREATE TABLE IF NOT EXISTS fortunes (
-			id INTEGER PRIMARY KEY,
-			content TEXT NOT NULL,
-			added TIMESTAMP NOT NULL
-		)`)
-	if err != nil {
-		return err
-	}
-
-	_, err = storage.db.Exec(`
 		CREATE VIEW IF NOT EXISTS
 			users(name, created, added, suspended, hidden, new, position)
 		AS
@@ -540,48 +530,4 @@ func (storage *Storage) SeenPostIDs(sub string) ([]string, error) {
 	}
 
 	return ids, nil
-}
-
-/********
- Fortunes
-*********/
-
-func (storage *Storage) SaveFortune(fortune string) error {
-	storage.Lock()
-	defer storage.Unlock()
-
-	stmt, err := storage.db.Prepare(`
-		INSERT INTO fortunes(content)
-		VALUES (?, strftime("%s", CURRENT_TIMESTAMP))`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec(fortune)
-	return err
-}
-
-func (storage *Storage) GetFortunes() ([]string, error) {
-	rows, err := storage.db.Query("SELECT content FROM fortunes")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	fortunes := make([]string, 0, 10)
-	for rows.Next() {
-		var fortune string
-
-		err = rows.Scan(&fortune)
-		if err != nil {
-			return nil, err
-		}
-		fortunes = append(fortunes, fortune)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return fortunes, nil
 }
