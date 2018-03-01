@@ -163,7 +163,7 @@ func (bot *DiscordBot) onMessage(msg *discordgo.MessageCreate) {
 	} else if content == "!sip" || content == "!sipthebep" {
 		response := `More like N0000 1 cares 🔥 This shitpost is horrible 👎👎👎`
 		_, err = bot.client.ChannelMessageSend(msg.ChannelID, response)
-	} else if content == "!sep" || content == "!separator" {
+	} else if content == "!sep" || content == "!separator" || content == "!=" {
 		err = bot.separator(msg)
 	}
 
