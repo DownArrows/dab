@@ -27,6 +27,13 @@ func MakeReportHandler(prefix string, typer *ReportTyper) http.HandlerFunc {
 		//			// 404
 		//		}
 
+		wants_source := false
+
+		if strings.HasSuffix(path[1], ".txt") {
+			wants_source = true
+			path[1] = strings.TrimSuffix(path[1], ".txt")
+		}
+
 		year, err := strconv.Atoi(path[0])
 		if err != nil {
 			panic(err)
@@ -42,12 +49,17 @@ func MakeReportHandler(prefix string, typer *ReportTyper) http.HandlerFunc {
 			panic(err)
 		}
 
-		content := blackfriday.Run([]byte(strings.Join(report, "")), blackfriday.WithExtensions(opts))
+		source := []byte(strings.Join(report, ""))
 
-		tmpl.Execute(w, map[string]interface{}{
-			"Title":   fmt.Sprintf("Report of year %d week %d", year, week),
-			"Content": template.HTML(string(content)),
-		})
+		if wants_source {
+			w.Write(source)
+		} else {
+			content := blackfriday.Run(source, blackfriday.WithExtensions(opts))
+			tmpl.Execute(w, map[string]interface{}{
+				"Title":   fmt.Sprintf("Report of year %d week %d", year, week),
+				"Content": template.HTML(string(content)),
+			})
+		}
 	}
 }
 
