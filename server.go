@@ -23,9 +23,10 @@ func MakeReportHandler(prefix string, typer *ReportTyper) http.HandlerFunc {
 			path = path[:len(path)-2]
 		}
 
-		//		if len(path) != 2 {
-		//			// 404
-		//		}
+		if len(path) != 2 {
+			http.NotFound(w, r)
+			return
+		}
 
 		wants_source := false
 
@@ -36,17 +37,20 @@ func MakeReportHandler(prefix string, typer *ReportTyper) http.HandlerFunc {
 
 		year, err := strconv.Atoi(path[0])
 		if err != nil {
-			panic(err)
+			http.NotFound(w, r)
+			return
 		}
 
 		week, err := strconv.Atoi(path[1])
 		if err != nil {
-			panic(err)
+			http.NotFound(w, r)
+			return
 		}
 
 		report, err := typer.ReportWeek(uint8(week), year)
 		if err != nil {
-			panic(err)
+			http.NotFound(w, r)
+			return
 		}
 
 		source := []byte(strings.Join(report, ""))
