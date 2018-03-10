@@ -157,6 +157,8 @@ func (bot *DiscordBot) onMessage(msg *discordgo.MessageCreate) {
 		err = bot.register(msg)
 	} else if strings.HasPrefix(content, "!unregister ") && msg.Author.ID == bot.Admin.ID {
 		err = bot.unregister(msg)
+	} else if strings.HasPrefix(content, "!purge ") && msg.Author.ID == bot.Admin.ID {
+		err = bot.purge(msg)
 	} else if strings.HasPrefix(content, "!exists ") {
 		log.Print(author + " wants to check if a user is registered")
 		err = bot.userExists(content, channel, msg)
@@ -248,6 +250,26 @@ func (bot *DiscordBot) unregister(msg *discordgo.MessageCreate) error {
 
 	result := strings.Join(results, ", ")
 	response := fmt.Sprintf("<@%s> unregister: %s", msg.Author.ID, result)
+	_, err := bot.client.ChannelMessageSend(msg.ChannelID, response)
+	return err
+}
+
+func (bot *DiscordBot) purge(msg *discordgo.MessageCreate) error {
+	names := strings.Split(strings.TrimPrefix(msg.Content, "!purge "), " ")
+	bot.logger.Print(msg.Author.Username, " wants to purge ", names)
+
+	results := make([]string, len(names))
+	for i, name := range names {
+		err := bot.storage.PurgeUser(name)
+		if err != nil {
+			results[i] = fmt.Sprintf("%s: error %s", name, err)
+		} else {
+			results[i] = fmt.Sprintf("%s: ok", name)
+		}
+	}
+
+	result := strings.Join(results, ", ")
+	response := fmt.Sprintf("<@%s> purge: %s", msg.Author.ID, result)
 	_, err := bot.client.ChannelMessageSend(msg.ChannelID, response)
 	return err
 }

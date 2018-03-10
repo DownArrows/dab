@@ -187,6 +187,38 @@ func (storage *Storage) DelUser(username string) error {
 	return nil
 }
 
+func (storage *Storage) PurgeUser(username string) error {
+	storage.Lock()
+	defer storage.Unlock()
+
+	comments_stmt, err := storage.db.Prepare("DELETE FROM comments WHERE author = ? COLLATE NOCASE")
+	if err != nil {
+		return err
+	}
+	defer comments_stmt.Close()
+
+	_, err = comments_stmt.Exec(username)
+	if err != nil {
+		return err
+	}
+
+	user_stmt, err := storage.db.Prepare("DELETE FROM tracked WHERE name = ? COLLATE NOCASE")
+	if err != nil {
+		return err
+	}
+	defer user_stmt.Close()
+
+	result, err := user_stmt.Exec(username)
+	if err != nil {
+		return err
+	}
+	if nb, _ := result.RowsAffected(); nb == 0 {
+		return errors.New("No user named " + username)
+	}
+
+	return nil
+}
+
 func (storage *Storage) ListUsers() ([]User, error) {
 	rows, err := storage.db.Query(`
 		SELECT name, hidden, new, created, added, position
