@@ -51,6 +51,10 @@ func NewDiscordBot(
 		dbot.onMessage(msg)
 	})
 
+	session.AddHandler(func(s *discordgo.Session, event *discordgo.GuildMemberAdd) {
+		dbot.onNewMember(event.Member)
+	})
+
 	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
 		dbot.onReady(admin, general, logChan)
 	})
@@ -130,6 +134,16 @@ func (bot *DiscordBot) onReady(admin, general, logChan string) {
 		bot.logger.Fatal(err)
 	}
 	bot.logger.Print("Initialization ok")
+}
+
+func (bot *DiscordBot) onNewMember(member *discordgo.Member) {
+	manual := "397034210218475520"
+	welcome := "Hello <@%s>! Have a look at the <#%s> to understand what's going on here, and don't hesitate to post on <#%s> and to try new things we haven't thought of! This server is still rather new and experimental, but we think it has great potential. We may have some knowledge of the craft to share too."
+	msg := fmt.Sprintf(welcome, member.User.ID, manual, bot.General.ID)
+	_, err := bot.client.ChannelMessageSend(bot.General.ID, msg)
+	if err != nil {
+		bot.logger.Print(err)
+	}
 }
 
 func (bot *DiscordBot) onMessage(msg *discordgo.MessageCreate) {
