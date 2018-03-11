@@ -15,15 +15,16 @@ type Storage struct {
 	sync.Mutex
 	db     *sql.DB
 	logger *log.Logger
+	Path   string
 }
 
-func NewStorage(db_path string, logOut io.Writer) (*Storage, error) {
+func NewStorage(dbPath string, logOut io.Writer) (*Storage, error) {
 	logger := log.New(logOut, "storage: ", log.LstdFlags)
-	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=1", db_path))
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=1", dbPath))
 	if err != nil {
 		return nil, err
 	}
-	storage := &Storage{db: db, logger: logger}
+	storage := &Storage{db: db, logger: logger, Path: dbPath}
 	err = storage.Init()
 	if err != nil {
 		return nil, err
@@ -32,12 +33,14 @@ func NewStorage(db_path string, logOut io.Writer) (*Storage, error) {
 }
 
 func (storage *Storage) Init() error {
-	err := storage.EnableWAL()
-	if err != nil {
-		return err
+	if storage.Path != ":memory:" {
+		err := storage.EnableWAL()
+		if err != nil {
+			return err
+		}
 	}
 
-	_, err = storage.db.Exec(`
+	_, err := storage.db.Exec(`
 		CREATE TABLE IF NOT EXISTS tracked (
 			name TEXT PRIMARY KEY,
 			created TIMESTAMP NOT NULL,
