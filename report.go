@@ -39,6 +39,8 @@ type reportHead struct {
 	Delta    []GenStats
 	Avg      []GenStats
 	Comments []string
+	Start    string
+	End      string
 }
 
 func NewReportTyper(
@@ -111,7 +113,7 @@ func (rt *ReportTyper) Report(start, end time.Time) ([]string, error) {
 		return nil, err
 	}
 
-	head, err := rt.typeReportHead(typed_comments[0], stats)
+	head, err := rt.typeReportHead(typed_comments[0], stats, start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -125,13 +127,15 @@ func (rt *ReportTyper) Report(start, end time.Time) ([]string, error) {
 	return batches, nil
 }
 
-func (rt *ReportTyper) typeReportHead(comments []string, stats Stats) (string, error) {
+func (rt *ReportTyper) typeReportHead(comments []string, stats Stats, start, end time.Time) (string, error) {
 	deltas := stats.DeltasToScores().Sort()
 	averages := stats.AveragesToScores().Sort()
 	data := reportHead{
 		Delta:    deltas[:rt.NbTop],
 		Avg:      averages[:rt.NbTop],
 		Comments: comments,
+		Start:    start.Format(time.RFC822),
+		End:      end.Format(time.RFC822),
 	}
 
 	var output bytes.Buffer
@@ -206,7 +210,9 @@ func StartOfFirstWeek(year int, location *time.Location) time.Time {
 }
 
 // TODO: post link to the rest if the max post length has been reached
-const reportHeadTmpl = `Top {{ .Delta | len }} negative **Δk** for this week:
+const reportHeadTmpl = `From {{ .Start }} to {{ .End }}.
+
+Top {{ .Delta | len }} negative **Δk** for this week:
 ^([**Δk** or "delta k" refers to the total change in karma])
 {{ range .Delta }}
  - **{{ .Score }}** with {{ .Count }} posts,
