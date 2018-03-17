@@ -485,7 +485,7 @@ func (storage *Storage) StatsBetween(since, until time.Time) (Stats, error) {
 			COUNT(comments.id) AS count
 		FROM comments JOIN users
 		ON comments.author = users.name
-		WHERE comments.created BETWEEN ? AND ?
+		WHERE comments.created BETWEEN ? AND ? AND score < 0
 		GROUP BY comments.author`)
 	if err != nil {
 		return nil, err
