@@ -194,7 +194,12 @@ func (storage *Storage) PurgeUser(username string) error {
 	storage.Lock()
 	defer storage.Unlock()
 
-	comments_stmt, err := storage.db.Prepare("DELETE FROM comments WHERE author = ? COLLATE NOCASE")
+	tx, err := storage.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	comments_stmt, err := tx.Prepare("DELETE FROM comments WHERE author = ? COLLATE NOCASE")
 	if err != nil {
 		return err
 	}
@@ -202,24 +207,28 @@ func (storage *Storage) PurgeUser(username string) error {
 
 	_, err = comments_stmt.Exec(username)
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 
-	user_stmt, err := storage.db.Prepare("DELETE FROM tracked WHERE name = ? COLLATE NOCASE")
+	user_stmt, err := tx.Prepare("DELETE FROM tracked WHERE name = ? COLLATE NOCASE")
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	defer user_stmt.Close()
 
 	result, err := user_stmt.Exec(username)
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	if nb, _ := result.RowsAffected(); nb == 0 {
+		tx.Rollback()
 		return errors.New("No user named " + username)
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 func (storage *Storage) ListUsers() ([]User, error) {
@@ -318,6 +327,7 @@ func (storage *Storage) ResetPosition(username string) error {
 	}
 	err = storage.savePosition(tx, username, "")
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	return tx.Commit()
@@ -335,11 +345,13 @@ func (storage *Storage) SaveCommentsPage(comments []Comment, user User) error {
 
 	err = storage.saveComments(tx, comments)
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 
 	err = storage.savePosition(tx, user.Name, user.Position)
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 
@@ -419,7 +431,6 @@ func (storage *Storage) savePosition(tx *sql.Tx, username string, position strin
 
 	_, err = stmt.Exec(position, username)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
 
