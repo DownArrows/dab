@@ -12,15 +12,16 @@ import (
 )
 
 type DiscordBot struct {
-	logger        *log.Logger
-	storage       *Storage
-	client        *discordgo.Session
-	LinkReactions []string
-	redditLink    *regexp.Regexp
-	General       *discordgo.Channel
-	LogChan       *discordgo.Channel
-	Admin         *discordgo.User
-	AddUser       chan UserQuery
+	logger         *log.Logger
+	storage        *Storage
+	client         *discordgo.Session
+	LinkReactions  []string
+	redditLink     *regexp.Regexp
+	General        *discordgo.Channel
+	LogChan        *discordgo.Channel
+	HighScoresChan *discordgo.Channel
+	Admin          *discordgo.User
+	AddUser        chan UserQuery
 }
 
 func NewDiscordBot(
@@ -29,6 +30,7 @@ func NewDiscordBot(
 	token string,
 	general string,
 	logChan string,
+	highScoresChan string,
 	admin string,
 ) (*DiscordBot, error) {
 	logger := log.New(logOut, "discordbot: ", log.LstdFlags)
@@ -56,7 +58,7 @@ func NewDiscordBot(
 	})
 
 	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
-		dbot.onReady(admin, general, logChan)
+		dbot.onReady(admin, general, logChan, highScoresChan)
 	})
 
 	return dbot, nil
@@ -117,7 +119,19 @@ func (bot *DiscordBot) SignalUnsuspensions(ch chan User) {
 	}
 }
 
-func (bot *DiscordBot) onReady(admin, general, logChan string) {
+func (bot *DiscordBot) SignalHighScores(ch chan Comment) {
+	for comment := range ch {
+		link := "https://www.reddit.com" + comment.Permalink
+		tmpl := "A comment by %s has reached %d: %s"
+		msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
+		_, err := bot.client.ChannelMessageSend(bot.HighScoresChan.ID, msg)
+		if err != nil {
+			bot.logger.Print("High-scores listener: ", err)
+		}
+	}
+}
+
+func (bot *DiscordBot) onReady(admin, general, logChan, highScoresChan string) {
 	var err error
 	bot.General, err = bot.client.Channel(general)
 	if err != nil {
@@ -127,6 +141,13 @@ func (bot *DiscordBot) onReady(admin, general, logChan string) {
 	bot.LogChan, err = bot.client.Channel(logChan)
 	if err != nil {
 		bot.logger.Fatal(err)
+	}
+
+	if highScoresChan != "" {
+		bot.HighScoresChan, err = bot.client.Channel(highScoresChan)
+		if err != nil {
+			bot.logger.Fatal(err)
+		}
 	}
 
 	bot.Admin, err = bot.client.User(admin)

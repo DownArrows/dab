@@ -28,3 +28,5 @@ token = "jvq9oSqmGhl34vQUd1nM.YU-lC.jZaAT27_0wFeHsK_FYZLocPW6"
 admin = "827298191882818"
 general = "288922928183292"
 log = "382842384247229"
+highscores = "28488247328828"
+highscore_threshold = -1000

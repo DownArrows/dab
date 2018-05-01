@@ -30,6 +30,7 @@ func main() {
 	viper.SetDefault("scanner.max_batches", 5)
 	viper.SetDefault("scanner.max_age", 24*time.Hour)
 	viper.SetDefault("scanner.unsuspension_interval", 15*time.Minute)
+	viper.SetDefault("discord.highscores", "")
 
 	err := viper.ReadInConfig()
 	if err != nil {
@@ -132,6 +133,7 @@ func main() {
 			viper.GetString("discord.token"),
 			viper.GetString("discord.general"),
 			viper.GetString("discord.log"),
+			viper.GetString("discord.highscores"),
 			viper.GetString("discord.admin"),
 		)
 		if err != nil {
@@ -152,6 +154,12 @@ func main() {
 		interval := viper.GetDuration("scanner.unsuspension_interval")
 		unsuspensions := bot.CheckUnsuspended(interval)
 		go discordbot.SignalUnsuspensions(unsuspensions)
+
+		if viper.IsSet("discord.highscore_threshold") {
+			threshold := viper.GetInt64("discord.highscore_threshold")
+			highscores := bot.StartHighScoresFeed(threshold)
+			go discordbot.SignalHighScores(highscores)
+		}
 	}
 
 	http.HandleFunc("/reports/", MakeReportHandler("/reports/", rt))

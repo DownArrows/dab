@@ -81,6 +81,15 @@ func (storage *Storage) Init() error {
 	}
 
 	_, err = storage.db.Exec(`
+		CREATE TABLE IF NOT EXISTS known_objects (
+			id TEXT PRIMARY KEY,
+			date TIMESTAMP NOT NULL
+		) WITHOUT ROWID`)
+	if err != nil {
+		return err
+	}
+
+	_, err = storage.db.Exec(`
 		CREATE VIEW IF NOT EXISTS
 			users(name, created, added, suspended, hidden, new, position)
 		AS
@@ -576,4 +585,42 @@ func (storage *Storage) SeenPostIDs(sub string) ([]string, error) {
 	}
 
 	return ids, nil
+}
+
+func (storage *Storage) SaveKnownObject(id string) error {
+	storage.Lock()
+	defer storage.Unlock()
+
+	stmt, err := storage.db.Prepare("INSERT INTO known_objects VALUES (?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(id, time.Now())
+	return err
+}
+
+func (storage *Storage) IsKnownObject(id string) (bool, error) {
+	stmt, err := storage.db.Prepare("SELECT id FROM known_objects WHERE id = ?")
+	if err != nil {
+		return false, err
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(id)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		return true, nil
+	}
+
+	if err = rows.Err(); err != nil {
+		return false, err
+	}
+
+	return false, nil
 }

@@ -8,12 +8,14 @@ import (
 )
 
 type Bot struct {
-	MaxAge     time.Duration
-	MaxQueries int
-	Suspended  chan User
-	scanner    *RedditClient
-	storage    *Storage
-	logger     *log.Logger
+	MaxAge         time.Duration
+	MaxQueries     int
+	Suspended      chan User
+	highScoresFeed chan Comment
+	highScore      int64
+	scanner        *RedditClient
+	storage        *Storage
+	logger         *log.Logger
 }
 
 func NewBot(
@@ -92,6 +94,14 @@ func (bot *Bot) AddUserServer(queries chan UserQuery) {
 
 		queries <- query
 	}
+}
+
+// This function mutates the bot struct, there is no locking,
+// so use this function before the bot runs.
+func (bot *Bot) StartHighScoresFeed(threshold int64) chan Comment {
+	bot.highScore = threshold
+	bot.highScoresFeed = make(chan Comment)
+	return bot.highScoresFeed
 }
 
 func (bot *Bot) AddUser(username string, hidden bool, force_suspended bool) UserQuery {
@@ -326,6 +336,11 @@ func (bot *Bot) saveCommentsPage(user User) (string, int, error) {
 		return "", status, err
 	}
 
+	err = bot.AlertIfHighScore(comments)
+	if err != nil {
+		return "", status, err
+	}
+
 	if len(comments) > 0 && bot.maxAgeReached(comments) && !user.New {
 		return "", status, nil
 	}
@@ -341,6 +356,39 @@ func (bot *Bot) maxAgeReached(comments []Comment) bool {
 	// on an external source (the comments' timestamps).
 	now := time.Now().Round(0)
 	return now.Sub(oldest) > bot.MaxAge
+}
+
+func (bot *Bot) AlertIfHighScore(comments []Comment) error {
+	if bot.highScoresFeed == nil {
+		return nil
+	}
+
+	for _, comment := range comments {
+
+		if comment.Score < bot.highScore {
+
+			is_known, err := bot.storage.IsKnownObject(comment.Id)
+			if err != nil {
+				return err
+			}
+
+			if is_known {
+				continue
+			}
+
+			bot.logger.Printf("New high-scoring comment found: %s", comment)
+			err = bot.storage.SaveKnownObject(comment.Id)
+			if err != nil {
+				return err
+			}
+
+			bot.highScoresFeed <- comment
+
+		}
+
+	}
+
+	return nil
 }
 
 func StringInSlice(str string, slice []string) bool {
