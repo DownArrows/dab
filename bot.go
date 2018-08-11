@@ -205,7 +205,6 @@ func (bot *Bot) Run() {
 }
 
 func (bot *Bot) scanOnce() error {
-	bot.logger.Print("Scanning all known users")
 	users, err := bot.getUsersOrWait()
 	if err != nil {
 		return err
@@ -252,9 +251,6 @@ func (bot *Bot) allRelevantComments(user User) error {
 	var status int
 
 	for i := 0; i < bot.MaxQueries; i++ {
-		template := "Fetching batch n°%d of comments from %s, position \"%s\""
-		bot.logger.Printf(template, i+1, user.Name, user.Position)
-
 		user.Position, status, err = bot.saveCommentsPage(user)
 		if err != nil {
 			return err
