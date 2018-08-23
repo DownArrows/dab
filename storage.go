@@ -44,6 +44,7 @@ func (storage *Storage) Init() error {
 		CREATE TABLE IF NOT EXISTS tracked (
 			name TEXT PRIMARY KEY,
 			created TIMESTAMP NOT NULL,
+			inactive BOOLEAN DEFAULT 0 NOT NULL,
 			suspended BOOLEAN DEFAULT 0 NOT NULL,
 			deleted BOOLEAN DEFAULT 0 NOT NULL,
 			added TIMESTAMP NOT NULL,
@@ -91,9 +92,9 @@ func (storage *Storage) Init() error {
 
 	_, err = storage.db.Exec(`
 		CREATE VIEW IF NOT EXISTS
-			users(name, created, added, suspended, hidden, new, position)
+			users(name, created, added, suspended, hidden, new, position, inactive)
 		AS
-			SELECT name, created, added, suspended, hidden, new, position
+			SELECT name, created, added, suspended, hidden, new, position, inactive
 			FROM tracked WHERE deleted = 0
 	`)
 	return err
@@ -145,7 +146,7 @@ func (storage *Storage) GetUser(username string) UserQuery {
 	query := UserQuery{User: User{Name: username}}
 
 	stmt, err := storage.db.Prepare(`
-		SELECT name, hidden, suspended, new, created, added, position
+		SELECT name, hidden, suspended, new, created, added, position, inactive
 		FROM users WHERE name = ? COLLATE NOCASE`)
 	if err != nil {
 		query.Error = err
@@ -168,8 +169,8 @@ func (storage *Storage) GetUser(username string) UserQuery {
 		return query
 	}
 
-	err = rows.Scan(&query.User.Name, &query.User.Hidden, &query.User.Suspended,
-		&query.User.New, &query.User.Created, &query.User.Added, &query.User.Position)
+	err = rows.Scan(&query.User.Name, &query.User.Hidden, &query.User.Suspended, &query.User.New,
+		&query.User.Created, &query.User.Added, &query.User.Position, &query.User.Inactive)
 	if err != nil {
 		query.Error = err
 		return query
@@ -242,7 +243,7 @@ func (storage *Storage) PurgeUser(username string) error {
 
 func (storage *Storage) ListUsers() ([]User, error) {
 	rows, err := storage.db.Query(`
-		SELECT name, hidden, new, created, added, position
+		SELECT name, hidden, new, created, added, position, inactive
 		FROM users WHERE suspended = 0 ORDER BY name`)
 	if err != nil {
 		return nil, err
@@ -254,7 +255,7 @@ func (storage *Storage) ListUsers() ([]User, error) {
 		var user User
 
 		err = rows.Scan(&user.Name, &user.Hidden, &user.New,
-			&user.Created, &user.Added, &user.Position)
+			&user.Created, &user.Added, &user.Position, &user.Inactive)
 		if err != nil {
 			return nil, err
 		}
@@ -270,8 +271,8 @@ func (storage *Storage) ListUsers() ([]User, error) {
 
 func (storage *Storage) ListSuspended() ([]User, error) {
 	rows, err := storage.db.Query(`
-		SELECT name, hidden, new, created, added, position
-		FROM tracked WHERE suspended = 1 AND deleted = 0
+		SELECT name, hidden, new, created, added, position, inactive
+		FROM users WHERE suspended = 1
 		ORDER BY name`)
 	if err != nil {
 		return nil, err
@@ -283,7 +284,7 @@ func (storage *Storage) ListSuspended() ([]User, error) {
 		var user User
 
 		err = rows.Scan(&user.Name, &user.Hidden, &user.New,
-			&user.Created, &user.Added, &user.Position)
+			&user.Created, &user.Added, &user.Position, &user.Inactive)
 		if err != nil {
 			return nil, err
 		}
@@ -320,6 +321,91 @@ func (storage *Storage) NotNewUser(username string) error {
 
 	_, err = stmt.Exec(username)
 	return err
+}
+
+func (storage *Storage) ListActiveUsers() ([]User, error) {
+	rows, err := storage.db.Query(`
+		SELECT name, hidden, new, created, added, position
+		FROM users WHERE inactive = 0 AND suspended = 0
+		ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := make([]User, 0, 100)
+	for rows.Next() {
+		var user User
+
+		err = rows.Scan(&user.Name, &user.Hidden, &user.New,
+			&user.Created, &user.Added, &user.Position)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+func (storage *Storage) UpdateInactiveStatus(max_age time.Duration) error {
+	// We use two SQL statements instead of one because SQLite is too limited
+	// to do that in a single statement that isn't exceedingly complicated.
+	storage.Lock()
+	defer storage.Unlock()
+
+	now := time.Now().Round(0).Unix()
+
+	tx, err := storage.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	inactive_stmt, err := tx.Prepare(`
+		UPDATE tracked SET inactive = 1
+		WHERE name IN (
+			SELECT author FROM (
+				SELECT author, max(created) AS last
+				FROM comments GROUP BY author
+			) WHERE (? - last) > ?
+		)`)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	defer inactive_stmt.Close()
+
+	_, err = inactive_stmt.Exec(now, max_age.Seconds())
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	active_stmt, err := tx.Prepare(`
+		UPDATE tracked SET inactive = 0
+		WHERE name IN (
+			SELECT author FROM (
+				SELECT author, max(created) AS last
+				FROM comments GROUP BY author
+			) WHERE (? - last) < ?
+		)`)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	defer active_stmt.Close()
+
+	_, err = active_stmt.Exec(now, max_age.Seconds())
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
 }
 
 /********

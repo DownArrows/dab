@@ -196,28 +196,48 @@ func (bot *Bot) CheckUnsuspended(delay time.Duration) chan User {
 }
 
 func (bot *Bot) Run() {
+	var last_full_scan time.Time
+
 	for {
-		err := bot.scanOnce()
-		if err != nil {
-			panic(err)
+
+		now := time.Now().Round(0)
+		full_scan := now.Sub(last_full_scan) >= 6*time.Hour
+
+		if err := bot.scanOnce(full_scan); err != nil {
+			log.Fatal(err)
 		}
+
+		if full_scan {
+			last_full_scan = now
+			if err := bot.storage.UpdateInactiveStatus(3 * 30 * 24 * time.Hour); err != nil {
+				log.Fatal(err)
+			}
+		}
+
 	}
+
 }
 
-func (bot *Bot) scanOnce() error {
-	users, err := bot.getUsersOrWait()
+func (bot *Bot) scanOnce(full_scan bool) error {
+	users, err := bot.getUsersOrWait(full_scan)
 	if err != nil {
 		return err
 	}
-
 	return bot.scanUsers(users)
 }
 
-func (bot *Bot) getUsersOrWait() ([]User, error) {
+func (bot *Bot) getUsersOrWait(full_scan bool) ([]User, error) {
 	var users []User
 	var err error
+
 	for {
-		users, err = bot.storage.ListUsers()
+
+		if full_scan {
+			users, err = bot.storage.ListUsers()
+		} else {
+			users, err = bot.storage.ListActiveUsers()
+		}
+
 		if err != nil {
 			return nil, err
 		}

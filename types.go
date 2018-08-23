@@ -33,6 +33,7 @@ type User struct {
 	Created   time.Time
 	Added     time.Time
 	Position  string
+	Inactive  bool
 }
 
 func (user *User) Username(username string) bool {
