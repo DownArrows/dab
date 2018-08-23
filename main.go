@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/spf13/viper"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -162,9 +161,9 @@ func main() {
 		}
 	}
 
-	http.HandleFunc("/reports/", MakeReportHandler("/reports/", rt))
+	wsrv := NewWebServer(rt)
 	go func() {
-		log.Fatal(http.ListenAndServe(":12345", nil))
+		log.Fatal(wsrv.Run())
 	}()
 
 	sig := make(chan os.Signal, 1)

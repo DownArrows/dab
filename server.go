@@ -1,70 +1,121 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"gopkg.in/russross/blackfriday.v2"
 	"html/template"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
-func MakeReportHandler(prefix string, typer *ReportTyper) http.HandlerFunc {
-	tmpl := template.Must(template.New("html_report").Parse(reportPage))
-	opts := blackfriday.Extensions(blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis)
+type WebServer struct {
+	Server      *http.Server
+	reportsTmpl *template.Template
+	Typer       *ReportTyper
+}
 
-	return func(w http.ResponseWriter, r *http.Request) {
-		log.Print(r.URL.Path)
-		sub_url := r.URL.Path[len(prefix):]
-		path := strings.Split(sub_url, "/")
+func NewWebServer(typer *ReportTyper) *WebServer {
+	reports_tmpl := template.Must(template.New("html_report").Parse(reportPage))
 
-		if path[len(path)-1] == "" {
-			path = path[:len(path)-2]
-		}
-
-		if len(path) != 2 {
-			http.NotFound(w, r)
-			return
-		}
-
-		wants_source := false
-
-		if strings.HasSuffix(path[1], ".txt") {
-			wants_source = true
-			path[1] = strings.TrimSuffix(path[1], ".txt")
-		}
-
-		year, err := strconv.Atoi(path[0])
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-
-		week, err := strconv.Atoi(path[1])
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-
-		report, err := typer.ReportWeek(uint8(week), year)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-
-		source := []byte(strings.Join(report, ""))
-
-		if wants_source {
-			w.Write(source)
-		} else {
-			content := blackfriday.Run(source, blackfriday.WithExtensions(opts))
-			tmpl.Execute(w, map[string]interface{}{
-				"Title":   fmt.Sprintf("Report of year %d week %d", year, week),
-				"Content": template.HTML(string(content)),
-			})
-		}
+	wsrv := &WebServer{
+		reportsTmpl: reports_tmpl,
+		Typer:       typer,
 	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/reports", wsrv.ReportIndex)
+	mux.HandleFunc("/reports/", wsrv.Report)
+	mux.HandleFunc("/reports/source/", wsrv.ReportSource)
+
+	wsrv.Server = &http.Server{
+		Addr:           ":12345",
+		Handler:        mux,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
+
+	return wsrv
+}
+
+func (wsrv *WebServer) Run() error {
+	return wsrv.Server.ListenAndServe()
+}
+
+func (wsrv *WebServer) ReportIndex(w http.ResponseWriter, r *http.Request) {
+	http.NotFound(w, r)
+}
+
+func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
+	year, week, source, err := wsrv.getReportFromURL("/reports/", w, r)
+	if err != nil {
+		return
+	}
+
+	opts := blackfriday.Extensions(blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis)
+	content := blackfriday.Run(source, blackfriday.WithExtensions(opts))
+	wsrv.reportsTmpl.Execute(w, map[string]interface{}{
+		"Title":   fmt.Sprintf("Report of year %d week %d", year, week),
+		"Content": template.HTML(string(content)),
+	})
+}
+
+func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
+	if _, _, report, err := wsrv.getReportFromURL("/reports/source/", w, r); err == nil {
+		w.Write(report)
+	}
+}
+
+func (wsrv *WebServer) getReportFromURL(leadingPath string, w http.ResponseWriter, r *http.Request) (int, int, []byte, error) {
+	path := subPath(leadingPath, r)
+
+	year, week, err := yearAndWeek(path)
+	if err != nil {
+		w.WriteHeader(400)
+		w.Write([]byte(fmt.Sprint(err)))
+		return 0, 0, nil, err
+	}
+
+	report, err := wsrv.Typer.ReportWeek(uint8(week), year)
+	if err != nil {
+		http.NotFound(w, r)
+		return 0, 0, nil, err
+	}
+
+	return year, week, []byte(strings.Join(report, "")), nil
+}
+
+func subPath(prefix string, r *http.Request) []string {
+	sub_url := r.URL.Path[len(prefix):]
+	return strings.Split(sub_url, "/")
+}
+
+func ignoreTrailing(path []string) []string {
+	if path[len(path)-1] == "" {
+		path = path[:len(path)-2]
+	}
+	return path
+}
+
+func yearAndWeek(path []string) (int, int, error) {
+	if len(path) != 2 {
+		return 0, 0, errors.New("URL must include '[year]/[week number]'")
+	}
+
+	year, err := strconv.Atoi(path[0])
+	if err != nil {
+		return 0, 0, errors.New("Year must be a valid number.")
+	}
+
+	week, err := strconv.Atoi(path[1])
+	if err != nil {
+		return 0, 0, errors.New("Week must be a valid number.")
+	}
+
+	return year, week, nil
 }
 
 const reportPage = `<!DOCTYPE html>
