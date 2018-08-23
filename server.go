@@ -60,6 +60,8 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 	wsrv.reportsTmpl.Execute(w, map[string]interface{}{
 		"Title":   fmt.Sprintf("Report of year %d week %d", year, week),
 		"Content": template.HTML(string(content)),
+		"Year":    year,
+		"Week":    week,
 	})
 }
 
@@ -145,6 +147,23 @@ const reportPage = `<!DOCTYPE html>
 			margin-bottom: 2rem;
 		}
 
+		aside {
+			float: right;
+			font-weight: bold;
+			margin-right: 1em;
+		}
+
+		aside a::after {
+			content: "M↓";
+			color: white;
+			background: black;
+			border-radius: 0.2em;
+			font-weight: bold;
+			padding: 0.1em;
+			margin: 0.1em;
+			font-size: smaller;
+		}
+
 		article h1 {
 			font-size: 1.25rem;
 		}
@@ -166,6 +185,7 @@ const reportPage = `<!DOCTYPE html>
 </head>
 <body>
 	<h1 id="title">{{ .Title }}</h1>
+	<aside><a href="/reports/source/{{ .Year }}/{{ .Week }}">source</a></aside>
 	<article>
 		{{ .Content }}
 	</article>
