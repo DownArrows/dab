@@ -15,6 +15,9 @@ max_age = "48h"
 max_batches = 10
 # Interval between each check of suspend users' status
 unsuspended_interval = "15m"
+# Users whose last comments was made at least this long ago will be scanned only during full scans
+inactivity_threshold = "2200h" # roughly 3 months
+full_scan_interval = "6h"
 
 [report]
 # Must follows the format of https://golang.org/pkg/time/#LoadLocation

@@ -8,14 +8,16 @@ import (
 )
 
 type Bot struct {
-	MaxAge         time.Duration
-	MaxQueries     int
-	Suspended      chan User
-	highScoresFeed chan Comment
-	highScore      int64
-	scanner        *RedditClient
-	storage        *Storage
-	logger         *log.Logger
+	MaxAge           time.Duration
+	MaxQueries       int
+	Suspended        chan User
+	highScoresFeed   chan Comment
+	highScore        int64
+	MaxInactive      time.Duration
+	FullScanInterval time.Duration
+	scanner          *RedditClient
+	storage          *Storage
+	logger           *log.Logger
 }
 
 func NewBot(
@@ -24,15 +26,19 @@ func NewBot(
 	logOut io.Writer,
 	maxAge time.Duration,
 	maxBatches int,
+	maxInactive time.Duration,
+	fullScanInterval time.Duration,
 ) *Bot {
 	logger := log.New(logOut, "bot: ", log.LstdFlags)
 
 	bot := &Bot{
-		MaxAge:     maxAge,
-		MaxQueries: maxBatches,
-		scanner:    scanner,
-		storage:    storage,
-		logger:     logger,
+		MaxAge:           maxAge,
+		MaxQueries:       maxBatches,
+		FullScanInterval: fullScanInterval,
+		MaxInactive:      maxInactive,
+		scanner:          scanner,
+		storage:          storage,
+		logger:           logger,
 	}
 
 	return bot
@@ -201,7 +207,7 @@ func (bot *Bot) Run() {
 	for {
 
 		now := time.Now().Round(0)
-		full_scan := now.Sub(last_full_scan) >= 6*time.Hour
+		full_scan := now.Sub(last_full_scan) >= bot.FullScanInterval
 
 		if err := bot.scanOnce(full_scan); err != nil {
 			log.Fatal(err)
@@ -209,7 +215,7 @@ func (bot *Bot) Run() {
 
 		if full_scan {
 			last_full_scan = now
-			if err := bot.storage.UpdateInactiveStatus(3 * 30 * 24 * time.Hour); err != nil {
+			if err := bot.storage.UpdateInactiveStatus(bot.MaxInactive); err != nil {
 				log.Fatal(err)
 			}
 		}

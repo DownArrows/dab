@@ -29,6 +29,8 @@ func main() {
 	viper.SetDefault("scanner.max_batches", 5)
 	viper.SetDefault("scanner.max_age", 24*time.Hour)
 	viper.SetDefault("scanner.unsuspension_interval", 15*time.Minute)
+	viper.SetDefault("scanner.inactivity_threshold", 2200*time.Hour)
+	viper.SetDefault("scanner.full_scan_interval", 6*time.Hour)
 	viper.SetDefault("discord.highscores", "")
 
 	err := viper.ReadInConfig()
@@ -107,6 +109,8 @@ func main() {
 			scanner, storage, os.Stdout,
 			viper.GetDuration("scanner.max_age"),
 			viper.GetInt("scanner.max_batches"),
+			viper.GetDuration("scanner.inactivity_threshold"),
+			viper.GetDuration("scanner.full_scan_interval"),
 		)
 	}
 
