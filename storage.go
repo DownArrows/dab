@@ -299,6 +299,9 @@ func (storage *Storage) ListSuspended() ([]User, error) {
 }
 
 func (storage *Storage) SetSuspended(username string, suspended bool) error {
+	storage.Lock()
+	defer storage.Unlock()
+
 	stmt, err := storage.db.Prepare("UPDATE tracked SET suspended = ? WHERE name = ?")
 	if err != nil {
 		return err
@@ -642,7 +645,6 @@ func (storage *Storage) SaveSubPostIDs(listing []Comment, sub string) error {
 }
 
 func (storage *Storage) SeenPostIDs(sub string) ([]string, error) {
-
 	stmt, err := storage.db.Prepare("SELECT id FROM seen_posts WHERE sub = ?")
 	if err != nil {
 		return nil, err
