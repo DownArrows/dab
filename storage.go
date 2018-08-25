@@ -20,7 +20,7 @@ type Storage struct {
 
 func NewStorage(dbPath string, logOut io.Writer) (*Storage, error) {
 	logger := log.New(logOut, "storage: ", log.LstdFlags)
-	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=1", dbPath))
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", dbPath))
 	if err != nil {
 		return nil, err
 	}
@@ -33,6 +33,8 @@ func NewStorage(dbPath string, logOut io.Writer) (*Storage, error) {
 }
 
 func (storage *Storage) Init() error {
+	storage.db.SetMaxOpenConns(1)
+
 	if storage.Path != ":memory:" {
 		err := storage.EnableWAL()
 		if err != nil {
