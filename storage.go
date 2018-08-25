@@ -118,9 +118,6 @@ func (storage *Storage) EnableWAL() error {
 }
 
 func (storage *Storage) Vacuum() error {
-	storage.Lock()
-	defer storage.Unlock()
-
 	_, err := storage.db.Exec("VACUUM")
 	return err
 }
@@ -130,9 +127,6 @@ func (storage *Storage) Vacuum() error {
 ******/
 
 func (storage *Storage) AddUser(username string, hidden bool, created time.Time) error {
-	storage.Lock()
-	defer storage.Unlock()
-
 	stmt, err := storage.db.Prepare(`
 		INSERT INTO tracked(name, hidden, created, added)
 		VALUES (?, ?, ?, strftime("%s", CURRENT_TIMESTAMP))`)
@@ -183,9 +177,6 @@ func (storage *Storage) GetUser(username string) UserQuery {
 }
 
 func (storage *Storage) DelUser(username string) error {
-	storage.Lock()
-	defer storage.Unlock()
-
 	stmt, err := storage.db.Prepare("UPDATE tracked SET deleted = 1 WHERE name = ?")
 	if err != nil {
 		return err
@@ -203,9 +194,6 @@ func (storage *Storage) DelUser(username string) error {
 }
 
 func (storage *Storage) PurgeUser(username string) error {
-	storage.Lock()
-	defer storage.Unlock()
-
 	tx, err := storage.db.Begin()
 	if err != nil {
 		return err
@@ -301,9 +289,6 @@ func (storage *Storage) ListSuspended() ([]User, error) {
 }
 
 func (storage *Storage) SetSuspended(username string, suspended bool) error {
-	storage.Lock()
-	defer storage.Unlock()
-
 	stmt, err := storage.db.Prepare("UPDATE tracked SET suspended = ? WHERE name = ?")
 	if err != nil {
 		return err
@@ -315,9 +300,6 @@ func (storage *Storage) SetSuspended(username string, suspended bool) error {
 }
 
 func (storage *Storage) NotNewUser(username string) error {
-	storage.Lock()
-	defer storage.Unlock()
-
 	stmt, err := storage.db.Prepare("UPDATE tracked SET new = 0 WHERE name = ?")
 	if err != nil {
 		return err
@@ -360,8 +342,6 @@ func (storage *Storage) ListActiveUsers() ([]User, error) {
 func (storage *Storage) UpdateInactiveStatus(max_age time.Duration) error {
 	// We use two SQL statements instead of one because SQLite is too limited
 	// to do that in a single statement that isn't exceedingly complicated.
-	storage.Lock()
-	defer storage.Unlock()
 
 	now := time.Now().Round(0).Unix()
 
@@ -418,9 +398,6 @@ func (storage *Storage) UpdateInactiveStatus(max_age time.Duration) error {
 *********/
 
 func (storage *Storage) ResetPosition(username string) error {
-	storage.Lock()
-	defer storage.Unlock()
-
 	tx, err := storage.db.Begin()
 	if err != nil {
 		return err
@@ -435,9 +412,6 @@ func (storage *Storage) ResetPosition(username string) error {
 
 // Make sure the comments are all from the same user and its struct is up to date
 func (storage *Storage) SaveCommentsPage(comments []Comment, user User) error {
-	storage.Lock()
-	defer storage.Unlock()
-
 	tx, err := storage.db.Begin()
 	if err != nil {
 		return err
@@ -620,9 +594,6 @@ func (storage *Storage) StatsBetween(since, until time.Time) (Stats, error) {
 ******/
 
 func (storage *Storage) SaveSubPostIDs(listing []Comment, sub string) error {
-	storage.Lock()
-	defer storage.Unlock()
-
 	tx, err := storage.db.Begin()
 	if err != nil {
 		return err
@@ -678,9 +649,6 @@ func (storage *Storage) SeenPostIDs(sub string) ([]string, error) {
 }
 
 func (storage *Storage) SaveKnownObject(id string) error {
-	storage.Lock()
-	defer storage.Unlock()
-
 	stmt, err := storage.db.Prepare("INSERT INTO known_objects VALUES (?, ?)")
 	if err != nil {
 		return err
