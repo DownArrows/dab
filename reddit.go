@@ -52,6 +52,13 @@ type aboutUser struct {
 	}
 }
 
+type wikiPage struct {
+	Data struct {
+		RevisionDate float64
+		Content      string `json:"content_md"`
+	}
+}
+
 func NewRedditClient(auth RedditAuth, userAgent string) (*RedditClient, error) {
 	http_client := &http.Client{}
 	var client = &RedditClient{
@@ -114,6 +121,28 @@ func (rc *RedditClient) AboutUser(username string) UserQuery {
 	query.User.Created = time.Unix(int64(about.Data.Created), 0)
 	query.User.Suspended = about.Data.Suspended
 	return query
+}
+
+func (rc *RedditClient) WikiPage(sub, page string) (string, error) {
+	rc.Lock()
+	defer rc.Unlock()
+
+	path := "/r/" + sub + "/wiki/" + page
+	res, status, err := rc.rawRequest("GET", path, nil)
+	if err != nil {
+		return "", err
+	}
+	if status != 200 {
+		return "", errors.New(fmt.Sprintf("invalid status when fetching '%s': %d", path, status))
+	}
+
+	parsed := &wikiPage{}
+	err = json.Unmarshal(res, parsed)
+	if err != nil {
+		return "", err
+	}
+
+	return parsed.Data.Content, nil
 }
 
 func (rc *RedditClient) SubPosts(sub string, position string) ([]Comment, string, error) {

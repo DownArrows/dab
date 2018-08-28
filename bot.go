@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -42,6 +43,78 @@ func NewBot(
 	}
 
 	return bot
+}
+
+func (bot *Bot) UpdateUsersFromCompendium() error {
+	page, err := bot.scanner.WikiPage("DownvoteTrolling", "compendium")
+	if err != nil {
+		return err
+	}
+
+	lines := strings.Split(page, "\n")
+	state := "before"
+	names := make([]string, 0)
+
+	for _, line := range lines {
+		if line == "####Users ranked by total comment karma" {
+			state = "header1"
+		} else if state == "header1" {
+			state = "header2"
+		} else if state == "header2" {
+			state = "in_listing"
+		} else if state == "in_listing" && strings.HasPrefix(line, "*") && strings.HasSuffix(line, "*") {
+			break
+		} else if state == "in_listing" {
+			cells := strings.Split(line, "|")
+			if len(cells) < 6 {
+				return errors.New("The array of names/scores doesn't have the expected format")
+			}
+			name_link := cells[2]
+			start := strings.Index(name_link, "[")
+			end := strings.Index(name_link, "]")
+			escaped_name := name_link[start+1 : end]
+			if len(escaped_name) == 0 {
+				return errors.New("The names don't have the expected format")
+			}
+			name := strings.Replace(escaped_name, `\`, "", -1)
+			names = append(names, name)
+		}
+	}
+
+	bot.logger.Printf("Found %d users in the compendium", len(names))
+
+	added_counter := 0
+	for _, username := range names {
+
+		is_known, err := bot.storage.IsKnownObject("username-" + username)
+		if err != nil {
+			return err
+		}
+		if is_known {
+			continue
+		}
+
+		result := bot.AddUser(username, false, false)
+		if result.Error != nil {
+			if !result.Exists {
+				msg := "Update from compendium: error when adding the new user "
+				bot.logger.Print(msg, result.User.Name, result.Error)
+			}
+		} else if result.Exists {
+			added_counter += 1
+		}
+
+		if result.Error != nil || !result.Exists {
+			if err := bot.storage.SaveKnownObject("username-" + username); err != nil {
+				return err
+			}
+		}
+
+	}
+
+	bot.logger.Printf("Added %d new user(s) from the compendium", added_counter)
+
+	return nil
 }
 
 func (bot *Bot) StreamSub(sub string, ch chan Comment, sleep time.Duration) {
