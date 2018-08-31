@@ -233,17 +233,19 @@ func (rc *RedditClient) rawRequest(verb string, path string, data io.Reader) ([]
 		return nil, 0, res_err
 	}
 
+	// The response's body must be read and closed to make sure the underlying TCP connection can be re-used.
+	raw_data, read_err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	if read_err != nil {
+		return nil, 0, read_err
+	}
+
 	if res.StatusCode == 401 {
 		err = rc.connect(rc.Auth)
 		if err != nil {
 			return nil, 0, err
 		}
 		return rc.rawRequest(verb, path, data)
-	}
-
-	raw_data, read_err := ioutil.ReadAll(res.Body)
-	if read_err != nil {
-		return nil, 0, read_err
 	}
 
 	return raw_data, res.StatusCode, nil
