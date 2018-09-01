@@ -129,10 +129,18 @@ func (rt *ReportTyper) Report(start, end time.Time) ([]string, error) {
 
 func (rt *ReportTyper) typeReportHead(comments []string, stats Stats, start, end time.Time) (string, error) {
 	deltas := stats.DeltasToScores().Sort()
+	if len(deltas) > rt.NbTop {
+		deltas = deltas[:rt.NbTop]
+	}
+
 	averages := stats.AveragesToScores().Sort()
+	if len(averages) > rt.NbTop {
+		averages = averages[:rt.NbTop]
+	}
+
 	data := reportHead{
-		Delta:    deltas[:rt.NbTop],
-		Avg:      averages[:rt.NbTop],
+		Delta:    deltas,
+		Avg:      averages,
 		Comments: comments,
 		Start:    start.Format(time.RFC822),
 		End:      end.Format(time.RFC822),
