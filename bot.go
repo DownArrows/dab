@@ -1,7 +1,7 @@
 package main
 
 import (
-	"errors"
+	"fmt"
 	"io"
 	"log"
 	"strings"
@@ -67,14 +67,14 @@ func (bot *Bot) UpdateUsersFromCompendium() error {
 		} else if state == "in_listing" {
 			cells := strings.Split(line, "|")
 			if len(cells) < 6 {
-				return errors.New("The array of names/scores doesn't have the expected format")
+				return fmt.Errorf("The array of names/scores doesn't have the expected format")
 			}
 			name_link := cells[2]
 			start := strings.Index(name_link, "[")
 			end := strings.Index(name_link, "]")
 			escaped_name := name_link[start+1 : end]
 			if len(escaped_name) == 0 {
-				return errors.New("The names don't have the expected format")
+				return fmt.Errorf("The names don't have the expected format")
 			}
 			name := strings.Replace(escaped_name, `\`, "", -1)
 			names = append(names, name)
@@ -191,9 +191,9 @@ func (bot *Bot) AddUser(username string, hidden bool, force_suspended bool) User
 	if query.Error != nil {
 		return query
 	} else if query.Exists {
-		msg := username + " already exists"
-		bot.logger.Print(msg)
-		query.Error = errors.New(msg)
+		template := "'%s' already exists"
+		bot.logger.Printf(template, username)
+		query.Error = fmt.Errorf(template, username)
 		return query
 	}
 
@@ -210,8 +210,7 @@ func (bot *Bot) AddUser(username string, hidden bool, force_suspended bool) User
 	if query.User.Suspended {
 		bot.logger.Printf("User \"%s\" was suspended", query.User.Name)
 		if !force_suspended {
-			err := errors.New("User " + query.User.Name + " can't be added, forced mode not enabled")
-			query.Error = err
+			query.Error = fmt.Errorf("User '%s' can't be added, forced mode not enabled", query.User.Name)
 			return query
 		}
 	}

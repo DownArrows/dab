@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -86,8 +85,7 @@ func (rc *RedditClient) AboutUser(username string) UserQuery {
 		query.Error = err
 		return query
 	} else if !sane {
-		msg := fmt.Sprintf("username %s contains forbidden characters or is empty", username)
-		query.Error = errors.New(msg)
+		query.Error = fmt.Errorf("username %s contains forbidden characters or is empty", username)
 		return query
 	}
 
@@ -102,10 +100,7 @@ func (rc *RedditClient) AboutUser(username string) UserQuery {
 	if status == 404 {
 		return query
 	} else if status != 200 {
-		template := "Bad response status when looking up %s: %d"
-		msg := fmt.Sprintf(template, username, status)
-		err = errors.New(msg)
-		query.Error = err
+		query.Error = fmt.Errorf("Bad response status when looking up %s: %d", username, status)
 		return query
 	}
 
@@ -133,7 +128,7 @@ func (rc *RedditClient) WikiPage(sub, page string) (string, error) {
 		return "", err
 	}
 	if status != 200 {
-		return "", errors.New(fmt.Sprintf("invalid status when fetching '%s': %d", path, status))
+		return "", fmt.Errorf("invalid status when fetching '%s': %d", path, status)
 	}
 
 	parsed := &wikiPage{}
@@ -197,9 +192,8 @@ func (rc *RedditClient) getListing(path string, position string) ([]Comment, str
 	}
 
 	if status != 200 {
-		template := "Bad response status when fetching the listing %s: %d"
-		msg := fmt.Sprintf(template, path, status)
-		return nil, position, status, errors.New(msg)
+		err = fmt.Errorf("Bad response status when fetching the listing %s: %d", path, status)
+		return nil, position, status, err
 	}
 
 	parsed := &commentListing{}

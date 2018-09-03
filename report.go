@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -100,7 +99,7 @@ func (rt *ReportTyper) Report(start, end time.Time) ([]string, error) {
 	}
 
 	if len(comments) == 0 {
-		return nil, errors.New(fmt.Sprintf("No comment found between %s and %s.", start, end))
+		return nil, fmt.Errorf("No comment found between %s and %s.", start, end)
 	}
 
 	stats, err := rt.storage.StatsBetween(start, end)
