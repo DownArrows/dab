@@ -2,29 +2,23 @@ package main
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"io"
-	"log"
-	"sync"
 	"time"
 )
 
 type Storage struct {
-	sync.Mutex
-	db     *sql.DB
-	logger *log.Logger
-	Path   string
+	db   *sql.DB
+	Path string
 }
 
 func NewStorage(dbPath string, logOut io.Writer) (*Storage, error) {
-	logger := log.New(logOut, "storage: ", log.LstdFlags)
 	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", dbPath))
 	if err != nil {
 		return nil, err
 	}
-	storage := &Storage{db: db, logger: logger, Path: dbPath}
+	storage := &Storage{db: db, Path: dbPath}
 	err = storage.Init()
 	if err != nil {
 		return nil, err
@@ -111,7 +105,7 @@ func (storage *Storage) EnableWAL() error {
 	}
 
 	if journal_mode != "wal" {
-		return errors.New("Failed to set journal mode to Write-Ahead Log (WAL)")
+		return fmt.Errorf("Failed to set journal mode to Write-Ahead Log (WAL)")
 	}
 
 	return nil
@@ -188,7 +182,7 @@ func (storage *Storage) DelUser(username string) error {
 		return err
 	}
 	if nb, _ := result.RowsAffected(); nb == 0 {
-		return errors.New("No user named " + username)
+		return fmt.Errorf("No user named '%s'", username)
 	}
 	return nil
 }
@@ -225,7 +219,7 @@ func (storage *Storage) PurgeUser(username string) error {
 	}
 	if nb, _ := result.RowsAffected(); nb == 0 {
 		tx.Rollback()
-		return errors.New("No user named " + username)
+		return fmt.Errorf("No user named '%s'", username)
 	}
 
 	return tx.Commit()
@@ -342,6 +336,14 @@ func (storage *Storage) ListActiveUsers() ([]User, error) {
 func (storage *Storage) UpdateInactiveStatus(max_age time.Duration) error {
 	// We use two SQL statements instead of one because SQLite is too limited
 	// to do that in a single statement that isn't exceedingly complicated.
+	template := `
+		UPDATE tracked SET inactive = ?
+		WHERE name IN (
+			SELECT author FROM (
+				SELECT author, max(created) AS last
+				FROM comments GROUP BY author
+			) WHERE (? - last) %s ?
+		)`
 
 	now := time.Now().Round(0).Unix()
 
@@ -350,41 +352,27 @@ func (storage *Storage) UpdateInactiveStatus(max_age time.Duration) error {
 		return err
 	}
 
-	inactive_stmt, err := tx.Prepare(`
-		UPDATE tracked SET inactive = 1
-		WHERE name IN (
-			SELECT author FROM (
-				SELECT author, max(created) AS last
-				FROM comments GROUP BY author
-			) WHERE (? - last) > ?
-		)`)
+	inactive_stmt, err := tx.Prepare(fmt.Sprintf(template, ">"))
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 	defer inactive_stmt.Close()
 
-	_, err = inactive_stmt.Exec(now, max_age.Seconds())
+	_, err = inactive_stmt.Exec(1, now, max_age.Seconds())
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	active_stmt, err := tx.Prepare(`
-		UPDATE tracked SET inactive = 0
-		WHERE name IN (
-			SELECT author FROM (
-				SELECT author, max(created) AS last
-				FROM comments GROUP BY author
-			) WHERE (? - last) < ?
-		)`)
+	active_stmt, err := tx.Prepare(fmt.Sprintf(template, "<"))
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 	defer active_stmt.Close()
 
-	_, err = active_stmt.Exec(now, max_age.Seconds())
+	_, err = active_stmt.Exec(0, now, max_age.Seconds())
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -545,7 +533,7 @@ func (storage *Storage) getKarma(username, cond string) (int64, error) {
 	var karma sql.NullInt64
 	err = rows.Scan(&karma)
 	if !karma.Valid {
-		return 0, errors.New("No comments from user " + username + " found")
+		return 0, fmt.Errorf("No comments from user '%s' found", username)
 	}
 	return karma.Int64, err
 }
