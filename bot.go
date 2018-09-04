@@ -375,9 +375,9 @@ func (bot *Bot) ifSuspended(user User, status int) (bool, error) {
 	forbidden := status == 403
 
 	if forbidden {
-		bot.logger.Print("trying to fetch " + user.Name + " resulted in a 403 error")
+		bot.logger.Printf("Trying to fetch '%s' resulted in a 403 error", user.Name)
 	} else if gone {
-		bot.logger.Print(user.Name + " not found")
+		bot.logger.Printf("User '%s' not found", user.Name)
 	}
 
 	var about UserQuery
@@ -395,7 +395,7 @@ func (bot *Bot) ifSuspended(user User, status int) (bool, error) {
 		}
 
 		if bot.Suspended != nil {
-			bot.logger.Print("User " + user.Name + " has been suspended or shadowbanned")
+			bot.logger.Printf("User '%s' has been suspended or shadowbanned", user.Name)
 			bot.Suspended <- user
 		}
 
