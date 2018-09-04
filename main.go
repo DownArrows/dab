@@ -63,15 +63,17 @@ func main() {
 		}
 	}()
 
-	rt, err := NewReportTyper(
-		storage,
-		os.Stdout,
-		viper.GetString("report.timezone"),
-		viper.GetDuration("report.leeway"),
-		viper.GetInt64("report.cutoff"),
-		uint64(viper.GetInt64("report.maxlength")),
-		viper.GetInt("report.nb_top"),
-	)
+	timezone, err := time.LoadLocation(viper.GetString("report.timezone"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	rt, err := NewReportTyper(storage, os.Stdout, ReportConf{
+		Timezone:  timezone,
+		Leeway:    viper.GetDuration("report.leeway"),
+		Cutoff:    viper.GetInt64("report.cutoff"),
+		MaxLength: uint64(viper.GetInt64("report.maxlength")),
+		NbTop:     viper.GetInt("report.nb_top"),
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -106,13 +108,12 @@ func main() {
 			log.Fatal(err)
 		}
 
-		bot = NewBot(
-			scanner, storage, os.Stdout,
-			viper.GetDuration("scanner.max_age"),
-			viper.GetInt("scanner.max_batches"),
-			viper.GetDuration("scanner.inactivity_threshold"),
-			viper.GetDuration("scanner.full_scan_interval"),
-		)
+		bot = NewBot(scanner, storage, os.Stdout, BotConf{
+			MaxAge:              viper.GetDuration("scanner.max_age"),
+			MaxBatches:          uint(viper.GetInt("scanner.max_batches")),
+			InactivityThreshold: viper.GetDuration("scanner.inactivity_threshold"),
+			FullScanInterval:    viper.GetDuration("scanner.full_scan_interval"),
+		})
 	}
 
 	// Command line registration
@@ -142,14 +143,13 @@ func main() {
 
 	// Discord bot
 	if !*nodiscord {
-		discordbot, err = NewDiscordBot(
-			storage, os.Stdout,
-			viper.GetString("discord.token"),
-			viper.GetString("discord.general"),
-			viper.GetString("discord.log"),
-			viper.GetString("discord.highscores"),
-			viper.GetString("discord.admin"),
-		)
+		discordbot, err = NewDiscordBot(storage, os.Stdout, DiscordBotConf{
+			Token:      viper.GetString("discord.token"),
+			General:    viper.GetString("discord.general"),
+			Log:        viper.GetString("discord.log"),
+			HighScores: viper.GetString("discord.highscores"),
+			Admin:      viper.GetString("discord.admin"),
+		})
 		if err != nil {
 			log.Fatal(err)
 		}

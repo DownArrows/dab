@@ -11,31 +11,33 @@ import (
 	"time"
 )
 
-type DiscordBot struct {
-	logger         *log.Logger
-	storage        *Storage
-	client         *discordgo.Session
-	LinkReactions  []string
-	redditLink     *regexp.Regexp
-	General        *discordgo.Channel
-	LogChan        *discordgo.Channel
-	HighScoresChan *discordgo.Channel
-	Admin          *discordgo.User
-	AddUser        chan UserQuery
+type DiscordBotConf struct {
+	Token      string
+	General    string
+	Log        string
+	HighScores string
+	Admin      string
 }
 
-func NewDiscordBot(
-	storage *Storage,
-	logOut io.Writer,
-	token string,
-	general string,
-	logChan string,
-	highScoresChan string,
-	admin string,
-) (*DiscordBot, error) {
+type DiscordBot struct {
+	logger        *log.Logger
+	storage       *Storage
+	client        *discordgo.Session
+	LinkReactions []string
+	redditLink    *regexp.Regexp
+	Channels      struct {
+		General    *discordgo.Channel
+		Log        *discordgo.Channel
+		HighScores *discordgo.Channel
+	}
+	Admin   *discordgo.User
+	AddUser chan UserQuery
+}
+
+func NewDiscordBot(storage *Storage, logOut io.Writer, conf DiscordBotConf) (*DiscordBot, error) {
 	logger := log.New(logOut, "discordbot: ", log.LstdFlags)
 
-	session, err := discordgo.New("Bot " + token)
+	session, err := discordgo.New("Bot " + conf.Token)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +60,7 @@ func NewDiscordBot(
 	})
 
 	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
-		dbot.onReady(admin, general, logChan, highScoresChan)
+		dbot.onReady(conf)
 	})
 
 	return dbot, nil
@@ -90,7 +92,7 @@ func (bot *DiscordBot) RedditEvents(evts chan Comment) {
 
 		if comment.Author == "DownvoteTrollingBot" || comment.Author == "DownvoteTrollingBot2" {
 			msg := "@everyone https://www.reddit.com" + comment.Permalink
-			_, err = bot.client.ChannelMessageSend(bot.General.ID, msg)
+			_, err = bot.client.ChannelMessageSend(bot.Channels.General.ID, msg)
 		}
 
 		if err != nil {
@@ -102,7 +104,7 @@ func (bot *DiscordBot) RedditEvents(evts chan Comment) {
 func (bot *DiscordBot) SignalSuspensions(suspensions chan User) {
 	for user := range suspensions {
 		msg := fmt.Sprintf("RIP %s 🙏", user.Name)
-		_, err := bot.client.ChannelMessageSend(bot.General.ID, msg)
+		_, err := bot.client.ChannelMessageSend(bot.Channels.General.ID, msg)
 		if err != nil {
 			bot.logger.Print("Suspensions listener: ", err)
 		}
@@ -112,7 +114,7 @@ func (bot *DiscordBot) SignalSuspensions(suspensions chan User) {
 func (bot *DiscordBot) SignalUnsuspensions(ch chan User) {
 	for user := range ch {
 		msg := fmt.Sprintf("🌈 %s has been unsuspended! 🌈", user.Name)
-		_, err := bot.client.ChannelMessageSend(bot.General.ID, msg)
+		_, err := bot.client.ChannelMessageSend(bot.Channels.General.ID, msg)
 		if err != nil {
 			bot.logger.Print("Unsuspensions listener: ", err)
 		}
@@ -124,33 +126,33 @@ func (bot *DiscordBot) SignalHighScores(ch chan Comment) {
 		link := "https://www.reddit.com" + comment.Permalink
 		tmpl := "A comment by %s has reached %d: %s"
 		msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
-		_, err := bot.client.ChannelMessageSend(bot.HighScoresChan.ID, msg)
+		_, err := bot.client.ChannelMessageSend(bot.Channels.HighScores.ID, msg)
 		if err != nil {
 			bot.logger.Print("High-scores listener: ", err)
 		}
 	}
 }
 
-func (bot *DiscordBot) onReady(admin, general, logChan, highScoresChan string) {
+func (bot *DiscordBot) onReady(conf DiscordBotConf) {
 	var err error
-	bot.General, err = bot.client.Channel(general)
+	bot.Channels.General, err = bot.client.Channel(conf.General)
 	if err != nil {
 		bot.logger.Fatal(err)
 	}
 
-	bot.LogChan, err = bot.client.Channel(logChan)
+	bot.Channels.Log, err = bot.client.Channel(conf.Log)
 	if err != nil {
 		bot.logger.Fatal(err)
 	}
 
-	if highScoresChan != "" {
-		bot.HighScoresChan, err = bot.client.Channel(highScoresChan)
+	if conf.HighScores != "" {
+		bot.Channels.HighScores, err = bot.client.Channel(conf.HighScores)
 		if err != nil {
 			bot.logger.Fatal(err)
 		}
 	}
 
-	bot.Admin, err = bot.client.User(admin)
+	bot.Admin, err = bot.client.User(conf.Admin)
 	if err != nil {
 		bot.logger.Fatal(err)
 	}
@@ -160,8 +162,8 @@ func (bot *DiscordBot) onReady(admin, general, logChan, highScoresChan string) {
 func (bot *DiscordBot) onNewMember(member *discordgo.Member) {
 	manual := "397034210218475520"
 	welcome := "Hello <@%s>! Have a look at the <#%s> to understand what's going on here, and don't hesitate to post on <#%s> and to try new things we haven't thought of! This server is still rather new and experimental, but we think it has great potential. We may have some knowledge of the craft to share too."
-	msg := fmt.Sprintf(welcome, member.User.ID, manual, bot.General.ID)
-	_, err := bot.client.ChannelMessageSend(bot.General.ID, msg)
+	msg := fmt.Sprintf(welcome, member.User.ID, manual, bot.Channels.General.ID)
+	_, err := bot.client.ChannelMessageSend(bot.Channels.General.ID, msg)
 	if err != nil {
 		bot.logger.Print(err)
 	}
@@ -226,7 +228,7 @@ func (bot *DiscordBot) onMessage(msg *discordgo.MessageCreate) {
 }
 
 func (bot *DiscordBot) isLoggableRedditLink(channel, content string) bool {
-	return (channel == bot.General.ID &&
+	return (channel == bot.Channels.General.ID &&
 		bot.redditLink.MatchString(content) &&
 		!strings.Contains(strings.ToLower(content), "!nolog"))
 }
@@ -247,7 +249,7 @@ func (bot *DiscordBot) addRandomReactionTo(msg *discordgo.MessageCreate) error {
 }
 
 func (bot *DiscordBot) postInLogChannel(response string) error {
-	_, err := bot.client.ChannelMessageSend(bot.LogChan.ID, response)
+	_, err := bot.client.ChannelMessageSend(bot.Channels.Log.ID, response)
 	return err
 }
 

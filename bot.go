@@ -8,41 +8,30 @@ import (
 	"time"
 )
 
-type Bot struct {
-	MaxAge           time.Duration
-	MaxQueries       int
-	Suspended        chan User
-	highScoresFeed   chan Comment
-	highScore        int64
-	MaxInactive      time.Duration
-	FullScanInterval time.Duration
-	scanner          *RedditClient
-	storage          *Storage
-	logger           *log.Logger
+type BotConf struct {
+	MaxAge              time.Duration
+	MaxBatches          uint
+	InactivityThreshold time.Duration
+	FullScanInterval    time.Duration
 }
 
-func NewBot(
-	scanner *RedditClient,
-	storage *Storage,
-	logOut io.Writer,
-	maxAge time.Duration,
-	maxBatches int,
-	maxInactive time.Duration,
-	fullScanInterval time.Duration,
-) *Bot {
-	logger := log.New(logOut, "bot: ", log.LstdFlags)
+type Bot struct {
+	Conf           BotConf
+	Suspended      chan User
+	highScoresFeed chan Comment
+	highScore      int64
+	scanner        *RedditClient
+	storage        *Storage
+	logger         *log.Logger
+}
 
-	bot := &Bot{
-		MaxAge:           maxAge,
-		MaxQueries:       maxBatches,
-		FullScanInterval: fullScanInterval,
-		MaxInactive:      maxInactive,
-		scanner:          scanner,
-		storage:          storage,
-		logger:           logger,
+func NewBot(scanner *RedditClient, storage *Storage, logOut io.Writer, conf BotConf) *Bot {
+	return &Bot{
+		scanner: scanner,
+		storage: storage,
+		logger:  log.New(logOut, "bot: ", log.LstdFlags),
+		Conf:    conf,
 	}
-
-	return bot
 }
 
 func (bot *Bot) UpdateUsersFromCompendium() error {
@@ -279,7 +268,7 @@ func (bot *Bot) Run() {
 	for {
 
 		now := time.Now().Round(0)
-		full_scan := now.Sub(last_full_scan) >= bot.FullScanInterval
+		full_scan := now.Sub(last_full_scan) >= bot.Conf.FullScanInterval
 
 		if err := bot.scanOnce(full_scan); err != nil {
 			log.Fatal(err)
@@ -287,7 +276,7 @@ func (bot *Bot) Run() {
 
 		if full_scan {
 			last_full_scan = now
-			if err := bot.storage.UpdateInactiveStatus(bot.MaxInactive); err != nil {
+			if err := bot.storage.UpdateInactiveStatus(bot.Conf.InactivityThreshold); err != nil {
 				log.Fatal(err)
 			}
 		}
@@ -348,7 +337,7 @@ func (bot *Bot) allRelevantComments(user User) error {
 	var err error
 	var status int
 
-	for i := 0; i < bot.MaxQueries; i++ {
+	for i := uint(0); i < bot.Conf.MaxBatches; i++ {
 		user.Position, status, err = bot.saveCommentsPage(user)
 		if err != nil {
 			return err
@@ -449,7 +438,7 @@ func (bot *Bot) maxAgeReached(comments []Comment) bool {
 	// we don't need it for the precision we want and one parameter depends
 	// on an external source (the comments' timestamps).
 	now := time.Now().Round(0)
-	return now.Sub(oldest) > bot.MaxAge
+	return now.Sub(oldest) > bot.Conf.MaxAge
 }
 
 func (bot *Bot) AlertIfHighScore(comments []Comment) error {

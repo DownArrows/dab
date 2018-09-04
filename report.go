@@ -12,16 +12,20 @@ import (
 	"time"
 )
 
+type ReportConf struct {
+	Leeway    time.Duration
+	Timezone  *time.Location
+	Cutoff    int64
+	MaxLength uint64
+	NbTop     int
+}
+
 type ReportTyper struct {
+	Conf        ReportConf
 	logger      *log.Logger
 	storage     *Storage
-	Leeway      time.Duration
-	Location    *time.Location
 	commentTmpl *template.Template
 	headTmpl    *template.Template
-	Cutoff      int64
-	MaxLength   uint64
-	NbTop       int
 }
 
 type reportComment struct {
@@ -42,47 +46,30 @@ type reportHead struct {
 	End      string
 }
 
-func NewReportTyper(
-	storage *Storage,
-	logOut io.Writer,
-	timezone string,
-	leeway time.Duration,
-	cutoff int64,
-	maxLength uint64,
-	nbTop int,
-) (*ReportTyper, error) {
+func NewReportTyper(storage *Storage, logOut io.Writer, conf ReportConf) (*ReportTyper, error) {
 	logger := log.New(logOut, "report: ", log.LstdFlags)
 
 	comment_tmpl := template.Must(template.New("comment").Parse(commentTmpl))
 	head_tmpl := template.Must(template.New("report").Parse(reportHeadTmpl))
 
-	location, err := time.LoadLocation(timezone)
-	if err != nil {
-		return nil, err
-	}
-
 	rt := &ReportTyper{
+		Conf:        conf,
 		storage:     storage,
 		logger:      logger,
-		Leeway:      leeway,
-		Location:    location,
 		commentTmpl: comment_tmpl,
 		headTmpl:    head_tmpl,
-		Cutoff:      cutoff,
-		MaxLength:   maxLength,
-		NbTop:       nbTop,
 	}
 	return rt, nil
 }
 
 func (rt *ReportTyper) ReportLastWeek() ([]string, error) {
-	now := time.Now().In(rt.Location)
+	now := time.Now().In(rt.Conf.Timezone)
 	year, week := now.AddDate(0, 0, -7).ISOWeek()
 	return rt.ReportWeek(uint8(week), year)
 }
 
 func (rt *ReportTyper) ReportWeek(week_num uint8, year int) ([]string, error) {
-	week_start := WeekNumToStartDate(week_num, year, rt.Location).Add(-rt.Leeway)
+	week_start := WeekNumToStartDate(week_num, year, rt.Conf.Timezone).Add(-rt.Conf.Leeway)
 	week_end := week_start.AddDate(0, 0, 7)
 
 	batches, err := rt.Report(week_start, week_end)
@@ -93,7 +80,7 @@ func (rt *ReportTyper) ReportWeek(week_num uint8, year int) ([]string, error) {
 }
 
 func (rt *ReportTyper) Report(start, end time.Time) ([]string, error) {
-	comments, err := rt.storage.GetCommentsBelowBetween(rt.Cutoff, start, end)
+	comments, err := rt.storage.GetCommentsBelowBetween(rt.Conf.Cutoff, start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -128,13 +115,13 @@ func (rt *ReportTyper) Report(start, end time.Time) ([]string, error) {
 
 func (rt *ReportTyper) typeReportHead(comments []string, stats Stats, start, end time.Time) (string, error) {
 	deltas := stats.DeltasToScores().Sort()
-	if len(deltas) > rt.NbTop {
-		deltas = deltas[:rt.NbTop]
+	if len(deltas) > rt.Conf.NbTop {
+		deltas = deltas[:rt.Conf.NbTop]
 	}
 
 	averages := stats.AveragesToScores().Sort()
-	if len(averages) > rt.NbTop {
-		averages = averages[:rt.NbTop]
+	if len(averages) > rt.Conf.NbTop {
+		averages = averages[:rt.Conf.NbTop]
 	}
 
 	data := reportHead{
@@ -168,7 +155,7 @@ func (rt *ReportTyper) typeComments(comments []Comment, stats Stats) ([][]string
 
 		len_formatted := uint64(len(formatted))
 		total_len += len_formatted
-		if total_len > rt.MaxLength {
+		if total_len > rt.Conf.MaxLength {
 			batches = append(batches, batch)
 			batch = make([]string, 0, nb_comments)
 			total_len = len_formatted
