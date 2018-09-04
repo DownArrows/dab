@@ -1,11 +1,62 @@
 package main
 
 import (
+	"encoding/json"
 	"math"
 	"sort"
 	"strings"
 	"time"
 )
+
+type Duration struct {
+	Value time.Duration
+}
+
+func (d *Duration) UnmarshalJSON(raw []byte) error {
+	var value string
+	err := json.Unmarshal(raw, &value)
+	if err != nil {
+		return err
+	}
+	d.Value, err = time.ParseDuration(value)
+	return err
+}
+
+type Timezone struct {
+	Value *time.Location
+}
+
+func (tz *Timezone) UnmarshalJSON(raw []byte) error {
+	var value string
+	err := json.Unmarshal(raw, &value)
+	if err != nil {
+		return err
+	}
+	tz.Value, err = time.LoadLocation(value)
+	return err
+}
+
+type Config struct {
+	Database struct {
+		Path            string   `json:"path"`
+		CleanupInterval Duration `json:"cleanup_interval"`
+	}
+
+	Scanner struct {
+		RedditAuth
+		BotConf
+		UserAgent                string   `json:"user_agent"`
+		UnsuspensionInterval     Duration `json:"unsuspension_interval"`
+		CompendiumUpdateInterval Duration `json:"compendium_update_interval"`
+	}
+
+	Report ReportConf
+
+	Discord struct {
+		DiscordBotConf
+		HighScoreThreshold int64 `json:"highscore_threshold"`
+	}
+}
 
 type Comment struct {
 	Id        string
@@ -47,10 +98,10 @@ type UserQuery struct {
 }
 
 type RedditAuth struct {
-	Username string
-	Password string
-	Id       string
-	Key      string
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Id       string `json:"id"`
+	Secret   string `json:"secret"`
 }
 
 type UserStats struct {

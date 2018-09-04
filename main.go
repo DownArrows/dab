@@ -1,9 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/spf13/viper"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -12,31 +13,57 @@ import (
 	"time"
 )
 
+const defaults string = `{
+	"database": {
+		"path": "./dab.db",
+		"cleanup_interval": "1h"
+	},
+
+	"scanner": {
+		"max_batches": 5,
+		"max_age": "24h",
+		"unsuspension_interval": "15m",
+		"inactivity_threshold": "2200h",
+		"full_scan_interval": "6h",
+		"compendium_update_interval": "24h"
+	},
+
+	"report": {
+		"timezone": "UTC",
+		"leeway": "12h",
+		"cutoff": -50,
+		"max_length": 400000,
+		"nb_top": 5
+	},
+
+	"discord": {
+		"highscore_threshold": -1000
+	}
+
+}`
+
 func main() {
+	config_paths := []string{"/etc/dab.conf.json", "./dab.conf.json"}
 
-	viper.SetConfigName("dab")
-	viper.AddConfigPath("/etc/")
-	viper.AddConfigPath("$HOME/.config/")
-	viper.AddConfigPath(".")
+	config := Config{}
+	if err := json.Unmarshal([]byte(defaults), &config); err != nil {
+		log.Fatal(err)
+	}
 
-	viper.SetDefault("database.path", "./dab.db")
-	viper.SetDefault("database.cleanup_interval", time.Hour)
-	viper.SetDefault("report.timezone", "UTC")
-	viper.SetDefault("report.leeway", 12*time.Hour)
-	viper.SetDefault("report.cutoff", -50)
-	viper.SetDefault("report.max_length", 400000)
-	viper.SetDefault("report.nb_top", 5)
-	viper.SetDefault("scanner.max_batches", 5)
-	viper.SetDefault("scanner.max_age", 24*time.Hour)
-	viper.SetDefault("scanner.unsuspension_interval", 15*time.Minute)
-	viper.SetDefault("scanner.inactivity_threshold", 2200*time.Hour)
-	viper.SetDefault("scanner.full_scan_interval", 6*time.Hour)
-	viper.SetDefault("discord.highscores", "")
-	viper.SetDefault("scanner.compendium_update_interval", 24*time.Hour)
-
-	err := viper.ReadInConfig()
+	var err error
+	var raw_config []byte
+	for _, path := range config_paths {
+		raw_config, err = ioutil.ReadFile(path)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
-		log.Fatal("Error reading config file: ", err)
+		log.Fatal("Couldn't find config file at any of %v", config_paths)
+	}
+
+	if err := json.Unmarshal(raw_config, &config); err != nil {
+		log.Fatal(err)
 	}
 
 	useradd := flag.String("useradd", "", "Add one or multiple comma-separated users to be tracked.")
@@ -45,8 +72,10 @@ func main() {
 	report := flag.Bool("report", false, "Print the report for the last week.")
 	flag.Parse()
 
+	*nodiscord = *nodiscord || config.Discord.Token == ""
+
 	// Storage
-	db_path := viper.GetString("database.path")
+	db_path := config.Database.Path
 	log.Print("Using database ", db_path)
 	storage, err := NewStorage(db_path, os.Stdout)
 	if err != nil {
@@ -55,7 +84,7 @@ func main() {
 
 	go func() {
 		for {
-			time.Sleep(viper.GetDuration("database.cleanup_interval"))
+			time.Sleep(config.Database.CleanupInterval.Value)
 			err := storage.Vacuum()
 			if err != nil {
 				log.Fatal(err)
@@ -63,17 +92,7 @@ func main() {
 		}
 	}()
 
-	timezone, err := time.LoadLocation(viper.GetString("report.timezone"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	rt, err := NewReportTyper(storage, os.Stdout, ReportConf{
-		Timezone:  timezone,
-		Leeway:    viper.GetDuration("report.leeway"),
-		Cutoff:    viper.GetInt64("report.cutoff"),
-		MaxLength: uint64(viper.GetInt64("report.maxlength")),
-		NbTop:     viper.GetInt("report.nb_top"),
-	})
+	rt, err := NewReportTyper(storage, os.Stdout, config.Report)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -95,25 +114,12 @@ func main() {
 
 	// Reddit bot or new users registration from the command line
 	if !*noreddit || *useradd != "" {
-		auth := RedditAuth{
-			Id:       viper.GetString("scanner.id"),
-			Key:      viper.GetString("scanner.secret"),
-			Username: viper.GetString("scanner.username"),
-			Password: viper.GetString("scanner.password"),
-		}
-		ua := viper.GetString("scanner.user_agent")
-
-		scanner, err := NewRedditClient(auth, ua)
+		scanner, err := NewRedditClient(config.Scanner.RedditAuth, config.Scanner.UserAgent)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		bot = NewBot(scanner, storage, os.Stdout, BotConf{
-			MaxAge:              viper.GetDuration("scanner.max_age"),
-			MaxBatches:          uint(viper.GetInt("scanner.max_batches")),
-			InactivityThreshold: viper.GetDuration("scanner.inactivity_threshold"),
-			FullScanInterval:    viper.GetDuration("scanner.full_scan_interval"),
-		})
+		bot = NewBot(scanner, storage, os.Stdout, config.Scanner.BotConf)
 	}
 
 	// Command line registration
@@ -130,26 +136,19 @@ func main() {
 	if !*noreddit {
 		go bot.Run()
 		go func() {
-			interval := viper.GetDuration("scanner.compendium_update_interval")
 			for {
 				err := bot.UpdateUsersFromCompendium()
 				if err != nil {
 					log.Print(err)
 				}
-				time.Sleep(interval)
+				time.Sleep(config.Scanner.CompendiumUpdateInterval.Value)
 			}
 		}()
 	}
 
 	// Discord bot
 	if !*nodiscord {
-		discordbot, err = NewDiscordBot(storage, os.Stdout, DiscordBotConf{
-			Token:      viper.GetString("discord.token"),
-			General:    viper.GetString("discord.general"),
-			Log:        viper.GetString("discord.log"),
-			HighScores: viper.GetString("discord.highscores"),
-			Admin:      viper.GetString("discord.admin"),
-		})
+		discordbot, err = NewDiscordBot(storage, os.Stdout, config.Discord.DiscordBotConf)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -160,18 +159,19 @@ func main() {
 	// Reddit bot <-> Discord bot
 	if !*nodiscord && !*noreddit {
 		go bot.AddUserServer(discordbot.AddUser)
-		stream(viper.Sub("new"), bot, discordbot)
+
+		reddit_evts := make(chan Comment)
+		go discordbot.RedditEvents(reddit_evts)
+		go bot.StreamSub("DownvoteTrolling", reddit_evts, time.Minute)
 
 		suspensions := bot.Suspensions()
 		go discordbot.SignalSuspensions(suspensions)
 
-		interval := viper.GetDuration("scanner.unsuspension_interval")
-		unsuspensions := bot.CheckUnsuspended(interval)
+		unsuspensions := bot.CheckUnsuspended(config.Scanner.UnsuspensionInterval.Value)
 		go discordbot.SignalUnsuspensions(unsuspensions)
 
-		if viper.IsSet("discord.highscore_threshold") {
-			threshold := viper.GetInt64("discord.highscore_threshold")
-			highscores := bot.StartHighScoresFeed(threshold)
+		if config.Discord.HighScores != "" {
+			highscores := bot.StartHighScoresFeed(config.Discord.HighScoreThreshold)
 			go discordbot.SignalHighScores(highscores)
 		}
 	}
@@ -185,18 +185,6 @@ func main() {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sig
 	log.Print("DAB stopped.")
-}
-
-func stream(config *viper.Viper, bot *Bot, discordbot *DiscordBot) {
-	if config == nil {
-		return
-	}
-	reddit_evts := make(chan Comment)
-	go discordbot.RedditEvents(reddit_evts)
-	for _, sub := range config.AllKeys() {
-		sleep := config.GetDuration(sub)
-		go bot.StreamSub(sub, reddit_evts, sleep)
-	}
 }
 
 func UserAdd(bot *Bot, arg string) error {

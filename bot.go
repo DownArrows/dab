@@ -9,10 +9,10 @@ import (
 )
 
 type BotConf struct {
-	MaxAge              time.Duration
-	MaxBatches          uint
-	InactivityThreshold time.Duration
-	FullScanInterval    time.Duration
+	MaxAge              Duration `json:"max_age"`
+	MaxBatches          uint     `json:"max_batches"`
+	InactivityThreshold Duration `json:"inactivity_threshold"`
+	FullScanInterval    Duration `json:"full_scan_interval"`
 }
 
 type Bot struct {
@@ -268,7 +268,7 @@ func (bot *Bot) Run() {
 	for {
 
 		now := time.Now().Round(0)
-		full_scan := now.Sub(last_full_scan) >= bot.Conf.FullScanInterval
+		full_scan := now.Sub(last_full_scan) >= bot.Conf.FullScanInterval.Value
 
 		if err := bot.scanOnce(full_scan); err != nil {
 			log.Fatal(err)
@@ -276,7 +276,7 @@ func (bot *Bot) Run() {
 
 		if full_scan {
 			last_full_scan = now
-			if err := bot.storage.UpdateInactiveStatus(bot.Conf.InactivityThreshold); err != nil {
+			if err := bot.storage.UpdateInactiveStatus(bot.Conf.InactivityThreshold.Value); err != nil {
 				log.Fatal(err)
 			}
 		}
@@ -438,7 +438,7 @@ func (bot *Bot) maxAgeReached(comments []Comment) bool {
 	// we don't need it for the precision we want and one parameter depends
 	// on an external source (the comments' timestamps).
 	now := time.Now().Round(0)
-	return now.Sub(oldest) > bot.Conf.MaxAge
+	return now.Sub(oldest) > bot.Conf.MaxAge.Value
 }
 
 func (bot *Bot) AlertIfHighScore(comments []Comment) error {

@@ -12,11 +12,11 @@ import (
 )
 
 type DiscordBotConf struct {
-	Token      string
-	General    string
-	Log        string
-	HighScores string
-	Admin      string
+	Token      string `json:"token"`
+	General    string `json:"general"`
+	Log        string `json:"log"`
+	HighScores string `json:"highscores"`
+	Admin      string `json:"admin"`
 }
 
 type DiscordBot struct {

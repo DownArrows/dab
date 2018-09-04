@@ -157,7 +157,7 @@ func (rc *RedditClient) connect(auth RedditAuth) error {
 	req, _ := http.NewRequest("POST", access_token_url, auth_form)
 
 	req.Header.Set("User-Agent", rc.UserAgent)
-	req.SetBasicAuth(rc.Auth.Id, rc.Auth.Key)
+	req.SetBasicAuth(rc.Auth.Id, rc.Auth.Secret)
 
 	res, err := rc.do(req)
 	if err != nil {

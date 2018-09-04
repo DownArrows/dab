@@ -13,11 +13,11 @@ import (
 )
 
 type ReportConf struct {
-	Leeway    time.Duration
-	Timezone  *time.Location
-	Cutoff    int64
-	MaxLength uint64
-	NbTop     int
+	Leeway    Duration `json:"leeway"`
+	Timezone  Timezone `json:"timezone"`
+	Cutoff    int64    `json:"cutoff"`
+	MaxLength uint64   `json:"max_length"`
+	NbTop     int      `json:"nb_top"`
 }
 
 type ReportTyper struct {
@@ -63,13 +63,13 @@ func NewReportTyper(storage *Storage, logOut io.Writer, conf ReportConf) (*Repor
 }
 
 func (rt *ReportTyper) ReportLastWeek() ([]string, error) {
-	now := time.Now().In(rt.Conf.Timezone)
+	now := time.Now().In(rt.Conf.Timezone.Value)
 	year, week := now.AddDate(0, 0, -7).ISOWeek()
 	return rt.ReportWeek(uint8(week), year)
 }
 
 func (rt *ReportTyper) ReportWeek(week_num uint8, year int) ([]string, error) {
-	week_start := WeekNumToStartDate(week_num, year, rt.Conf.Timezone).Add(-rt.Conf.Leeway)
+	week_start := WeekNumToStartDate(week_num, year, rt.Conf.Timezone.Value).Add(-rt.Conf.Leeway.Value)
 	week_end := week_start.AddDate(0, 0, 7)
 
 	batches, err := rt.Report(week_start, week_end)
