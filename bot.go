@@ -246,7 +246,7 @@ func (bot *Bot) CheckUnsuspended(delay time.Duration) chan User {
 				if res.Exists && !res.User.Suspended {
 					err := bot.storage.SetSuspended(user.Name, false)
 					if err != nil {
-						bot.logger.Printf("Unsuspension checker, while checking \"%s\": %s", user.Name, res)
+						bot.logger.Printf("Unsuspension checker, while checking \"%s\": %s", user.Name, res.Error)
 						continue
 					}
 
@@ -459,7 +459,7 @@ func (bot *Bot) AlertIfHighScore(comments []Comment) error {
 				continue
 			}
 
-			bot.logger.Printf("New high-scoring comment found: %s", comment)
+			bot.logger.Printf("New high-scoring comment found: %+v", comment)
 			err = bot.storage.SaveKnownObject(comment.Id)
 			if err != nil {
 				return err
