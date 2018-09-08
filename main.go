@@ -62,9 +62,7 @@ func main() {
 		log.Fatal("Couldn't find config file at any of %v", config_paths)
 	}
 
-	if err := json.Unmarshal(raw_config, &config); err != nil {
-		log.Fatal(err)
-	}
+	fatal(json.Unmarshal(raw_config, &config))
 
 	useradd := flag.String("useradd", "", "Add one or multiple comma-separated users to be tracked.")
 	nodiscord := flag.Bool("nodiscord", false, "Don't connect to discord.")
@@ -78,30 +76,21 @@ func main() {
 	db_path := config.Database.Path
 	log.Print("Using database ", db_path)
 	storage, err := NewStorage(db_path, os.Stdout)
-	if err != nil {
-		log.Fatal(err)
-	}
+	fatal(err)
 
 	go func() {
 		for {
 			time.Sleep(config.Database.CleanupInterval.Value)
-			err := storage.Vacuum()
-			if err != nil {
-				log.Fatal(err)
-			}
+			fatal(storage.Vacuum())
 		}
 	}()
 
 	rt, err := NewReportTyper(storage, os.Stdout, config.Report)
-	if err != nil {
-		log.Fatal(err)
-	}
+	fatal(err)
 
 	if *report {
 		report, err := rt.ReportLastWeek()
-		if err != nil {
-			log.Fatal(err)
-		}
+		fatal(err)
 		for _, chunk := range report {
 			fmt.Println(chunk)
 		}
@@ -115,19 +104,13 @@ func main() {
 	// Reddit bot or new users registration from the command line
 	if !*noreddit || *useradd != "" {
 		scanner, err := NewRedditClient(config.Scanner.RedditAuth, config.Scanner.UserAgent)
-		if err != nil {
-			log.Fatal(err)
-		}
-
+		fatal(err)
 		bot = NewBot(scanner, storage, os.Stdout, config.Scanner.BotConf)
 	}
 
 	// Command line registration
 	if *useradd != "" {
-		err = UserAdd(bot, *useradd)
-		if err != nil {
-			log.Fatal(err)
-		}
+		fatal(UserAdd(bot, *useradd))
 		log.Print("Done")
 		return
 	}
@@ -137,8 +120,7 @@ func main() {
 		go bot.Run()
 		go func() {
 			for {
-				err := bot.UpdateUsersFromCompendium()
-				if err != nil {
+				if err := bot.UpdateUsersFromCompendium(); err != nil {
 					log.Print(err)
 				}
 				time.Sleep(config.Scanner.CompendiumUpdateInterval.Value)
@@ -149,10 +131,7 @@ func main() {
 	// Discord bot
 	if !*nodiscord {
 		discordbot, err = NewDiscordBot(storage, os.Stdout, config.Discord.DiscordBotConf)
-		if err != nil {
-			log.Fatal(err)
-		}
-
+		fatal(err)
 		go discordbot.Run()
 	}
 
@@ -178,13 +157,19 @@ func main() {
 
 	wsrv := NewWebServer(rt)
 	go func() {
-		log.Fatal(wsrv.Run())
+		fatal(wsrv.Run())
 	}()
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sig
 	log.Print("DAB stopped.")
+}
+
+func fatal(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func UserAdd(bot *Bot, arg string) error {
