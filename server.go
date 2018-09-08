@@ -45,6 +45,10 @@ func (wsrv *WebServer) Run() error {
 	return wsrv.Server.ListenAndServe()
 }
 
+func (wsrv *WebServer) Close() error {
+	return wsrv.Server.Close()
+}
+
 func (wsrv *WebServer) ReportIndex(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }

@@ -66,13 +66,17 @@ func NewDiscordBot(storage *Storage, logOut io.Writer, conf DiscordBotConf) (*Di
 	return dbot, nil
 }
 
-func (bot *DiscordBot) Run() {
+func (bot *DiscordBot) Run() error {
 	err := bot.client.Open()
 	if err != nil {
-		panic(err)
+		return err
 	}
-
 	go bot.setPlayingStatus()
+	return nil
+}
+
+func (bot *DiscordBot) Close() error {
+	return bot.client.Close()
 }
 
 func (bot *DiscordBot) setPlayingStatus() {

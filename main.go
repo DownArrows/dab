@@ -132,7 +132,7 @@ func main() {
 	if !*nodiscord {
 		discordbot, err = NewDiscordBot(storage, os.Stdout, config.Discord.DiscordBotConf)
 		fatal(err)
-		go discordbot.Run()
+		fatal(discordbot.Run())
 	}
 
 	// Reddit bot <-> Discord bot
@@ -157,12 +157,17 @@ func main() {
 
 	wsrv := NewWebServer(rt)
 	go func() {
-		fatal(wsrv.Run())
+		if err := wsrv.Run(); err != nil {
+			log.Print(err)
+		}
 	}()
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sig
+	fatal(discordbot.Close())
+	fatal(wsrv.Close())
+	fatal(storage.Close())
 	log.Print("DAB stopped.")
 }
 

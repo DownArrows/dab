@@ -96,6 +96,10 @@ func (storage *Storage) Init() error {
 	return err
 }
 
+func (storage *Storage) Close() error {
+	return storage.db.Close()
+}
+
 func (storage *Storage) EnableWAL() error {
 	var journal_mode string
 
