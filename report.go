@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"html"
-	"io"
-	"log"
 	"math"
 	"strings"
 	"text/template"
@@ -22,7 +20,6 @@ type ReportConf struct {
 
 type ReportTyper struct {
 	Conf        ReportConf
-	logger      *log.Logger
 	storage     *Storage
 	commentTmpl *template.Template
 	headTmpl    *template.Template
@@ -46,16 +43,13 @@ type reportHead struct {
 	End      string
 }
 
-func NewReportTyper(storage *Storage, logOut io.Writer, conf ReportConf) (*ReportTyper, error) {
-	logger := log.New(logOut, "report: ", log.LstdFlags)
-
+func NewReportTyper(storage *Storage, conf ReportConf) (*ReportTyper, error) {
 	comment_tmpl := template.Must(template.New("comment").Parse(commentTmpl))
 	head_tmpl := template.Must(template.New("report").Parse(reportHeadTmpl))
 
 	rt := &ReportTyper{
 		Conf:        conf,
 		storage:     storage,
-		logger:      logger,
 		commentTmpl: comment_tmpl,
 		headTmpl:    head_tmpl,
 	}

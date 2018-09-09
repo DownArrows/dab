@@ -44,7 +44,15 @@ const defaults string = `{
 }`
 
 func main() {
-	defer log.Print("DAB stopped.")
+	logger := log.New(os.Stdout, "", log.Lshortfile)
+
+	fatal := func(err error) {
+		if err != nil {
+			logger.Fatal(err)
+		}
+	}
+
+	defer logger.Print("DAB stopped.")
 
 	config_paths := []string{"/etc/dab.conf.json", "./dab.conf.json"}
 
@@ -60,7 +68,7 @@ func main() {
 		}
 	}
 	if err != nil {
-		log.Fatal("Couldn't find config file at any of %v", config_paths)
+		logger.Fatal("Couldn't find config file at any of %v", config_paths)
 	}
 
 	fatal(json.Unmarshal(raw_config, &config))
@@ -75,7 +83,7 @@ func main() {
 
 	// Storage
 	db_path := config.Database.Path
-	log.Print("Using database ", db_path)
+	logger.Print("Using database ", db_path)
 	storage, err := NewStorage(db_path)
 	fatal(err)
 	defer storage.Close()
@@ -87,7 +95,7 @@ func main() {
 		}
 	}()
 
-	rt, err := NewReportTyper(storage, os.Stdout, config.Report)
+	rt, err := NewReportTyper(storage, config.Report)
 	fatal(err)
 
 	if *report {
@@ -107,13 +115,14 @@ func main() {
 	if !*noreddit || *useradd != "" {
 		scanner, err := NewRedditClient(config.Scanner.RedditAuth, config.Scanner.UserAgent)
 		fatal(err)
-		bot = NewBot(scanner, storage, os.Stdout, config.Scanner.BotConf)
+		logger := log.New(os.Stdout, "", log.Lshortfile)
+		bot = NewBot(scanner, storage, logger, config.Scanner.BotConf)
 	}
 
 	// Command line registration
 	if *useradd != "" {
-		fatal(UserAdd(bot, *useradd))
-		log.Print("Done")
+		fatal(UserAdd(logger, bot, *useradd))
+		logger.Print("Done")
 		return
 	}
 
@@ -123,7 +132,7 @@ func main() {
 		go func() {
 			for {
 				if err := bot.UpdateUsersFromCompendium(); err != nil {
-					log.Print(err)
+					logger.Print(err)
 				}
 				time.Sleep(config.Scanner.CompendiumUpdateInterval.Value)
 			}
@@ -132,7 +141,8 @@ func main() {
 
 	// Discord bot
 	if !*nodiscord {
-		discordbot, err = NewDiscordBot(storage, os.Stdout, config.Discord.DiscordBotConf)
+		logger := log.New(os.Stdout, "", log.Lshortfile)
+		discordbot, err = NewDiscordBot(storage, logger, config.Discord.DiscordBotConf)
 		fatal(err)
 		fatal(discordbot.Run())
 		defer discordbot.Close()
@@ -162,7 +172,7 @@ func main() {
 	go func() {
 		err := wsrv.Run()
 		if err != nil {
-			log.Print(err)
+			logger.Print(err)
 		}
 	}()
 	defer wsrv.Close()
@@ -172,13 +182,7 @@ func main() {
 	<-sig
 }
 
-func fatal(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func UserAdd(bot *Bot, arg string) error {
+func UserAdd(logger *log.Logger, bot *Bot, arg string) error {
 	usernames := strings.Split(arg, ",")
 	for _, username := range usernames {
 		res := bot.AddUser(username, false, true)
@@ -186,6 +190,6 @@ func UserAdd(bot *Bot, arg string) error {
 			return res.Error
 		}
 	}
-	log.Print("done")
+	logger.Print("Done")
 	return nil
 }

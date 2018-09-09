@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"strings"
 	"time"
@@ -25,11 +24,11 @@ type Bot struct {
 	logger         *log.Logger
 }
 
-func NewBot(scanner *RedditClient, storage *Storage, logOut io.Writer, conf BotConf) *Bot {
+func NewBot(scanner *RedditClient, storage *Storage, logger *log.Logger, conf BotConf) *Bot {
 	return &Bot{
 		scanner: scanner,
 		storage: storage,
-		logger:  log.New(logOut, "bot: ", log.LstdFlags),
+		logger:  logger,
 		Conf:    conf,
 	}
 }

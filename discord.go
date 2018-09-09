@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/bwmarrin/discordgo"
-	"io"
 	"log"
 	"math/rand"
 	"regexp"
@@ -77,9 +76,7 @@ func (cmd DiscordCommand) Match(prefix, content string) (bool, string) {
 	return false, content
 }
 
-func NewDiscordBot(storage *Storage, logOut io.Writer, conf DiscordBotConf) (*DiscordBot, error) {
-	logger := log.New(logOut, "discordbot: ", log.LstdFlags)
-
+func NewDiscordBot(storage *Storage, logger *log.Logger, conf DiscordBotConf) (*DiscordBot, error) {
 	session, err := discordgo.New("Bot " + conf.Token)
 	if err != nil {
 		return nil, err
