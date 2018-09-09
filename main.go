@@ -25,7 +25,8 @@ const defaults string = `{
 		"unsuspension_interval": "15m",
 		"inactivity_threshold": "2200h",
 		"full_scan_interval": "6h",
-		"compendium_update_interval": "24h"
+		"compendium_update_interval": "24h",
+		"dvt_interval": "5m"
 	},
 
 	"report": {
@@ -154,7 +155,7 @@ func main() {
 
 		reddit_evts := make(chan Comment)
 		go discordbot.RedditEvents(reddit_evts)
-		go bot.StreamSub("DownvoteTrolling", reddit_evts, time.Minute)
+		go bot.StreamSub("DownvoteTrolling", reddit_evts, config.Scanner.DVTInterval.Value)
 
 		suspensions := bot.Suspensions()
 		go discordbot.SignalSuspensions(suspensions)

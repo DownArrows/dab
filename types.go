@@ -48,6 +48,7 @@ type Config struct {
 		UserAgent                string   `json:"user_agent"`
 		UnsuspensionInterval     Duration `json:"unsuspension_interval"`
 		CompendiumUpdateInterval Duration `json:"compendium_update_interval"`
+		DVTInterval              Duration `json:"dvt_interval"`
 	}
 
 	Report ReportConf
