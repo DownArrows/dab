@@ -76,7 +76,7 @@ func main() {
 	// Storage
 	db_path := config.Database.Path
 	log.Print("Using database ", db_path)
-	storage, err := NewStorage(db_path, os.Stdout)
+	storage, err := NewStorage(db_path)
 	fatal(err)
 	defer storage.Close()
 

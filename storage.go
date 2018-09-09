@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
-	"io"
 	"time"
 )
 
@@ -13,7 +12,7 @@ type Storage struct {
 	Path string
 }
 
-func NewStorage(dbPath string, logOut io.Writer) (*Storage, error) {
+func NewStorage(dbPath string) (*Storage, error) {
 	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", dbPath))
 	if err != nil {
 		return nil, err
