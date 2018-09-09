@@ -37,18 +37,19 @@ const defaults string = `{
 	},
 
 	"discord": {
-		"highscore_threshold": -1000
+		"highscore_threshold": -1000,
+		"prefix": "!"
 	}
 
 }`
 
 func main() {
+	defer log.Print("DAB stopped.")
+
 	config_paths := []string{"/etc/dab.conf.json", "./dab.conf.json"}
 
 	config := Config{}
-	if err := json.Unmarshal([]byte(defaults), &config); err != nil {
-		log.Fatal(err)
-	}
+	fatal(json.Unmarshal([]byte(defaults), &config))
 
 	var err error
 	var raw_config []byte
@@ -77,6 +78,7 @@ func main() {
 	log.Print("Using database ", db_path)
 	storage, err := NewStorage(db_path, os.Stdout)
 	fatal(err)
+	defer storage.Close()
 
 	go func() {
 		for {
@@ -133,6 +135,7 @@ func main() {
 		discordbot, err = NewDiscordBot(storage, os.Stdout, config.Discord.DiscordBotConf)
 		fatal(err)
 		fatal(discordbot.Run())
+		defer discordbot.Close()
 	}
 
 	// Reddit bot <-> Discord bot
@@ -157,18 +160,16 @@ func main() {
 
 	wsrv := NewWebServer(rt)
 	go func() {
-		if err := wsrv.Run(); err != nil {
+		err := wsrv.Run()
+		if err != nil {
 			log.Print(err)
 		}
 	}()
+	defer wsrv.Close()
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sig
-	fatal(discordbot.Close())
-	fatal(wsrv.Close())
-	fatal(storage.Close())
-	log.Print("DAB stopped.")
 }
 
 func fatal(err error) {
