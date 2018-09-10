@@ -120,8 +120,7 @@ func (bot *Bot) StreamSub(sub string, ch chan Comment, sleep time.Duration) {
 			bot.logger.Print("event streamer: ", err)
 		}
 
-		err = bot.storage.SaveSubPostIDs(posts, sub)
-		if err != nil {
+		if err := bot.storage.SaveSubPostIDs(posts, sub); err != nil {
 			bot.logger.Print("event streamer: ", err)
 		}
 
@@ -203,8 +202,7 @@ func (bot *Bot) AddUser(username string, hidden bool, force_suspended bool) User
 		}
 	}
 
-	err := bot.storage.AddUser(query.User.Name, hidden, query.User.Created)
-	if err != nil {
+	if err := bot.storage.AddUser(query.User.Name, hidden, query.User.Created); err != nil {
 		query.Error = err
 		return query
 	}
@@ -243,8 +241,7 @@ func (bot *Bot) CheckUnsuspended(delay time.Duration) chan User {
 				}
 
 				if res.Exists && !res.User.Suspended {
-					err := bot.storage.SetSuspended(user.Name, false)
-					if err != nil {
+					if err := bot.storage.SetSuspended(user.Name, false); err != nil {
 						bot.logger.Printf("Unsuspension checker, while checking \"%s\": %s", user.Name, res.Error)
 						continue
 					}
@@ -322,8 +319,7 @@ func (bot *Bot) getUsersOrWait(full_scan bool) ([]User, error) {
 func (bot *Bot) scanUsers(users []User) error {
 	for _, user := range users {
 
-		err := bot.allRelevantComments(user)
-		if err != nil {
+		if err := bot.allRelevantComments(user); err != nil {
 			// That error is probably network-related, so just log it
 			// and wait for the network or reddit to work again.
 			bot.logger.Print("Error when fetching and saving comments: ", err)
@@ -350,15 +346,13 @@ func (bot *Bot) allRelevantComments(user User) error {
 		}
 
 		if user.Position == "" && user.New {
-			err = bot.storage.NotNewUser(user.Name)
-			if err != nil {
+			if err := bot.storage.NotNewUser(user.Name); err != nil {
 				return err
 			}
 		}
 
 		if user.Position == "" {
-			err = bot.storage.ResetPosition(user.Name)
-			if err != nil {
+			if err := bot.storage.ResetPosition(user.Name); err != nil {
 				return err
 			}
 			break
@@ -388,8 +382,7 @@ func (bot *Bot) ifSuspended(user User, status int) (bool, error) {
 	}
 
 	if gone || about.User.Suspended {
-		err := bot.storage.SetSuspended(user.Name, true)
-		if err != nil {
+		if err := bot.storage.SetSuspended(user.Name, true); err != nil {
 			return false, err
 		}
 
@@ -413,13 +406,11 @@ func (bot *Bot) saveCommentsPage(user User) (string, int, error) {
 		return position, status, nil
 	}
 
-	err = bot.storage.SaveCommentsPage(comments, user)
-	if err != nil {
+	if err := bot.storage.SaveCommentsPage(comments, user); err != nil {
 		return "", status, err
 	}
 
-	err = bot.AlertIfHighScore(comments)
-	if err != nil {
+	if err := bot.AlertIfHighScore(comments); err != nil {
 		return "", status, err
 	}
 
@@ -459,8 +450,7 @@ func (bot *Bot) AlertIfHighScore(comments []Comment) error {
 			}
 
 			bot.logger.Printf("New high-scoring comment found: %+v", comment)
-			err = bot.storage.SaveKnownObject(comment.Id)
-			if err != nil {
+			if err := bot.storage.SaveKnownObject(comment.Id); err != nil {
 				return err
 			}
 

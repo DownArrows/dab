@@ -109,8 +109,7 @@ func NewDiscordBot(storage *Storage, logger *log.Logger, conf DiscordBotConf) (*
 }
 
 func (bot *DiscordBot) Run() error {
-	err := bot.client.Open()
-	if err != nil {
+	if err := bot.client.Open(); err != nil {
 		return err
 	}
 	go bot.setPlayingStatus()
@@ -123,8 +122,7 @@ func (bot *DiscordBot) Close() error {
 
 func (bot *DiscordBot) setPlayingStatus() {
 	for {
-		err := bot.client.UpdateStatus(0, "Downvote Counter")
-		if err != nil {
+		if err := bot.client.UpdateStatus(0, "Downvote Counter"); err != nil {
 			bot.logger.Print("Couldn't set status on discord")
 		}
 		time.Sleep(time.Hour)
@@ -172,8 +170,7 @@ func (bot *DiscordBot) onNewMember(member *discordgo.Member) {
 	manual := "397034210218475520"
 	welcome := "Hello <@%s>! Have a look at the <#%s> to understand what's going on here, and don't hesitate to post on <#%s> and to try new things we haven't thought of! This server is still rather new and experimental, but we think it has great potential. We may have some knowledge of the craft to share too."
 	msg := fmt.Sprintf(welcome, member.User.ID, manual, bot.Channels.General.ID)
-	err := bot.ChannelMessageSend(bot.Channels.General.ID, msg)
-	if err != nil {
+	if err := bot.ChannelMessageSend(bot.Channels.General.ID, msg); err != nil {
 		bot.logger.Print(err)
 	}
 }
@@ -230,8 +227,7 @@ func (bot *DiscordBot) RedditEvents(evts chan Comment) {
 func (bot *DiscordBot) SignalSuspensions(suspensions chan User) {
 	for user := range suspensions {
 		msg := fmt.Sprintf("RIP %s 🙏", user.Name)
-		err := bot.ChannelMessageSend(bot.Channels.General.ID, msg)
-		if err != nil {
+		if err := bot.ChannelMessageSend(bot.Channels.General.ID, msg); err != nil {
 			bot.logger.Print("Suspensions listener: ", err)
 		}
 	}
@@ -240,8 +236,7 @@ func (bot *DiscordBot) SignalSuspensions(suspensions chan User) {
 func (bot *DiscordBot) SignalUnsuspensions(ch chan User) {
 	for user := range ch {
 		msg := fmt.Sprintf("🌈 %s has been unsuspended! 🌈", user.Name)
-		err := bot.ChannelMessageSend(bot.Channels.General.ID, msg)
-		if err != nil {
+		if err := bot.ChannelMessageSend(bot.Channels.General.ID, msg); err != nil {
 			bot.logger.Print("Unsuspensions listener: ", err)
 		}
 	}
@@ -252,8 +247,7 @@ func (bot *DiscordBot) SignalHighScores(ch chan Comment) {
 		link := "https://www.reddit.com" + comment.Permalink
 		tmpl := "A comment by %s has reached %d: %s"
 		msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
-		err := bot.ChannelMessageSend(bot.Channels.HighScores.ID, msg)
-		if err != nil {
+		if err := bot.ChannelMessageSend(bot.Channels.HighScores.ID, msg); err != nil {
 			bot.logger.Print("High-scores listener: ", err)
 		}
 	}
@@ -294,8 +288,7 @@ func (bot *DiscordBot) isLoggableRedditLink(msg DiscordMessage) bool {
 }
 
 func (bot *DiscordBot) processRedditLink(msg DiscordMessage) error {
-	err := bot.addRandomReactionTo(msg)
-	if err != nil {
+	if err := bot.addRandomReactionTo(msg); err != nil {
 		return err
 	}
 	reply := msg.FQAuthor + ": " + msg.Content
@@ -372,8 +365,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 
 	statuses := make([]string, 0, len(names))
 	for _, name := range names {
-		err := bot.client.ChannelTyping(msg.ChannelID)
-		if err != nil {
+		if err := bot.client.ChannelTyping(msg.ChannelID); err != nil {
 			return err
 		}
 
@@ -405,8 +397,7 @@ func (bot *DiscordBot) unregister(msg DiscordMessage) error {
 
 	results := make([]string, len(names))
 	for i, name := range names {
-		err := bot.storage.DelUser(name)
-		if err != nil {
+		if err := bot.storage.DelUser(name); err != nil {
 			results[i] = fmt.Sprintf("%s: error %s", name, err)
 		} else {
 			results[i] = fmt.Sprintf("%s: ok", name)
@@ -424,8 +415,7 @@ func (bot *DiscordBot) purge(msg DiscordMessage) error {
 
 	results := make([]string, len(names))
 	for i, name := range names {
-		err := bot.storage.PurgeUser(name)
-		if err != nil {
+		if err := bot.storage.PurgeUser(name); err != nil {
 			results[i] = fmt.Sprintf("%s: error %s", name, err)
 		} else {
 			results[i] = fmt.Sprintf("%s: ok", name)
@@ -460,8 +450,7 @@ func (bot *DiscordBot) userExists(msg DiscordMessage) error {
 
 func (bot *DiscordBot) karma(msg DiscordMessage) error {
 	username := msg.Content
-	err := bot.client.ChannelTyping(msg.ChannelID)
-	if err != nil {
+	if err := bot.client.ChannelTyping(msg.ChannelID); err != nil {
 		return err
 	}
 

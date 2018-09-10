@@ -127,11 +127,10 @@ func (rt *ReportTyper) typeReportHead(comments []string, stats Stats, start, end
 	}
 
 	var output bytes.Buffer
-	err := rt.headTmpl.Execute(&output, data)
-	if err != nil {
+	if err := rt.headTmpl.Execute(&output, data); err != nil {
 		return "", err
 	}
-	return output.String(), err
+	return output.String(), nil
 }
 
 func (rt *ReportTyper) typeComments(comments []Comment, stats Stats) ([][]string, error) {
@@ -179,11 +178,10 @@ func (rt *ReportTyper) CommentToString(number uint64, comment Comment, average f
 	}
 
 	var output bytes.Buffer
-	err := rt.commentTmpl.Execute(&output, data)
-	if err != nil {
+	if err := rt.commentTmpl.Execute(&output, data); err != nil {
 		return "", err
 	}
-	return output.String(), err
+	return output.String(), nil
 }
 
 func WeekNumToStartDate(week_num uint8, year int, location *time.Location) time.Time {

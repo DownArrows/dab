@@ -66,8 +66,7 @@ func NewRedditClient(auth RedditAuth, userAgent string) (*RedditClient, error) {
 		UserAgent: userAgent,
 	}
 
-	err := client.connect(auth)
-	if err != nil {
+	if err := client.connect(auth); err != nil {
 		return nil, err
 	}
 
@@ -105,8 +104,7 @@ func (rc *RedditClient) AboutUser(username string) UserQuery {
 	}
 
 	about := &aboutUser{}
-	err = json.Unmarshal(res, about)
-	if err != nil {
+	if err := json.Unmarshal(res, about); err != nil {
 		query.Error = err
 		return query
 	}
@@ -132,8 +130,7 @@ func (rc *RedditClient) WikiPage(sub, page string) (string, error) {
 	}
 
 	parsed := &wikiPage{}
-	err = json.Unmarshal(res, parsed)
-	if err != nil {
+	if err := json.Unmarshal(res, parsed); err != nil {
 		return "", err
 	}
 
@@ -169,8 +166,7 @@ func (rc *RedditClient) connect(auth RedditAuth) error {
 		return read_err
 	}
 
-	err = json.Unmarshal(body, &rc.OAuth)
-	return err
+	return json.Unmarshal(body, &rc.OAuth)
 }
 
 func (rc *RedditClient) getListing(path string, position string) ([]Comment, string, int, error) {
@@ -197,8 +193,7 @@ func (rc *RedditClient) getListing(path string, position string) ([]Comment, str
 	}
 
 	parsed := &commentListing{}
-	err = json.Unmarshal(res, parsed)
-	if err != nil {
+	if err := json.Unmarshal(res, parsed); err != nil {
 		return nil, position, status, err
 	}
 
@@ -235,8 +230,7 @@ func (rc *RedditClient) rawRequest(verb string, path string, data io.Reader) ([]
 	}
 
 	if res.StatusCode == 401 {
-		err = rc.connect(rc.Auth)
-		if err != nil {
+		if err := rc.connect(rc.Auth); err != nil {
 			return nil, 0, err
 		}
 		return rc.rawRequest(verb, path, data)

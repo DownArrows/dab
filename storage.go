@@ -18,8 +18,7 @@ func NewStorage(dbPath string) (*Storage, error) {
 		return nil, err
 	}
 	storage := &Storage{db: db, Path: dbPath}
-	err = storage.Init()
-	if err != nil {
+	if err := storage.Init(); err != nil {
 		return nil, err
 	}
 	return storage, nil
@@ -29,8 +28,7 @@ func (storage *Storage) Init() error {
 	storage.db.SetMaxOpenConns(1)
 
 	if storage.Path != ":memory:" {
-		err := storage.EnableWAL()
-		if err != nil {
+		if err := storage.EnableWAL(); err != nil {
 			return err
 		}
 	}
@@ -102,8 +100,7 @@ func (storage *Storage) Close() error {
 func (storage *Storage) EnableWAL() error {
 	var journal_mode string
 
-	err := storage.db.QueryRow("PRAGMA journal_mode=WAL").Scan(&journal_mode)
-	if err != nil {
+	if err := storage.db.QueryRow("PRAGMA journal_mode=WAL").Scan(&journal_mode); err != nil {
 		return err
 	}
 
@@ -393,8 +390,7 @@ func (storage *Storage) ResetPosition(username string) error {
 	if err != nil {
 		return err
 	}
-	err = storage.savePosition(tx, username, "")
-	if err != nil {
+	if err := storage.savePosition(tx, username, ""); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -408,14 +404,12 @@ func (storage *Storage) SaveCommentsPage(comments []Comment, user User) error {
 		return err
 	}
 
-	err = storage.saveComments(tx, comments)
-	if err != nil {
+	if err := storage.saveComments(tx, comments); err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	err = storage.savePosition(tx, user.Name, user.Position)
-	if err != nil {
+	if err := storage.savePosition(tx, user.Name, user.Position); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -566,8 +560,7 @@ func (storage *Storage) StatsBetween(since, until time.Time) (Stats, error) {
 	stats := make(Stats)
 	for rows.Next() {
 		var data UserStats
-		err = rows.Scan(&data.Author, &data.Average, &data.Delta, &data.Count)
-		if err != nil {
+		if err := rows.Scan(&data.Author, &data.Average, &data.Delta, &data.Count); err != nil {
 			return nil, err
 		}
 		stats[data.Author] = data
@@ -625,8 +618,7 @@ func (storage *Storage) SeenPostIDs(sub string) ([]string, error) {
 	for rows.Next() {
 		var id string
 
-		err = rows.Scan(&id)
-		if err != nil {
+		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
 		ids = append(ids, id)
