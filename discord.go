@@ -61,16 +61,16 @@ func (cmd DiscordCommand) Match(prefix, content string) (bool, string) {
 	if !cmd.NoArgs {
 		head += " "
 	}
-	if strings.HasPrefix(head, content) {
-		return true, strings.TrimPrefix(head, content)
+	if strings.HasPrefix(content, head) {
+		return true, strings.TrimPrefix(content, head)
 	}
 	for _, name := range cmd.Aliases {
 		head := prefix + name
 		if !cmd.NoArgs {
 			head += " "
 		}
-		if strings.HasPrefix(head, content) {
-			return true, strings.TrimPrefix(head, content)
+		if strings.HasPrefix(content, head) {
+			return true, strings.TrimPrefix(content, head)
 		}
 	}
 	return false, content
