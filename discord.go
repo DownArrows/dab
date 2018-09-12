@@ -57,23 +57,30 @@ type DiscordCommand struct {
 }
 
 func (cmd DiscordCommand) Match(prefix, content string) (bool, string) {
-	head := prefix + cmd.Command
-	if !cmd.NoArgs {
-		head += " "
-	}
-	if strings.HasPrefix(content, head) {
-		return true, strings.TrimPrefix(content, head)
+	if matches, head := cmd.SingleMatch(cmd.Command, prefix, content); matches {
+		return matches, strings.TrimPrefix(content, head)
 	}
 	for _, name := range cmd.Aliases {
-		head := prefix + name
-		if !cmd.NoArgs {
-			head += " "
-		}
-		if strings.HasPrefix(content, head) {
-			return true, strings.TrimPrefix(content, head)
+		if matches, head := cmd.SingleMatch(name, prefix, content); matches {
+			return matches, strings.TrimPrefix(content, head)
 		}
 	}
 	return false, content
+}
+
+func (cmd DiscordCommand) SingleMatch(name, prefix, content string) (bool, string) {
+	if cmd.NoArgs {
+		head := prefix + name
+		if head == content {
+			return true, head
+		}
+	} else {
+		head := prefix + name + " "
+		if strings.HasPrefix(content, head) && len(content) > len(head) {
+			return true, head
+		}
+	}
+	return false, ""
 }
 
 func NewDiscordBot(storage *Storage, logger *log.Logger, conf DiscordBotConf) (*DiscordBot, error) {

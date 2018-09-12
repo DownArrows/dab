@@ -69,7 +69,7 @@ func main() {
 		}
 	}
 	if err != nil {
-		logger.Fatal("Couldn't find config file at any of %v", config_paths)
+		logger.Fatalf("Couldn't find config file at any of %v", config_paths)
 	}
 
 	fatal(json.Unmarshal(raw_config, &config))
