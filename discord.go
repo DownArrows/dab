@@ -324,7 +324,7 @@ func (bot *DiscordBot) GetCommandsDescriptors() []DiscordCommand {
 		},
 		DiscordCommand{
 			Command:    "ping",
-			Callback:   bot.pong,
+			Callback:   bot.simpleReply("pong"),
 			Admin:      true,
 			AutoDelete: true,
 		},
@@ -357,20 +357,22 @@ func (bot *DiscordBot) GetCommandsDescriptors() []DiscordCommand {
 		DiscordCommand{
 			Command:    "sip",
 			Aliases:    []string{"sipthebep"},
-			Callback:   bot.sipTheBep,
+			Callback:   bot.simpleReply(`More like N0000 1 cares 🔥 This shitpost is horrible 👎👎👎`),
 			AutoDelete: true,
 		},
 		DiscordCommand{
 			Command:    "separator",
 			Aliases:    []string{"sep", "="},
-			Callback:   bot.separator,
+			Callback:   bot.simpleReply("══════════════════"),
 			AutoDelete: false,
 		},
 	}
 }
 
-func (bot *DiscordBot) pong(msg DiscordMessage) error {
-	return bot.ChannelMessageSend(msg.ChannelID, "pong")
+func (bot *DiscordBot) simpleReply(reply string) func(DiscordMessage) error {
+	return func(msg DiscordMessage) error {
+		return bot.ChannelMessageSend(msg.ChannelID, reply)
+	}
 }
 
 func (bot *DiscordBot) register(msg DiscordMessage) error {
@@ -490,13 +492,4 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 	reply := fmt.Sprintf("<@%s> karma for %s: %d / %d", msg.AuthorID, res.User.Name, total, negative)
 	return bot.ChannelMessageSend(msg.ChannelID, reply)
-}
-
-func (bot *DiscordBot) sipTheBep(msg DiscordMessage) error {
-	response := `More like N0000 1 cares 🔥 This shitpost is horrible 👎👎👎`
-	return bot.ChannelMessageSend(msg.ChannelID, response)
-}
-
-func (bot *DiscordBot) separator(msg DiscordMessage) error {
-	return bot.ChannelMessageSend(msg.ChannelID, "══════════════════")
 }
