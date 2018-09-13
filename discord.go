@@ -26,12 +26,12 @@ type DiscordBot struct {
 	Commands      []DiscordCommand
 	linkReactions []string
 	redditLink    *regexp.Regexp
-	Channels      struct {
-		General    *discordgo.Channel
-		Log        *discordgo.Channel
-		HighScores *discordgo.Channel
+	ChannelsID    struct {
+		General    string
+		Log        string
+		HighScores string
 	}
-	admin   *discordgo.User
+	AdminID string
 	AddUser chan UserQuery
 	Prefix  string
 }
@@ -53,7 +53,7 @@ type DiscordCommand struct {
 	Callback   func(DiscordMessage) error
 	Admin      bool
 	AutoDelete bool
-	NoArgs     bool
+	HasArgs    bool
 }
 
 func (cmd DiscordCommand) Match(prefix, content string) (bool, string) {
@@ -69,14 +69,14 @@ func (cmd DiscordCommand) Match(prefix, content string) (bool, string) {
 }
 
 func (cmd DiscordCommand) SingleMatch(name, prefix, content string) (bool, string) {
-	if cmd.NoArgs {
-		head := prefix + name
-		if head == content {
+	if cmd.HasArgs {
+		head := prefix + name + " "
+		if strings.HasPrefix(content, head) && len(content) > len(head) {
 			return true, head
 		}
 	} else {
-		head := prefix + name + " "
-		if strings.HasPrefix(content, head) && len(content) > len(head) {
+		head := prefix + name
+		if head == content {
 			return true, head
 		}
 	}
@@ -150,34 +150,36 @@ func (bot *DiscordBot) ChannelMessageSend(channelID, content string) error {
 }
 
 func (bot *DiscordBot) onReady(conf DiscordBotConf) {
-	var err error
-	bot.Channels.General, err = bot.client.Channel(conf.General)
-	bot.fatal(err)
-
-	bot.Channels.Log, err = bot.client.Channel(conf.Log)
-	bot.fatal(err)
-
-	if conf.HighScores != "" {
-		bot.Channels.HighScores, err = bot.client.Channel(conf.HighScores)
-		bot.fatal(err)
-	}
-
-	bot.admin, err = bot.client.User(conf.Admin)
-	bot.fatal(err)
-	bot.logger.Print("Initialization ok")
-}
-
-func (bot *DiscordBot) fatal(err error) {
-	if err != nil {
+	if _, err := bot.client.Channel(conf.General); err != nil {
 		bot.logger.Fatal(err)
 	}
+	bot.ChannelsID.General = conf.General
+
+	if _, err := bot.client.Channel(conf.Log); err != nil {
+		bot.logger.Fatal(err)
+	}
+	bot.ChannelsID.Log = conf.Log
+
+	if conf.HighScores != "" {
+		if _, err := bot.client.Channel(conf.HighScores); err != nil {
+			bot.logger.Fatal(err)
+		}
+		bot.ChannelsID.HighScores = conf.HighScores
+	}
+
+	if _, err := bot.client.User(conf.Admin); err != nil {
+		bot.logger.Fatal(err)
+	}
+	bot.AdminID = conf.Admin
+
+	bot.logger.Print("Initialization ok")
 }
 
 func (bot *DiscordBot) onNewMember(member *discordgo.Member) {
 	manual := "397034210218475520"
 	welcome := "Hello <@%s>! Have a look at the <#%s> to understand what's going on here, and don't hesitate to post on <#%s> and to try new things we haven't thought of! This server is still rather new and experimental, but we think it has great potential. We may have some knowledge of the craft to share too."
-	msg := fmt.Sprintf(welcome, member.User.ID, manual, bot.Channels.General.ID)
-	if err := bot.ChannelMessageSend(bot.Channels.General.ID, msg); err != nil {
+	msg := fmt.Sprintf(welcome, member.User.ID, manual, bot.ChannelsID.General)
+	if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
 		bot.logger.Print(err)
 	}
 }
@@ -222,7 +224,7 @@ func (bot *DiscordBot) RedditEvents(evts chan Comment) {
 
 		if comment.Author == "DownvoteTrollingBot" || comment.Author == "DownvoteTrollingBot2" {
 			msg := "@everyone https://www.reddit.com" + comment.Permalink
-			err = bot.ChannelMessageSend(bot.Channels.General.ID, msg)
+			err = bot.ChannelMessageSend(bot.ChannelsID.General, msg)
 		}
 
 		if err != nil {
@@ -234,7 +236,7 @@ func (bot *DiscordBot) RedditEvents(evts chan Comment) {
 func (bot *DiscordBot) SignalSuspensions(suspensions chan User) {
 	for user := range suspensions {
 		msg := fmt.Sprintf("RIP %s 🙏", user.Name)
-		if err := bot.ChannelMessageSend(bot.Channels.General.ID, msg); err != nil {
+		if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
 			bot.logger.Print("Suspensions listener: ", err)
 		}
 	}
@@ -243,7 +245,7 @@ func (bot *DiscordBot) SignalSuspensions(suspensions chan User) {
 func (bot *DiscordBot) SignalUnsuspensions(ch chan User) {
 	for user := range ch {
 		msg := fmt.Sprintf("🌈 %s has been unsuspended! 🌈", user.Name)
-		if err := bot.ChannelMessageSend(bot.Channels.General.ID, msg); err != nil {
+		if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
 			bot.logger.Print("Unsuspensions listener: ", err)
 		}
 	}
@@ -254,25 +256,28 @@ func (bot *DiscordBot) SignalHighScores(ch chan Comment) {
 		link := "https://www.reddit.com" + comment.Permalink
 		tmpl := "A comment by %s has reached %d: %s"
 		msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
-		if err := bot.ChannelMessageSend(bot.Channels.HighScores.ID, msg); err != nil {
+		if err := bot.ChannelMessageSend(bot.ChannelsID.HighScores, msg); err != nil {
 			bot.logger.Print("High-scores listener: ", err)
 		}
 	}
 }
 
-func (bot *DiscordBot) command(msg DiscordMessage) error {
-	var cmd DiscordCommand
-	for _, a_cmd := range bot.Commands {
-		if a_cmd.Admin && msg.AuthorID != bot.admin.ID {
+func (bot *DiscordBot) MatchCommand(msg DiscordMessage) (DiscordCommand, DiscordMessage) {
+	for _, cmd := range bot.Commands {
+		if cmd.Admin && msg.AuthorID != bot.AdminID {
 			continue
 		}
-		if matches, content_rest := a_cmd.Match(bot.Prefix, msg.Content); matches {
+		if matches, content_rest := cmd.Match(bot.Prefix, msg.Content); matches {
 			msg.Content = content_rest
 			msg.Args = strings.Split(msg.Content, " ")
-			cmd = a_cmd
-			break
+			return cmd, msg
 		}
 	}
+	return DiscordCommand{}, msg
+}
+
+func (bot *DiscordBot) command(msg DiscordMessage) error {
+	cmd, msg := bot.MatchCommand(msg)
 
 	if cmd.Command == "" {
 		return nil
@@ -289,7 +294,7 @@ func (bot *DiscordBot) command(msg DiscordMessage) error {
 }
 
 func (bot *DiscordBot) isLoggableRedditLink(msg DiscordMessage) bool {
-	return (msg.ChannelID == bot.Channels.General.ID &&
+	return (msg.ChannelID == bot.ChannelsID.General &&
 		bot.redditLink.MatchString(msg.Content) &&
 		!strings.Contains(strings.ToLower(msg.Content), "!nolog"))
 }
@@ -299,7 +304,7 @@ func (bot *DiscordBot) processRedditLink(msg DiscordMessage) error {
 		return err
 	}
 	reply := msg.FQAuthor + ": " + msg.Content
-	return bot.ChannelMessageSend(bot.Channels.Log.ID, reply)
+	return bot.ChannelMessageSend(bot.ChannelsID.Log, reply)
 }
 
 func (bot *DiscordBot) addRandomReactionTo(msg DiscordMessage) error {
@@ -314,50 +319,52 @@ func (bot *DiscordBot) GetCommandsDescriptors() []DiscordCommand {
 		DiscordCommand{
 			Command:    "karma",
 			Callback:   bot.karma,
+			HasArgs:    true,
 			AutoDelete: true,
 		},
 		DiscordCommand{
 			Command:    "ping",
 			Callback:   bot.pong,
-			AutoDelete: true,
 			Admin:      true,
-			NoArgs:     true,
+			AutoDelete: true,
 		},
 		DiscordCommand{
 			Command:    "register",
 			Callback:   bot.register,
+			HasArgs:    true,
 			AutoDelete: true,
 		},
 		DiscordCommand{
 			Command:    "unregister",
 			Callback:   bot.unregister,
-			AutoDelete: true,
+			HasArgs:    true,
 			Admin:      true,
+			AutoDelete: true,
 		},
 		DiscordCommand{
 			Command:    "purge",
 			Callback:   bot.purge,
-			AutoDelete: true,
+			HasArgs:    true,
 			Admin:      true,
+			AutoDelete: true,
 		},
 		DiscordCommand{
 			Command:    "exists",
 			Callback:   bot.userExists,
 			AutoDelete: true,
+			HasArgs:    true,
 		},
 		DiscordCommand{
 			Command:    "sip",
 			Aliases:    []string{"sipthebep"},
 			Callback:   bot.sipTheBep,
 			AutoDelete: true,
-			NoArgs:     true,
 		},
 		DiscordCommand{
 			Command:    "separator",
 			Aliases:    []string{"sep", "="},
 			Callback:   bot.separator,
 			AutoDelete: false,
-			NoArgs:     true,
 		},
 	}
 }
