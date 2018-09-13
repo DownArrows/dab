@@ -60,6 +60,18 @@ func TestCommandMatch(t *testing.T) {
 		}
 	})
 
+	t.Run("return the rest of the command", func(t *testing.T) {
+		cmd := DiscordCommand{Command: "test", HasArgs: true}
+		expected := "something something"
+		matches, rest := cmd.Match("!", "!test "+expected)
+		if !matches {
+			t.Errorf("Command %v should match with '!test %s'", cmd, expected)
+		}
+		if rest != expected {
+			t.Errorf("Matching command %v with '!test %s' should return '%s'", cmd, expected, expected)
+		}
+	})
+
 }
 
 func TestCommandFind(t *testing.T) {
