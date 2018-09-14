@@ -257,17 +257,13 @@ func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
 }
 
 func (bot *DiscordBot) RedditEvents(evts chan Comment) {
-	var err error
 	for comment := range evts {
 		bot.logger.Print("New event from reddit: ", comment)
-
 		if comment.Author == "DownvoteTrollingBot" || comment.Author == "DownvoteTrollingBot2" {
 			msg := "@everyone https://www.reddit.com" + comment.Permalink
-			err = bot.ChannelMessageSend(bot.ChannelsID.General, msg)
-		}
-
-		if err != nil {
-			bot.logger.Print("Reddit events listener: ", err)
+			if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
+				bot.logger.Print("Reddit events listener: ", err)
+			}
 		}
 	}
 }
@@ -416,7 +412,7 @@ func (bot *DiscordBot) simpleReply(reply string) func(DiscordMessage) error {
 
 func (bot *DiscordBot) register(msg DiscordMessage) error {
 	names := msg.Args
-	bot.logger.Print(msg.Author.FullyQualified(), " wants to register ", names)
+	bot.logger.Printf("%s wants to register %v", msg.Author.FullyQualified(), names)
 
 	statuses := make([]string, 0, len(names))
 	for _, name := range names {
@@ -439,6 +435,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 	}
 
 	status := strings.Join(statuses, ", ")
+	// TODO post multiple messages instead
 	if len(status) > 1900 {
 		status = "registrations done, check the logs for more details."
 	}
@@ -446,9 +443,10 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 	return bot.ChannelMessageSend(msg.ChannelID, response)
 }
 
+// TODO refactor with purge
 func (bot *DiscordBot) unregister(msg DiscordMessage) error {
 	names := msg.Args
-	bot.logger.Print(msg.Author.FullyQualified(), " wants to unregister ", names)
+	bot.logger.Printf("%s wants to unregister %v", msg.Author.FullyQualified(), names)
 
 	results := make([]string, len(names))
 	for i, name := range names {
@@ -466,7 +464,7 @@ func (bot *DiscordBot) unregister(msg DiscordMessage) error {
 
 func (bot *DiscordBot) purge(msg DiscordMessage) error {
 	names := msg.Args
-	bot.logger.Print(msg.Author.FullyQualified(), " wants to purge ", names)
+	bot.logger.Printf("%s wants to purge %v", msg.Author.FullyQualified(), names)
 
 	results := make([]string, len(names))
 	for i, name := range names {
@@ -494,7 +492,7 @@ func (bot *DiscordBot) userExists(msg DiscordMessage) error {
 	for _, user := range users {
 		if user.Username(username) {
 			username = user.Name
-			status = fmt.Sprintf("found")
+			status = "found"
 			break
 		}
 	}
