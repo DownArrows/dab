@@ -390,9 +390,11 @@ func (bot *DiscordBot) GetCommandsDescriptors() []DiscordCommand {
 			HasArgs:    true,
 		},
 		DiscordCommand{
-			Command:    "sip",
-			Aliases:    []string{"sipthebep"},
-			Callback:   bot.simpleReply(`More like N0000 1 cares 🔥 This shitpost is horrible 👎👎👎`),
+			Command: "sip",
+			Aliases: []string{"sipthebep"},
+			Callback: bot.simpleReply(fmt.Sprintf(
+				"More like N0000 1 cares %s This shitpost is horrible %s",
+				EmojiFire, strings.Repeat(EmojiThumbDown, 3))),
 			AutoDelete: true,
 		},
 		DiscordCommand{
