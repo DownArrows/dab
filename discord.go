@@ -32,12 +32,12 @@ type DiscordBotConf struct {
 }
 
 type DiscordCommand struct {
-	Command    string
-	Aliases    []string
-	Callback   func(DiscordMessage) error
-	Admin      bool
-	AutoDelete bool
-	HasArgs    bool
+	Command   string
+	Aliases   []string
+	Callback  func(DiscordMessage) error
+	Admin     bool
+	NoCleanUp bool
+	HasArgs   bool
 }
 
 type DiscordWelcomeData struct {
@@ -314,7 +314,7 @@ func (bot *DiscordBot) command(msg DiscordMessage) error {
 
 	err := cmd.Callback(msg)
 
-	if err == nil && cmd.AutoDelete && !msg.IsDM {
+	if err == nil && !cmd.NoCleanUp && !msg.IsDM {
 		time.Sleep(5 * time.Second)
 		err = bot.client.ChannelMessageDelete(msg.ChannelID, msg.ID)
 	}
@@ -346,42 +346,36 @@ func (bot *DiscordBot) addRandomReactionTo(msg DiscordMessage) error {
 func (bot *DiscordBot) GetCommandsDescriptors() []DiscordCommand {
 	return []DiscordCommand{
 		DiscordCommand{
-			Command:    "karma",
-			Callback:   bot.karma,
-			HasArgs:    true,
-			AutoDelete: true,
+			Command:  "karma",
+			Callback: bot.karma,
+			HasArgs:  true,
 		},
 		DiscordCommand{
-			Command:    "ping",
-			Callback:   bot.simpleReply("pong"),
-			Admin:      true,
-			AutoDelete: true,
+			Command:  "ping",
+			Callback: bot.simpleReply("pong"),
+			Admin:    true,
 		},
 		DiscordCommand{
-			Command:    "register",
-			Callback:   bot.register,
-			HasArgs:    true,
-			AutoDelete: true,
+			Command:  "register",
+			Callback: bot.register,
+			HasArgs:  true,
 		},
 		DiscordCommand{
-			Command:    "unregister",
-			Callback:   bot.editUsers("unregister", bot.storage.DelUser),
-			HasArgs:    true,
-			Admin:      true,
-			AutoDelete: true,
+			Command:  "unregister",
+			Callback: bot.editUsers("unregister", bot.storage.DelUser),
+			HasArgs:  true,
+			Admin:    true,
 		},
 		DiscordCommand{
-			Command:    "purge",
-			Callback:   bot.editUsers("purge", bot.storage.PurgeUser),
-			HasArgs:    true,
-			Admin:      true,
-			AutoDelete: true,
+			Command:  "purge",
+			Callback: bot.editUsers("purge", bot.storage.PurgeUser),
+			HasArgs:  true,
+			Admin:    true,
 		},
 		DiscordCommand{
-			Command:    "exists",
-			Callback:   bot.userExists,
-			AutoDelete: true,
-			HasArgs:    true,
+			Command:  "exists",
+			Callback: bot.userExists,
+			HasArgs:  true,
 		},
 		DiscordCommand{
 			Command: "sip",
@@ -389,13 +383,11 @@ func (bot *DiscordBot) GetCommandsDescriptors() []DiscordCommand {
 			Callback: bot.simpleReply(fmt.Sprintf(
 				"More like N0000 1 cares %s This shitpost is horrible %s",
 				EmojiFire, strings.Repeat(EmojiThumbDown, 3))),
-			AutoDelete: true,
 		},
 		DiscordCommand{
-			Command:    "separator",
-			Aliases:    []string{"sep", "="},
-			Callback:   bot.simpleReply("══════════════════"),
-			AutoDelete: false,
+			Command:  "separator",
+			Aliases:  []string{"sep", "="},
+			Callback: bot.simpleReply("══════════════════"),
 		},
 	}
 }
