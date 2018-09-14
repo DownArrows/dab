@@ -306,8 +306,11 @@ func (bot *DiscordBot) MatchCommand(msg DiscordMessage) (DiscordCommand, Discord
 }
 
 func (bot *DiscordBot) command(msg DiscordMessage) error {
-	cmd, msg := bot.MatchCommand(msg)
+	if err := bot.client.ChannelTyping(msg.ChannelID); err != nil {
+		return err
+	}
 
+	cmd, msg := bot.MatchCommand(msg)
 	if cmd.Command == "" {
 		return nil
 	}
@@ -474,9 +477,6 @@ func (bot *DiscordBot) userExists(msg DiscordMessage) error {
 
 func (bot *DiscordBot) karma(msg DiscordMessage) error {
 	username := msg.Content
-	if err := bot.client.ChannelTyping(msg.ChannelID); err != nil {
-		return err
-	}
 
 	res := bot.storage.GetUser(username)
 	if res.Error != nil {
