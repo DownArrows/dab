@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"regexp"
 	"strings"
+	"text/template"
 	"time"
 )
 
@@ -17,6 +18,13 @@ type DiscordBotConf struct {
 	HighScores string `json:"highscores"`
 	Admin      string `json:"admin"`
 	Prefix     string `json:"prefix"`
+	Welcome    string `json:"welcome"`
+}
+
+type DiscordBotChannelsID struct {
+	General    string
+	Log        string
+	HighScores string
 }
 
 type DiscordBot struct {
@@ -26,14 +34,11 @@ type DiscordBot struct {
 	Commands      []DiscordCommand
 	linkReactions []string
 	redditLink    *regexp.Regexp
-	ChannelsID    struct {
-		General    string
-		Log        string
-		HighScores string
-	}
-	AdminID string
-	AddUser chan UserQuery
-	Prefix  string
+	ChannelsID    DiscordBotChannelsID
+	AdminID       string
+	AddUser       chan UserQuery
+	Prefix        string
+	Welcome       *template.Template
 }
 
 type DiscordMessage struct {
@@ -54,6 +59,11 @@ type DiscordCommand struct {
 	Admin      bool
 	AutoDelete bool
 	HasArgs    bool
+}
+
+type DiscordWelcomeData struct {
+	ChannelsID DiscordBotChannelsID
+	Member     DiscordMessage // This is just a trick to avoid yet another type definition
 }
 
 func (cmd DiscordCommand) Match(prefix, content string) (bool, string) {
@@ -98,19 +108,18 @@ func NewDiscordBot(storage *Storage, logger *log.Logger, conf DiscordBotConf) (*
 		AddUser:       make(chan UserQuery),
 		Prefix:        conf.Prefix,
 	}
+
 	bot.Commands = bot.GetCommandsDescriptors()
 
-	session.AddHandler(func(s *discordgo.Session, msg *discordgo.MessageCreate) {
-		bot.onMessage(msg)
-	})
+	if conf.Welcome != "" {
+		bot.Welcome = template.Must(template.New("DiscordWelcome").Parse(conf.Welcome))
+		session.AddHandler(func(s *discordgo.Session, event *discordgo.GuildMemberAdd) {
+			bot.welcomeNewMember(event.Member)
+		})
+	}
 
-	session.AddHandler(func(s *discordgo.Session, event *discordgo.GuildMemberAdd) {
-		bot.onNewMember(event.Member)
-	})
-
-	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
-		bot.onReady(conf)
-	})
+	session.AddHandler(func(s *discordgo.Session, msg *discordgo.MessageCreate) { bot.onMessage(msg) })
+	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) { bot.onReady(conf) })
 
 	return bot, nil
 }
@@ -175,11 +184,16 @@ func (bot *DiscordBot) onReady(conf DiscordBotConf) {
 	bot.logger.Print("Initialization ok")
 }
 
-func (bot *DiscordBot) onNewMember(member *discordgo.Member) {
-	manual := "397034210218475520"
-	welcome := "Hello <@%s>! Have a look at the <#%s> to understand what's going on here, and don't hesitate to post on <#%s> and to try new things we haven't thought of! This server is still rather new and experimental, but we think it has great potential. We may have some knowledge of the craft to share too."
-	msg := fmt.Sprintf(welcome, member.User.ID, manual, bot.ChannelsID.General)
-	if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
+func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
+	var msg *strings.Builder
+	data := DiscordWelcomeData{
+		ChannelsID: bot.ChannelsID,
+		Member:     DiscordMessage{ID: member.User.ID},
+	}
+	if err := bot.Welcome.Execute(msg, data); err != nil {
+		bot.logger.Fatal(err)
+	}
+	if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg.String()); err != nil {
 		bot.logger.Print(err)
 	}
 }
