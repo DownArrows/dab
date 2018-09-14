@@ -11,6 +11,16 @@ import (
 	"time"
 )
 
+const (
+	EmojiFire         string = "\U0001f525"
+	EmojiThumbDown    string = "\U0001f44e"
+	EmojiOkHand       string = "\U0001f44c"
+	EmojiGrowingHeart string = "\U0001f497"
+	EmojiOneHundred   string = "\U0001f4af"
+	EmojiRainbow      string = "\U0001f308"
+	EmojiPrayingHands string = "\U0001f64f"
+)
+
 type DiscordBotConf struct {
 	Token      string `json:"token"`
 	General    string `json:"general"`
@@ -103,7 +113,7 @@ func NewDiscordBot(storage *Storage, logger *log.Logger, conf DiscordBotConf) (*
 		client:        session,
 		logger:        logger,
 		storage:       storage,
-		linkReactions: []string{"👌", "💗", "🔥", "💯"},
+		linkReactions: []string{EmojiOkHand, EmojiOneHundred, EmojiGrowingHeart, EmojiFire},
 		redditLink:    regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
 		AddUser:       make(chan UserQuery),
 		Prefix:        conf.Prefix,
@@ -249,7 +259,7 @@ func (bot *DiscordBot) RedditEvents(evts chan Comment) {
 
 func (bot *DiscordBot) SignalSuspensions(suspensions chan User) {
 	for user := range suspensions {
-		msg := fmt.Sprintf("RIP %s 🙏", user.Name)
+		msg := fmt.Sprintf("RIP %s %s", user.Name, EmojiPrayingHands)
 		if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
 			bot.logger.Print("Suspensions listener: ", err)
 		}
@@ -258,7 +268,7 @@ func (bot *DiscordBot) SignalSuspensions(suspensions chan User) {
 
 func (bot *DiscordBot) SignalUnsuspensions(ch chan User) {
 	for user := range ch {
-		msg := fmt.Sprintf("🌈 %s has been unsuspended! 🌈", user.Name)
+		msg := fmt.Sprintf("%s %s has been unsuspended! %s", user.Name, EmojiRainbow, EmojiRainbow)
 		if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
 			bot.logger.Print("Unsuspensions listener: ", err)
 		}
