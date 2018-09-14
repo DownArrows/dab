@@ -197,7 +197,7 @@ func (bot *DiscordBot) onReady(conf DiscordBotConf) {
 }
 
 func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
-	var msg *strings.Builder
+	var msg strings.Builder
 	data := DiscordWelcomeData{
 		ChannelsID: bot.ChannelsID,
 		Member: DiscordMember{
@@ -206,7 +206,7 @@ func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
 			Discriminator: member.User.Discriminator,
 		},
 	}
-	if err := bot.Welcome.Execute(msg, data); err != nil {
+	if err := bot.Welcome.Execute(&msg, data); err != nil {
 		bot.logger.Fatal(err)
 	}
 	if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg.String()); err != nil {
