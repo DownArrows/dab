@@ -80,7 +80,7 @@ type DiscordMessage struct {
 	ID        string
 }
 
-func (member DiscordMember) FullyQualified() string {
+func (member DiscordMember) FQN() string {
 	return member.Name + "#" + member.Discriminator
 }
 
@@ -239,7 +239,7 @@ func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
 	}
 
 	if bot.isLoggableRedditLink(msg) {
-		bot.logger.Print("Link to a comment on reddit posted by ", msg.Author.FullyQualified())
+		bot.logger.Print("Link to a comment on reddit posted by ", msg.Author.FQN())
 		err = bot.processRedditLink(msg)
 	} else {
 		err = bot.command(msg)
@@ -332,7 +332,7 @@ func (bot *DiscordBot) processRedditLink(msg DiscordMessage) error {
 	if err := bot.addRandomReactionTo(msg); err != nil {
 		return err
 	}
-	reply := msg.Author.FullyQualified() + ": " + msg.Content
+	reply := msg.Author.FQN() + ": " + msg.Content
 	return bot.ChannelMessageSend(bot.ChannelsID.Log, reply)
 }
 
@@ -400,7 +400,7 @@ func (bot *DiscordBot) simpleReply(reply string) func(DiscordMessage) error {
 
 func (bot *DiscordBot) register(msg DiscordMessage) error {
 	names := msg.Args
-	bot.logger.Printf("%s wants to register %v", msg.Author.FullyQualified(), names)
+	bot.logger.Printf("%s wants to register %v", msg.Author.FQN(), names)
 
 	statuses := make([]string, 0, len(names))
 	for _, name := range names {
@@ -434,7 +434,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 func (bot *DiscordBot) editUsers(action_name string, action func(string) error) func(DiscordMessage) error {
 	return func(msg DiscordMessage) error {
 		names := msg.Args
-		bot.logger.Printf("%s wants to %s %v", msg.Author.FullyQualified(), action_name, names)
+		bot.logger.Printf("%s wants to %s %v", msg.Author.FQN(), action_name, names)
 
 		results := make([]string, len(names))
 		for i, name := range names {
