@@ -94,7 +94,11 @@ func TestCommandFind(t *testing.T) {
 	})
 
 	t.Run("admin privilege matching", func(t *testing.T) {
-		cmd, _ := bot.MatchCommand(DiscordMessage{Content: "!admin", AuthorID: bot.AdminID})
+		msg := DiscordMessage{
+			Content: "!admin",
+			Author:  DiscordMember{ID: bot.AdminID},
+		}
+		cmd, _ := bot.MatchCommand(msg)
 		if cmd.Command != "admin" {
 			t.Errorf("Incorrect command match %v for '!admin'", cmd)
 		}

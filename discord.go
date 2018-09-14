@@ -52,14 +52,12 @@ type DiscordBot struct {
 }
 
 type DiscordMessage struct {
-	Args       []string
-	Content    string
-	AuthorName string
-	AuthorID   string
-	ChannelID  string
-	IsDM       bool
-	FQAuthor   string // Fully Qualified Author (Name)
-	ID         string
+	Args      []string
+	Author    DiscordMember
+	Content   string
+	ChannelID string
+	IsDM      bool
+	ID        string
 }
 
 type DiscordCommand struct {
@@ -73,7 +71,17 @@ type DiscordCommand struct {
 
 type DiscordWelcomeData struct {
 	ChannelsID DiscordBotChannelsID
-	Member     DiscordMessage // This is just a trick to avoid yet another type definition
+	Member     DiscordMember
+}
+
+type DiscordMember struct {
+	ID            string
+	Name          string
+	Discriminator string
+}
+
+func (member DiscordMember) FullyQualified() string {
+	return member.Name + "#" + member.Discriminator
 }
 
 func (cmd DiscordCommand) Match(prefix, content string) (bool, string) {
@@ -198,7 +206,11 @@ func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
 	var msg *strings.Builder
 	data := DiscordWelcomeData{
 		ChannelsID: bot.ChannelsID,
-		Member:     DiscordMessage{ID: member.User.ID},
+		Member: DiscordMember{
+			ID:            member.User.ID,
+			Name:          member.User.Username,
+			Discriminator: member.User.Discriminator,
+		},
 	}
 	if err := bot.Welcome.Execute(msg, data); err != nil {
 		bot.logger.Fatal(err)
@@ -221,16 +233,19 @@ func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
 	}
 
 	msg := DiscordMessage{
-		Content:   dg_msg.Content,
-		AuthorID:  dg_msg.Author.ID,
-		ChannelID: dg_msg.ChannelID,
-		IsDM:      is_dm,
-		FQAuthor:  dg_msg.Author.Username + "#" + dg_msg.Author.Discriminator,
 		ID:        dg_msg.ID,
+		IsDM:      is_dm,
+		Content:   dg_msg.Content,
+		ChannelID: dg_msg.ChannelID,
+		Author: DiscordMember{
+			ID:            dg_msg.Author.ID,
+			Name:          dg_msg.Author.Username,
+			Discriminator: dg_msg.Author.Discriminator,
+		},
 	}
 
 	if bot.isLoggableRedditLink(msg) {
-		bot.logger.Print("Link to a comment on reddit posted by ", msg.FQAuthor)
+		bot.logger.Print("Link to a comment on reddit posted by ", msg.Author.FullyQualified())
 		err = bot.processRedditLink(msg)
 	} else {
 		err = bot.command(msg)
@@ -288,7 +303,7 @@ func (bot *DiscordBot) SignalHighScores(ch chan Comment) {
 
 func (bot *DiscordBot) MatchCommand(msg DiscordMessage) (DiscordCommand, DiscordMessage) {
 	for _, cmd := range bot.Commands {
-		if cmd.Admin && msg.AuthorID != bot.AdminID {
+		if cmd.Admin && msg.Author.ID != bot.AdminID {
 			continue
 		}
 		if matches, content_rest := cmd.Match(bot.Prefix, msg.Content); matches {
@@ -327,7 +342,7 @@ func (bot *DiscordBot) processRedditLink(msg DiscordMessage) error {
 	if err := bot.addRandomReactionTo(msg); err != nil {
 		return err
 	}
-	reply := msg.FQAuthor + ": " + msg.Content
+	reply := msg.Author.FullyQualified() + ": " + msg.Content
 	return bot.ChannelMessageSend(bot.ChannelsID.Log, reply)
 }
 
@@ -401,7 +416,7 @@ func (bot *DiscordBot) simpleReply(reply string) func(DiscordMessage) error {
 
 func (bot *DiscordBot) register(msg DiscordMessage) error {
 	names := msg.Args
-	bot.logger.Print(msg.FQAuthor, " wants to register ", names)
+	bot.logger.Print(msg.Author.FullyQualified(), " wants to register ", names)
 
 	statuses := make([]string, 0, len(names))
 	for _, name := range names {
@@ -427,13 +442,13 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 	if len(status) > 1900 {
 		status = "registrations done, check the logs for more details."
 	}
-	response := fmt.Sprintf("<@%s> registration: %s", msg.AuthorID, status)
+	response := fmt.Sprintf("<@%s> registration: %s", msg.Author.ID, status)
 	return bot.ChannelMessageSend(msg.ChannelID, response)
 }
 
 func (bot *DiscordBot) unregister(msg DiscordMessage) error {
 	names := msg.Args
-	bot.logger.Print(msg.FQAuthor, " wants to unregister ", names)
+	bot.logger.Print(msg.Author.FullyQualified(), " wants to unregister ", names)
 
 	results := make([]string, len(names))
 	for i, name := range names {
@@ -445,13 +460,13 @@ func (bot *DiscordBot) unregister(msg DiscordMessage) error {
 	}
 
 	result := strings.Join(results, ", ")
-	response := fmt.Sprintf("<@%s> unregister: %s", msg.AuthorID, result)
+	response := fmt.Sprintf("<@%s> unregister: %s", msg.Author.ID, result)
 	return bot.ChannelMessageSend(msg.ChannelID, response)
 }
 
 func (bot *DiscordBot) purge(msg DiscordMessage) error {
 	names := msg.Args
-	bot.logger.Print(msg.FQAuthor, " wants to purge ", names)
+	bot.logger.Print(msg.Author.FullyQualified(), " wants to purge ", names)
 
 	results := make([]string, len(names))
 	for i, name := range names {
@@ -463,7 +478,7 @@ func (bot *DiscordBot) purge(msg DiscordMessage) error {
 	}
 
 	result := strings.Join(results, ", ")
-	response := fmt.Sprintf("<@%s> purge: %s", msg.AuthorID, result)
+	response := fmt.Sprintf("<@%s> purge: %s", msg.Author.ID, result)
 	return bot.ChannelMessageSend(msg.ChannelID, response)
 }
 
@@ -484,7 +499,7 @@ func (bot *DiscordBot) userExists(msg DiscordMessage) error {
 		}
 	}
 
-	response := fmt.Sprintf("<@%s> User %s %s.", msg.AuthorID, username, status)
+	response := fmt.Sprintf("<@%s> User %s %s.", msg.Author.ID, username, status)
 	return bot.ChannelMessageSend(msg.ChannelID, response)
 }
 
@@ -500,7 +515,7 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 	}
 
 	if !res.Exists {
-		reply := fmt.Sprintf("<@%s> user %s not found.", msg.AuthorID, username)
+		reply := fmt.Sprintf("<@%s> user %s not found.", msg.Author.ID, username)
 		return bot.ChannelMessageSend(msg.ChannelID, reply)
 	}
 
@@ -514,6 +529,6 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 		return err
 	}
 
-	reply := fmt.Sprintf("<@%s> karma for %s: %d / %d", msg.AuthorID, res.User.Name, total, negative)
+	reply := fmt.Sprintf("<@%s> karma for %s: %d / %d", msg.Author.ID, res.User.Name, total, negative)
 	return bot.ChannelMessageSend(msg.ChannelID, reply)
 }
