@@ -146,21 +146,11 @@ func (bot *DiscordBot) Run() error {
 	if err := bot.client.Open(); err != nil {
 		return err
 	}
-	go bot.setPlayingStatus()
 	return nil
 }
 
 func (bot *DiscordBot) Close() error {
 	return bot.client.Close()
-}
-
-func (bot *DiscordBot) setPlayingStatus() {
-	for {
-		if err := bot.client.UpdateStatus(0, "Downvote Counter"); err != nil {
-			bot.logger.Print("Couldn't set status on discord")
-		}
-		time.Sleep(time.Hour)
-	}
 }
 
 func (bot *DiscordBot) isDMChannel(channelID string) (bool, error) {
@@ -177,6 +167,10 @@ func (bot *DiscordBot) ChannelMessageSend(channelID, content string) error {
 }
 
 func (bot *DiscordBot) onReady(conf DiscordBotConf) {
+	if err := bot.client.UpdateStatus(0, "Downvote Counter"); err != nil {
+		bot.logger.Fatal("Couldn't set status on discord")
+	}
+
 	if _, err := bot.client.Channel(conf.General); err != nil {
 		bot.logger.Fatal(err)
 	}
