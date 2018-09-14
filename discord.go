@@ -371,14 +371,14 @@ func (bot *DiscordBot) GetCommandsDescriptors() []DiscordCommand {
 		},
 		DiscordCommand{
 			Command:    "unregister",
-			Callback:   bot.unregister,
+			Callback:   bot.editUsers("unregister", bot.storage.DelUser),
 			HasArgs:    true,
 			Admin:      true,
 			AutoDelete: true,
 		},
 		DiscordCommand{
 			Command:    "purge",
-			Callback:   bot.purge,
+			Callback:   bot.editUsers("purge", bot.storage.PurgeUser),
 			HasArgs:    true,
 			Admin:      true,
 			AutoDelete: true,
@@ -443,41 +443,24 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 	return bot.ChannelMessageSend(msg.ChannelID, response)
 }
 
-// TODO refactor with purge
-func (bot *DiscordBot) unregister(msg DiscordMessage) error {
-	names := msg.Args
-	bot.logger.Printf("%s wants to unregister %v", msg.Author.FullyQualified(), names)
+func (bot *DiscordBot) editUsers(action_name string, action func(string) error) func(DiscordMessage) error {
+	return func(msg DiscordMessage) error {
+		names := msg.Args
+		bot.logger.Printf("%s wants to %s %v", msg.Author.FullyQualified(), action_name, names)
 
-	results := make([]string, len(names))
-	for i, name := range names {
-		if err := bot.storage.DelUser(name); err != nil {
-			results[i] = fmt.Sprintf("%s: error %s", name, err)
-		} else {
-			results[i] = fmt.Sprintf("%s: ok", name)
+		results := make([]string, len(names))
+		for i, name := range names {
+			if err := action(name); err != nil {
+				results[i] = fmt.Sprintf("%s: error %s", name, err)
+			} else {
+				results[i] = fmt.Sprintf("%s: ok", name)
+			}
 		}
+
+		result := strings.Join(results, ", ")
+		response := fmt.Sprintf("<@%s> %s: %s", msg.Author.ID, action_name, result)
+		return bot.ChannelMessageSend(msg.ChannelID, response)
 	}
-
-	result := strings.Join(results, ", ")
-	response := fmt.Sprintf("<@%s> unregister: %s", msg.Author.ID, result)
-	return bot.ChannelMessageSend(msg.ChannelID, response)
-}
-
-func (bot *DiscordBot) purge(msg DiscordMessage) error {
-	names := msg.Args
-	bot.logger.Printf("%s wants to purge %v", msg.Author.FullyQualified(), names)
-
-	results := make([]string, len(names))
-	for i, name := range names {
-		if err := bot.storage.PurgeUser(name); err != nil {
-			results[i] = fmt.Sprintf("%s: error %s", name, err)
-		} else {
-			results[i] = fmt.Sprintf("%s: ok", name)
-		}
-	}
-
-	result := strings.Join(results, ", ")
-	response := fmt.Sprintf("<@%s> purge: %s", msg.Author.ID, result)
-	return bot.ChannelMessageSend(msg.ChannelID, response)
 }
 
 func (bot *DiscordBot) userExists(msg DiscordMessage) error {
