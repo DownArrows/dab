@@ -31,10 +31,18 @@ type DiscordBotConf struct {
 	Welcome    string `json:"welcome"`
 }
 
-type DiscordBotChannelsID struct {
-	General    string
-	Log        string
-	HighScores string
+type DiscordCommand struct {
+	Command    string
+	Aliases    []string
+	Callback   func(DiscordMessage) error
+	Admin      bool
+	AutoDelete bool
+	HasArgs    bool
+}
+
+type DiscordWelcomeData struct {
+	ChannelsID DiscordBotChannelsID
+	Member     DiscordMember
 }
 
 type DiscordBot struct {
@@ -51,6 +59,18 @@ type DiscordBot struct {
 	Welcome       *template.Template
 }
 
+type DiscordBotChannelsID struct {
+	General    string
+	Log        string
+	HighScores string
+}
+
+type DiscordMember struct {
+	ID            string
+	Name          string
+	Discriminator string
+}
+
 type DiscordMessage struct {
 	Args      []string
 	Author    DiscordMember
@@ -58,26 +78,6 @@ type DiscordMessage struct {
 	ChannelID string
 	IsDM      bool
 	ID        string
-}
-
-type DiscordCommand struct {
-	Command    string
-	Aliases    []string
-	Callback   func(DiscordMessage) error
-	Admin      bool
-	AutoDelete bool
-	HasArgs    bool
-}
-
-type DiscordWelcomeData struct {
-	ChannelsID DiscordBotChannelsID
-	Member     DiscordMember
-}
-
-type DiscordMember struct {
-	ID            string
-	Name          string
-	Discriminator string
 }
 
 func (member DiscordMember) FullyQualified() string {
