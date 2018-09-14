@@ -273,7 +273,7 @@ func (bot *DiscordBot) SignalSuspensions(suspensions chan User) {
 
 func (bot *DiscordBot) SignalUnsuspensions(ch chan User) {
 	for user := range ch {
-		msg := fmt.Sprintf("%s %s has been unsuspended! %s", user.Name, EmojiRainbow, EmojiRainbow)
+		msg := fmt.Sprintf("%s %s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
 		if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
 			bot.logger.Print("Unsuspensions listener: ", err)
 		}
