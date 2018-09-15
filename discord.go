@@ -306,13 +306,13 @@ func (bot *DiscordBot) MatchCommand(msg DiscordMessage) (DiscordCommand, Discord
 }
 
 func (bot *DiscordBot) command(msg DiscordMessage) error {
-	if err := bot.client.ChannelTyping(msg.ChannelID); err != nil {
-		return err
-	}
-
 	cmd, msg := bot.MatchCommand(msg)
 	if cmd.Command == "" {
 		return nil
+	}
+
+	if err := bot.client.ChannelTyping(msg.ChannelID); err != nil {
+		return err
 	}
 
 	err := cmd.Callback(msg)
