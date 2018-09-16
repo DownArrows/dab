@@ -17,6 +17,13 @@ const access_token_url = "https://www.reddit.com/api/v1/access_token"
 
 const request_base_url = "https://oauth.reddit.com"
 
+type RedditAuth struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Id       string `json:"id"`
+	Secret   string `json:"secret"`
+}
+
 type OAuthResponse struct {
 	Token   string `json:"access_token"`
 	Refresh string `json:"refresh_token"`

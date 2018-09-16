@@ -102,13 +102,6 @@ type UserQuery struct {
 	Error  error
 }
 
-type RedditAuth struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Id       string `json:"id"`
-	Secret   string `json:"secret"`
-}
-
 type UserStats struct {
 	Author  string
 	Average float64
