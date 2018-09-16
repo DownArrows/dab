@@ -42,9 +42,9 @@ type Config struct {
 		CleanupInterval Duration `json:"cleanup_interval"`
 	}
 
-	Scanner struct {
+	Reddit struct {
 		RedditAuth
-		BotConf
+		RedditBotConf
 		UserAgent                string   `json:"user_agent"`
 		UnsuspensionInterval     Duration `json:"unsuspension_interval"`
 		CompendiumUpdateInterval Duration `json:"compendium_update_interval"`

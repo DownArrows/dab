@@ -19,7 +19,7 @@ const defaults string = `{
 		"cleanup_interval": "1h"
 	},
 
-	"scanner": {
+	"reddit": {
 		"max_batches": 5,
 		"max_age": "24h",
 		"unsuspension_interval": "15m",
@@ -100,28 +100,28 @@ func main() {
 		return
 	}
 
-	// Bots
+	// reddit_bots
 
-	// Reddit bot
+	// Reddit reddit_bot
 
 	reddit_ok := true
-	if config.Scanner.Username == "" || config.Scanner.Secret == "" || config.Scanner.Id == "" ||
-		config.Scanner.Password == "" || config.Scanner.UserAgent == "" {
+	if config.Reddit.Username == "" || config.Reddit.Secret == "" || config.Reddit.Id == "" ||
+		config.Reddit.Password == "" || config.Reddit.UserAgent == "" {
 		fields := "id, secret, username, password, user_agent"
-		msg := "Disabling reddit bot; at least one of the required fields of 'scanner' in the configuration file is empty"
+		msg := "Disabling reddit bot; at least one of the required fields of 'reddit' in the configuration file is empty"
 		logger.Print(msg, ": ", fields)
 		reddit_ok = false
 	}
 
-	var bot *Bot
+	var reddit_bot *RedditBot
 
 	if reddit_ok {
-		scanner, err := NewRedditClient(config.Scanner.RedditAuth, config.Scanner.UserAgent)
+		scanner, err := NewScanner(config.Reddit.RedditAuth, config.Reddit.UserAgent)
 		if err != nil {
 			logger.Fatal(err)
 		}
 		logger := log.New(os.Stdout, "", log.Lshortfile)
-		bot = NewBot(scanner, storage, logger, config.Scanner.BotConf)
+		reddit_bot = NewRedditBot(scanner, storage, logger, config.Reddit.RedditBotConf)
 	}
 
 	// Command line registration
@@ -132,22 +132,22 @@ func main() {
 		usernames := strings.Split(*useradd, ",")
 		fmt.Println(usernames)
 		for _, username := range usernames {
-			if res := bot.AddUser(username, false, true); res.Error != nil && !res.Exists {
+			if res := reddit_bot.AddUser(username, false, true); res.Error != nil && !res.Exists {
 				logger.Fatal(res.Error)
 			}
 		}
 		return
 	}
 
-	// Launch reddit bot
+	// Launch reddit reddit_bot
 	if reddit_ok {
-		go bot.Run()
+		go reddit_bot.Run()
 		go func() {
 			for {
-				if err := bot.UpdateUsersFromCompendium(); err != nil {
+				if err := reddit_bot.UpdateUsersFromCompendium(); err != nil {
 					logger.Print(err)
 				}
-				time.Sleep(config.Scanner.CompendiumUpdateInterval.Value)
+				time.Sleep(config.Reddit.CompendiumUpdateInterval.Value)
 			}
 		}()
 	}
@@ -173,22 +173,22 @@ func main() {
 		defer discordbot.Close()
 	}
 
-	// Reddit bot <-> Discord bot
+	// Reddit reddit_bot <-> Discord reddit_bot
 	if reddit_ok && discord_ok {
-		go bot.AddUserServer(discordbot.AddUser)
+		go reddit_bot.AddUserServer(discordbot.AddUser)
 
 		reddit_evts := make(chan Comment)
 		go discordbot.RedditEvents(reddit_evts)
-		go bot.StreamSub("DownvoteTrolling", reddit_evts, config.Scanner.DVTInterval.Value)
+		go reddit_bot.StreamSub("DownvoteTrolling", reddit_evts, config.Reddit.DVTInterval.Value)
 
-		suspensions := bot.Suspensions()
+		suspensions := reddit_bot.Suspensions()
 		go discordbot.SignalSuspensions(suspensions)
 
-		unsuspensions := bot.CheckUnsuspended(config.Scanner.UnsuspensionInterval.Value)
+		unsuspensions := reddit_bot.CheckUnsuspended(config.Reddit.UnsuspensionInterval.Value)
 		go discordbot.SignalUnsuspensions(unsuspensions)
 
 		if config.Discord.HighScores != "" {
-			highscores := bot.StartHighScoresFeed(config.Discord.HighScoreThreshold)
+			highscores := reddit_bot.StartHighScoresFeed(config.Discord.HighScoreThreshold)
 			go discordbot.SignalHighScores(highscores)
 		}
 	}

@@ -1,257 +1,473 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"net/http"
-	"net/url"
-	"regexp"
+	"log"
 	"strings"
-	"sync"
 	"time"
 )
 
-const access_token_url = "https://www.reddit.com/api/v1/access_token"
-
-const request_base_url = "https://oauth.reddit.com"
-
-type RedditAuth struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Id       string `json:"id"`
-	Secret   string `json:"secret"`
+type RedditBotConf struct {
+	MaxAge              Duration `json:"max_age"`
+	MaxBatches          uint     `json:"max_batches"`
+	InactivityThreshold Duration `json:"inactivity_threshold"`
+	FullScanInterval    Duration `json:"full_scan_interval"`
 }
 
-type OAuthResponse struct {
-	Token   string `json:"access_token"`
-	Refresh string `json:"refresh_token"`
-	Type    string `json:"token_type"`
-	Timeout int    `json:"expires_in"`
-	Scope   string `json:"scope"`
+type RedditBot struct {
+	Conf           RedditBotConf
+	Suspended      chan User
+	highScoresFeed chan Comment
+	highScore      int64
+	scanner        *Scanner
+	storage        *Storage
+	logger         *log.Logger
 }
 
-type RedditClient struct {
-	sync.Mutex
-	Client    *http.Client
-	UserAgent string
-	OAuth     OAuthResponse
-	Auth      RedditAuth
-	ticker    *time.Ticker
-}
-
-type commentListing struct {
-	Data struct {
-		Children []struct {
-			Data Comment
-		}
-		After string
+func NewRedditBot(scanner *Scanner, storage *Storage, logger *log.Logger, conf RedditBotConf) *RedditBot {
+	return &RedditBot{
+		scanner: scanner,
+		storage: storage,
+		logger:  logger,
+		Conf:    conf,
 	}
 }
 
-type aboutUser struct {
-	Data struct {
-		Name      string
-		Created   float64 `json:"created_utc"`
-		Suspended bool    `json:"is_suspended"`
-	}
-}
-
-type wikiPage struct {
-	Data struct {
-		RevisionDate float64
-		Content      string `json:"content_md"`
-	}
-}
-
-func NewRedditClient(auth RedditAuth, userAgent string) (*RedditClient, error) {
-	http_client := &http.Client{}
-	var client = &RedditClient{
-		Client:    http_client,
-		ticker:    time.NewTicker(time.Second),
-		UserAgent: userAgent,
-	}
-
-	if err := client.connect(auth); err != nil {
-		return nil, err
-	}
-
-	return client, nil
-}
-
-func (rc *RedditClient) UserComments(username string, position string) ([]Comment, string, int, error) {
-	return rc.getListing("/u/"+username+"/comments", position)
-}
-
-func (rc *RedditClient) AboutUser(username string) UserQuery {
-	query := UserQuery{User: User{Name: username}}
-	sane, err := regexp.MatchString(`^[[:word:]-]+$`, username)
-	if err != nil {
-		query.Error = err
-		return query
-	} else if !sane {
-		query.Error = fmt.Errorf("username %s contains forbidden characters or is empty", username)
-		return query
-	}
-
-	rc.Lock()
-	defer rc.Unlock()
-	res, status, err := rc.rawRequest("GET", "/u/"+username+"/about", nil)
-	if err != nil {
-		query.Error = err
-		return query
-	}
-
-	if status == 404 {
-		return query
-	} else if status != 200 {
-		query.Error = fmt.Errorf("Bad response status when looking up %s: %d", username, status)
-		return query
-	}
-
-	about := &aboutUser{}
-	if err := json.Unmarshal(res, about); err != nil {
-		query.Error = err
-		return query
-	}
-
-	query.Exists = true
-	query.User.Name = about.Data.Name
-	query.User.Created = time.Unix(int64(about.Data.Created), 0)
-	query.User.Suspended = about.Data.Suspended
-	return query
-}
-
-func (rc *RedditClient) WikiPage(sub, page string) (string, error) {
-	rc.Lock()
-	defer rc.Unlock()
-
-	path := "/r/" + sub + "/wiki/" + page
-	res, status, err := rc.rawRequest("GET", path, nil)
-	if err != nil {
-		return "", err
-	}
-	if status != 200 {
-		return "", fmt.Errorf("invalid status when fetching '%s': %d", path, status)
-	}
-
-	parsed := &wikiPage{}
-	if err := json.Unmarshal(res, parsed); err != nil {
-		return "", err
-	}
-
-	return parsed.Data.Content, nil
-}
-
-func (rc *RedditClient) SubPosts(sub string, position string) ([]Comment, string, error) {
-	comments, position, _, err := rc.getListing("/r/"+sub+"/new", position)
-	return comments, position, err
-}
-
-func (rc *RedditClient) connect(auth RedditAuth) error {
-	rc.Auth = auth
-
-	var auth_conf = url.Values{
-		"grant_type": {"password"},
-		"username":   {rc.Auth.Username},
-		"password":   {rc.Auth.Password}}
-	auth_form := strings.NewReader(auth_conf.Encode())
-
-	req, _ := http.NewRequest("POST", access_token_url, auth_form)
-
-	req.Header.Set("User-Agent", rc.UserAgent)
-	req.SetBasicAuth(rc.Auth.Id, rc.Auth.Secret)
-
-	res, err := rc.do(req)
+func (bot *RedditBot) UpdateUsersFromCompendium() error {
+	page, err := bot.scanner.WikiPage("DownvoteTrolling", "compendium")
 	if err != nil {
 		return err
 	}
 
-	body, read_err := ioutil.ReadAll(res.Body)
-	if read_err != nil {
-		return read_err
-	}
+	lines := strings.Split(page, "\n")
+	state := "before"
+	names := make([]string, 0)
 
-	return json.Unmarshal(body, &rc.OAuth)
-}
-
-func (rc *RedditClient) getListing(path string, position string) ([]Comment, string, int, error) {
-	params := "?sort=new&limit=100"
-	if position != "" {
-		params += "&after=" + position
-	}
-
-	rc.Lock()
-	defer rc.Unlock()
-
-	res, status, err := rc.rawRequest("GET", path+params, nil)
-	if err != nil {
-		return nil, position, 0, err
-	}
-
-	if strings.HasPrefix(path, "/u/") && (status == 403 || status == 404) {
-		return nil, position, status, nil
-	}
-
-	if status != 200 {
-		err = fmt.Errorf("Bad response status when fetching the listing %s: %d", path, status)
-		return nil, position, status, err
-	}
-
-	parsed := &commentListing{}
-	if err := json.Unmarshal(res, parsed); err != nil {
-		return nil, position, status, err
-	}
-
-	children := parsed.Data.Children
-	comments := make([]Comment, len(children))
-	for i, child := range children {
-		comments[i] = child.Data.FinishDecoding()
-	}
-
-	new_position := parsed.Data.After
-	return comments, new_position, status, nil
-}
-
-func (rc *RedditClient) rawRequest(verb string, path string, data io.Reader) ([]byte, int, error) {
-
-	<-rc.ticker.C
-
-	req, err := http.NewRequest(verb, request_base_url+path, data)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	rc.prepareRequest(req)
-	res, res_err := rc.Client.Do(req)
-	if res_err != nil {
-		return nil, 0, res_err
-	}
-
-	// The response's body must be read and closed to make sure the underlying TCP connection can be re-used.
-	raw_data, read_err := ioutil.ReadAll(res.Body)
-	res.Body.Close()
-	if read_err != nil {
-		return nil, 0, read_err
-	}
-
-	if res.StatusCode == 401 {
-		if err := rc.connect(rc.Auth); err != nil {
-			return nil, 0, err
+	for _, line := range lines {
+		if line == "####Users ranked by total comment karma" {
+			state = "header1"
+		} else if state == "header1" {
+			state = "header2"
+		} else if state == "header2" {
+			state = "in_listing"
+		} else if state == "in_listing" && strings.HasPrefix(line, "*") && strings.HasSuffix(line, "*") {
+			break
+		} else if state == "in_listing" {
+			cells := strings.Split(line, "|")
+			if len(cells) < 6 {
+				return fmt.Errorf("The array of names/scores doesn't have the expected format")
+			}
+			name_link := cells[2]
+			start := strings.Index(name_link, "[")
+			end := strings.Index(name_link, "]")
+			escaped_name := name_link[start+1 : end]
+			if len(escaped_name) == 0 {
+				return fmt.Errorf("The names don't have the expected format")
+			}
+			name := strings.Replace(escaped_name, `\`, "", -1)
+			names = append(names, name)
 		}
-		return rc.rawRequest(verb, path, data)
 	}
 
-	return raw_data, res.StatusCode, nil
+	bot.logger.Printf("Found %d users in the compendium", len(names))
+
+	added_counter := 0
+	for _, username := range names {
+
+		is_known, err := bot.storage.IsKnownObject("username-" + username)
+		if err != nil {
+			return err
+		}
+		if is_known {
+			continue
+		}
+
+		result := bot.AddUser(username, false, false)
+		if result.Error != nil {
+			if !result.Exists {
+				msg := "Update from compendium: error when adding the new user "
+				bot.logger.Print(msg, result.User.Name, result.Error)
+			}
+		} else if result.Exists {
+			added_counter += 1
+		}
+
+		if result.Error != nil || !result.Exists {
+			if err := bot.storage.SaveKnownObject("username-" + username); err != nil {
+				return err
+			}
+		}
+
+	}
+
+	bot.logger.Printf("Added %d new user(s) from the compendium", added_counter)
+
+	return nil
 }
 
-func (rc *RedditClient) prepareRequest(req *http.Request) *http.Request {
-	req.Header.Set("User-Agent", rc.UserAgent)
-	req.Header.Set("Authorization", "bearer "+rc.OAuth.Token)
-	return req
+func (bot *RedditBot) StreamSub(sub string, ch chan Comment, sleep time.Duration) {
+	bot.logger.Print("streaming new posts from ", sub)
+	seen, err := bot.storage.SeenPostIDs(sub)
+	if err != nil {
+		bot.logger.Fatal("event streamer: ", err)
+	}
+
+	first_time := len(seen) == 0
+
+	for {
+		posts, _, err := bot.scanner.SubPosts(sub, "")
+		if err != nil {
+			bot.logger.Print("event streamer: ", err)
+		}
+
+		if err := bot.storage.SaveSubPostIDs(posts, sub); err != nil {
+			bot.logger.Print("event streamer: ", err)
+		}
+
+		for _, post := range posts {
+			if first_time {
+				break
+			}
+			if !StringInSlice(post.Id, seen) {
+				ch <- post
+			} else {
+				break
+			}
+		}
+
+		ids := make([]string, 0, len(posts))
+		for _, post := range posts {
+			ids = append(ids, post.Id)
+		}
+
+		seen = append(seen, ids...)
+		first_time = false
+
+		time.Sleep(sleep)
+	}
 }
 
-func (rc *RedditClient) do(req *http.Request) (*http.Response, error) {
-	return rc.Client.Do(req)
+func (bot *RedditBot) AddUserServer(queries chan UserQuery) {
+	bot.logger.Print("Init addition of new users.")
+	for query := range queries {
+		bot.logger.Print("Received query to add a new user: ", query)
+
+		query = bot.AddUser(query.User.Name, query.User.Hidden, false)
+		if query.Error != nil {
+			msg := "Error when adding the new user "
+			bot.logger.Print(msg, query.User.Name, query.Error)
+		}
+
+		queries <- query
+	}
+}
+
+// This function mutates the bot struct, there is no locking,
+// so use this function before the bot runs.
+func (bot *RedditBot) StartHighScoresFeed(threshold int64) chan Comment {
+	bot.highScore = threshold
+	bot.highScoresFeed = make(chan Comment)
+	return bot.highScoresFeed
+}
+
+func (bot *RedditBot) AddUser(username string, hidden bool, force_suspended bool) UserQuery {
+	bot.logger.Print("Trying to add user ", username)
+	query := UserQuery{User: User{Name: username}}
+
+	query = bot.storage.GetUser(username)
+	if query.Error != nil {
+		return query
+	} else if query.Exists {
+		template := "'%s' already exists"
+		bot.logger.Printf(template, username)
+		query.Error = fmt.Errorf(template, username)
+		return query
+	}
+
+	query = bot.scanner.AboutUser(username)
+	if query.Error != nil {
+		return query
+	}
+
+	if !query.Exists {
+		bot.logger.Printf("User \"%s\" not found", username)
+		return query
+	}
+
+	if query.User.Suspended {
+		bot.logger.Printf("User \"%s\" was suspended", query.User.Name)
+		if !force_suspended {
+			query.Error = fmt.Errorf("User '%s' can't be added, forced mode not enabled", query.User.Name)
+			return query
+		}
+	}
+
+	if err := bot.storage.AddUser(query.User.Name, hidden, query.User.Created); err != nil {
+		query.Error = err
+		return query
+	}
+
+	bot.logger.Printf("New user \"%s\" sucessfully added", query.User.Name)
+	return query
+}
+
+func (bot *RedditBot) Suspensions() chan User {
+	if bot.Suspended == nil {
+		bot.Suspended = make(chan User)
+	}
+	return bot.Suspended
+}
+
+func (bot *RedditBot) CheckUnsuspended(delay time.Duration) chan User {
+	ch := make(chan User)
+
+	go func() {
+
+		for {
+
+			time.Sleep(delay)
+
+			suspended, err := bot.storage.ListSuspended()
+			if err != nil {
+				bot.logger.Print("Unsuspension checker, (re-)starting : ", err)
+				continue
+			}
+
+			for _, user := range suspended {
+				res := bot.scanner.AboutUser(user.Name)
+				if res.Error != nil {
+					bot.logger.Printf("Unsuspension checker, while checking \"%s\": %s", user.Name, res.Error)
+					continue
+				}
+
+				if res.Exists && !res.User.Suspended {
+					if err := bot.storage.SetSuspended(user.Name, false); err != nil {
+						bot.logger.Printf("Unsuspension checker, while checking \"%s\": %s", user.Name, res.Error)
+						continue
+					}
+
+					bot.logger.Print(user.Name, " has been unsuspended")
+					ch <- user
+				}
+			}
+
+		}
+
+	}()
+
+	return ch
+}
+
+func (bot *RedditBot) Run() {
+	var last_full_scan time.Time
+
+	for {
+
+		now := time.Now().Round(0)
+		full_scan := now.Sub(last_full_scan) >= bot.Conf.FullScanInterval.Value
+
+		if err := bot.scanOnce(full_scan); err != nil {
+			log.Fatal(err)
+		}
+
+		if full_scan {
+			last_full_scan = now
+			if err := bot.storage.UpdateInactiveStatus(bot.Conf.InactivityThreshold.Value); err != nil {
+				log.Fatal(err)
+			}
+		}
+
+	}
+
+}
+
+func (bot *RedditBot) scanOnce(full_scan bool) error {
+	users, err := bot.getUsersOrWait(full_scan)
+	if err != nil {
+		return err
+	}
+	return bot.scanUsers(users)
+}
+
+func (bot *RedditBot) getUsersOrWait(full_scan bool) ([]User, error) {
+	var users []User
+	var err error
+
+	for {
+
+		if full_scan {
+			users, err = bot.storage.ListUsers()
+		} else {
+			users, err = bot.storage.ListActiveUsers()
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		if len(users) > 0 {
+			break
+		}
+		// We could be using a channel to signal when a new user is added,
+		// but this isn't worth complicating AddUser for a feature that
+		// is used in production only once, when the database is empty.
+		time.Sleep(time.Second)
+	}
+	return users, nil
+}
+
+func (bot *RedditBot) scanUsers(users []User) error {
+	for _, user := range users {
+
+		if err := bot.allRelevantComments(user); err != nil {
+			// That error is probably network-related, so just log it
+			// and wait for the network or reddit to work again.
+			bot.logger.Print("Error when fetching and saving comments: ", err)
+		}
+	}
+	return nil
+}
+
+func (bot *RedditBot) allRelevantComments(user User) error {
+	var err error
+	var status int
+
+	for i := uint(0); i < bot.Conf.MaxBatches; i++ {
+		user.Position, status, err = bot.saveCommentsPage(user)
+		if err != nil {
+			return err
+		}
+
+		suspended, err := bot.ifSuspended(user, status)
+		if err != nil {
+			return err
+		} else if suspended {
+			break
+		}
+
+		if user.Position == "" && user.New {
+			if err := bot.storage.NotNewUser(user.Name); err != nil {
+				return err
+			}
+		}
+
+		if user.Position == "" {
+			if err := bot.storage.ResetPosition(user.Name); err != nil {
+				return err
+			}
+			break
+		}
+
+	}
+
+	return nil
+}
+
+func (bot *RedditBot) ifSuspended(user User, status int) (bool, error) {
+	gone := status == 404
+	forbidden := status == 403
+
+	if forbidden {
+		bot.logger.Printf("Trying to fetch '%s' resulted in a 403 error", user.Name)
+	} else if gone {
+		bot.logger.Printf("User '%s' not found", user.Name)
+	}
+
+	var about UserQuery
+	if forbidden {
+		about = bot.scanner.AboutUser(user.Name)
+		if about.Error != nil {
+			return false, about.Error
+		}
+	}
+
+	if gone || about.User.Suspended {
+		if err := bot.storage.SetSuspended(user.Name, true); err != nil {
+			return false, err
+		}
+
+		if bot.Suspended != nil {
+			bot.logger.Printf("User '%s' has been suspended or shadowbanned", user.Name)
+			bot.Suspended <- user
+		}
+
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (bot *RedditBot) saveCommentsPage(user User) (string, int, error) {
+	comments, position, status, err := bot.scanner.UserComments(user.Name, user.Position)
+	if err != nil {
+		return "", status, err
+	}
+	if status == 403 || status == 404 {
+		return position, status, nil
+	}
+
+	if err := bot.storage.SaveCommentsPage(comments, user); err != nil {
+		return "", status, err
+	}
+
+	if err := bot.AlertIfHighScore(comments); err != nil {
+		return "", status, err
+	}
+
+	if len(comments) > 0 && bot.maxAgeReached(comments) && !user.New {
+		return "", status, nil
+	}
+	return position, status, nil
+}
+
+func (bot *RedditBot) maxAgeReached(comments []Comment) bool {
+	last_comment := comments[len(comments)-1]
+
+	oldest := last_comment.Created
+	// Use time.Time.Round to remove the monotonic clock measurement, as
+	// we don't need it for the precision we want and one parameter depends
+	// on an external source (the comments' timestamps).
+	now := time.Now().Round(0)
+	return now.Sub(oldest) > bot.Conf.MaxAge.Value
+}
+
+func (bot *RedditBot) AlertIfHighScore(comments []Comment) error {
+	if bot.highScoresFeed == nil {
+		return nil
+	}
+
+	for _, comment := range comments {
+
+		if comment.Score < bot.highScore {
+
+			is_known, err := bot.storage.IsKnownObject(comment.Id)
+			if err != nil {
+				return err
+			}
+
+			if is_known {
+				continue
+			}
+
+			bot.logger.Printf("New high-scoring comment found: %+v", comment)
+			if err := bot.storage.SaveKnownObject(comment.Id); err != nil {
+				return err
+			}
+
+			bot.highScoresFeed <- comment
+
+		}
+
+	}
+
+	return nil
+}
+
+func StringInSlice(str string, slice []string) bool {
+	for _, elem := range slice {
+		if str == elem {
+			return true
+		}
+	}
+	return false
 }
