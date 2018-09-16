@@ -44,8 +44,10 @@ const defaults string = `{
 
 }`
 
+const logger_opts int = log.Lshortfile
+
 func main() {
-	logger := log.New(os.Stderr, "", log.Lshortfile)
+	logger := log.New(os.Stderr, "", logger_opts)
 
 	defer logger.Print("DAB stopped.")
 
@@ -116,12 +118,14 @@ func main() {
 	var reddit_bot *RedditBot
 
 	if reddit_ok {
+		logger.Print("attempting to log reddit bot in")
 		scanner, err := NewScanner(config.Reddit.RedditAuth, config.Reddit.UserAgent)
 		if err != nil {
 			logger.Fatal(err)
 		}
-		logger := log.New(os.Stdout, "", log.Lshortfile)
-		reddit_bot = NewRedditBot(scanner, storage, logger, config.Reddit.RedditBotConf)
+		logger.Print("reddit bot successfully logged in")
+		bot_logger := log.New(os.Stdout, "", logger_opts)
+		reddit_bot = NewRedditBot(scanner, storage, bot_logger, config.Reddit.RedditBotConf)
 	}
 
 	// Command line registration
@@ -162,19 +166,22 @@ func main() {
 	var discordbot *DiscordBot
 
 	if discord_ok {
-		logger := log.New(os.Stdout, "", log.Lshortfile)
-		discordbot, err = NewDiscordBot(storage, logger, config.Discord.DiscordBotConf)
+		logger.Print("attempting to connect discord bot")
+		bot_logger := log.New(os.Stdout, "", logger_opts)
+		discordbot, err = NewDiscordBot(storage, bot_logger, config.Discord.DiscordBotConf)
 		if err != nil {
 			logger.Fatal(err)
 		}
 		if err := discordbot.Run(); err != nil {
 			logger.Fatal(err)
 		}
+		logger.Print("discord bot connected")
 		defer discordbot.Close()
 	}
 
 	// Reddit reddit_bot <-> Discord reddit_bot
 	if reddit_ok && discord_ok {
+		logger.Print("connecting the discord bot and the reddit bot together")
 		go reddit_bot.AddUserServer(discordbot.AddUser)
 
 		reddit_evts := make(chan Comment)
@@ -191,10 +198,12 @@ func main() {
 			highscores := reddit_bot.StartHighScoresFeed(config.Discord.HighScoreThreshold)
 			go discordbot.SignalHighScores(highscores)
 		}
+		logger.Print("discord bot and reddit bot connected")
 	}
 
 	// Web server for reports
 	if config.Web.Listen != "" {
+		logger.Print("lauching the web server")
 		rt, err := NewReportTyper(storage, config.Report)
 		if err != nil {
 			logger.Fatal(err)
