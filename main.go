@@ -45,63 +45,55 @@ const defaults string = `{
 }`
 
 func main() {
-	logger := log.New(os.Stdout, "", log.Lshortfile)
-
-	fatal := func(err error) {
-		if err != nil {
-			logger.Fatal(err)
-		}
-	}
+	logger := log.New(os.Stderr, "", log.Lshortfile)
 
 	defer logger.Print("DAB stopped.")
 
-	config_paths := []string{"/etc/dab.conf.json", "./dab.conf.json"}
-
 	config := Config{}
-	fatal(json.Unmarshal([]byte(defaults), &config))
-
-	var err error
-	var raw_config []byte
-	for _, path := range config_paths {
-		raw_config, err = ioutil.ReadFile(path)
-		if err == nil {
-			break
-		}
-	}
-	if err != nil {
-		logger.Fatalf("Couldn't find config file at any of %v", config_paths)
+	if err := json.Unmarshal([]byte(defaults), &config); err != nil {
+		logger.Fatal(err)
 	}
 
-	fatal(json.Unmarshal(raw_config, &config))
-
-	useradd := flag.String("useradd", "", "Add one or multiple comma-separated users to be tracked.")
-	nodiscord := flag.Bool("nodiscord", false, "Don't connect to discord.")
-	noreddit := flag.Bool("noreddit", false, "Don't connect to reddit.")
 	report := flag.Bool("report", false, "Print the report for the last week.")
+	useradd := flag.String("useradd", "", "Add one or multiple comma-separated usernames to be tracked.")
+	config_path := flag.String("config", "./dab.conf.json", "Path to the configuration file.")
 	flag.Parse()
 
-	*nodiscord = *nodiscord || config.Discord.Token == ""
+	raw_config, err := ioutil.ReadFile(*config_path)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	if err := json.Unmarshal(raw_config, &config); err != nil {
+		logger.Fatal(err)
+	}
 
 	// Storage
 	db_path := config.Database.Path
 	logger.Print("Using database ", db_path)
 	storage, err := NewStorage(db_path)
-	fatal(err)
+	if err != nil {
+		logger.Fatal(err)
+	}
 	defer storage.Close()
 
 	go func() {
 		for {
 			time.Sleep(config.Database.CleanupInterval.Value)
-			fatal(storage.Vacuum())
+			if err := storage.Vacuum(); err != nil {
+				logger.Fatal(err)
+			}
 		}
 	}()
 
-	rt, err := NewReportTyper(storage, config.Report)
-	fatal(err)
-
 	if *report {
+		rt, err := NewReportTyper(storage, config.Report)
+		if err != nil {
+			logger.Fatal(err)
+		}
 		report, err := rt.ReportLastWeek()
-		fatal(err)
+		if err != nil {
+			logger.Fatal(err)
+		}
 		for _, chunk := range report {
 			fmt.Println(chunk)
 		}
@@ -109,26 +101,46 @@ func main() {
 	}
 
 	// Bots
-	var bot *Bot
-	var discordbot *DiscordBot
 
-	// Reddit bot or new users registration from the command line
-	if !*noreddit || *useradd != "" {
+	// Reddit bot
+
+	reddit_ok := true
+	if config.Scanner.Username == "" || config.Scanner.Secret == "" || config.Scanner.Id == "" ||
+		config.Scanner.Password == "" || config.Scanner.UserAgent == "" {
+		fields := "id, secret, username, password, user_agent"
+		msg := "Disabling reddit bot; at least one of the required fields of 'scanner' in the configuration file is empty"
+		logger.Print(msg, ": ", fields)
+		reddit_ok = false
+	}
+
+	var bot *Bot
+
+	if reddit_ok {
 		scanner, err := NewRedditClient(config.Scanner.RedditAuth, config.Scanner.UserAgent)
-		fatal(err)
+		if err != nil {
+			logger.Fatal(err)
+		}
 		logger := log.New(os.Stdout, "", log.Lshortfile)
 		bot = NewBot(scanner, storage, logger, config.Scanner.BotConf)
 	}
 
 	// Command line registration
 	if *useradd != "" {
-		fatal(UserAdd(logger, bot, *useradd))
-		logger.Print("Done")
+		if !reddit_ok {
+			logger.Fatal("Reddit bot must be running to register users")
+		}
+		usernames := strings.Split(*useradd, ",")
+		fmt.Println(usernames)
+		for _, username := range usernames {
+			if res := bot.AddUser(username, false, true); res.Error != nil && !res.Exists {
+				logger.Fatal(res.Error)
+			}
+		}
 		return
 	}
 
-	// Reddit bot
-	if !*noreddit {
+	// Launch reddit bot
+	if reddit_ok {
 		go bot.Run()
 		go func() {
 			for {
@@ -140,17 +152,29 @@ func main() {
 		}()
 	}
 
-	// Discord bot
-	if !*nodiscord {
+	// Discord
+
+	discord_ok := config.Discord.Token != ""
+	if !discord_ok {
+		logger.Print("Disabling discord bot; empty 'token' field in 'discord' section of the configuration file")
+	}
+
+	var discordbot *DiscordBot
+
+	if discord_ok {
 		logger := log.New(os.Stdout, "", log.Lshortfile)
 		discordbot, err = NewDiscordBot(storage, logger, config.Discord.DiscordBotConf)
-		fatal(err)
-		fatal(discordbot.Run())
+		if err != nil {
+			logger.Fatal(err)
+		}
+		if err := discordbot.Run(); err != nil {
+			logger.Fatal(err)
+		}
 		defer discordbot.Close()
 	}
 
 	// Reddit bot <-> Discord bot
-	if !*nodiscord && !*noreddit {
+	if reddit_ok && discord_ok {
 		go bot.AddUserServer(discordbot.AddUser)
 
 		reddit_evts := make(chan Comment)
@@ -169,7 +193,12 @@ func main() {
 		}
 	}
 
+	// Web server for reports
 	if config.Web.Listen != "" {
+		rt, err := NewReportTyper(storage, config.Report)
+		if err != nil {
+			logger.Fatal(err)
+		}
 		wsrv := NewWebServer(config.Web.Listen, rt)
 		go func() {
 			err := wsrv.Run()
@@ -178,21 +207,13 @@ func main() {
 			}
 		}()
 		defer wsrv.Close()
+	} else {
+		logger.Print("Disabling web server; empty 'listen' field in 'web' section of the configuration file")
 	}
+
+	logger.Print("All enabled components launched")
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sig
-}
-
-func UserAdd(logger *log.Logger, bot *Bot, arg string) error {
-	usernames := strings.Split(arg, ",")
-	for _, username := range usernames {
-		res := bot.AddUser(username, false, true)
-		if res.Error != nil {
-			return res.Error
-		}
-	}
-	logger.Print("Done")
-	return nil
 }
