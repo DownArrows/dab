@@ -17,11 +17,20 @@ const (
 	EmojiOkHand       string = "\U0001f44c"
 	EmojiGrowingHeart string = "\U0001f497"
 	EmojiOneHundred   string = "\U0001f4af"
+	EmojiCrossBones   string = "\U00002620"
+	EmojiWhiteFlower  string = "\U0001f4ae"
 	EmojiRainbow      string = "\U0001f308"
+	EmojiHighVoltage  string = "\U000026a1"
+	EmojiThumbsUp     string = "\U0001f44d"
 	EmojiPrayingHands string = "\U0001f64f"
 )
 
 const DiscordMessageLengthLimit = 2000
+
+var link_reactions = []string{
+	EmojiOkHand, EmojiOneHundred, EmojiRainbow, EmojiFire, EmojiThumbsUp,
+	EmojiCrossBones, EmojiWhiteFlower, EmojiGrowingHeart, EmojiHighVoltage,
+}
 
 type DiscordBotConf struct {
 	Token      string `json:"token"`
@@ -120,13 +129,12 @@ func NewDiscordBot(storage *Storage, logger *log.Logger, conf DiscordBotConf) (*
 	}
 
 	bot := &DiscordBot{
-		client:        session,
-		logger:        logger,
-		storage:       storage,
-		linkReactions: []string{EmojiOkHand, EmojiOneHundred, EmojiGrowingHeart, EmojiFire},
-		redditLink:    regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
-		AddUser:       make(chan UserQuery),
-		Prefix:        conf.Prefix,
+		client:     session,
+		logger:     logger,
+		storage:    storage,
+		redditLink: regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
+		AddUser:    make(chan UserQuery),
+		Prefix:     conf.Prefix,
 	}
 
 	bot.Commands = bot.GetCommandsDescriptors()
@@ -342,9 +350,9 @@ func (bot *DiscordBot) processRedditLink(msg DiscordMessage) error {
 }
 
 func (bot *DiscordBot) addRandomReactionTo(msg DiscordMessage) error {
-	nb_reactions := len(bot.linkReactions)
+	nb_reactions := len(link_reactions)
 	rand_index := rand.Int31n(int32(nb_reactions))
-	reaction := bot.linkReactions[rand_index]
+	reaction := link_reactions[rand_index]
 	return bot.client.MessageReactionAdd(msg.ChannelID, msg.ID, reaction)
 }
 
