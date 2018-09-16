@@ -27,7 +27,7 @@ const (
 
 const DiscordMessageLengthLimit = 2000
 
-var link_reactions = []string{
+var linkReactions = []string{
 	EmojiOkHand, EmojiOneHundred, EmojiRainbow, EmojiFire, EmojiThumbsUp,
 	EmojiCrossBones, EmojiWhiteFlower, EmojiGrowingHeart, EmojiHighVoltage,
 }
@@ -57,17 +57,16 @@ type DiscordWelcomeData struct {
 }
 
 type DiscordBot struct {
-	logger        *log.Logger
-	storage       *Storage
-	client        *discordgo.Session
-	Commands      []DiscordCommand
-	linkReactions []string
-	redditLink    *regexp.Regexp
-	ChannelsID    DiscordBotChannelsID
-	AdminID       string
-	AddUser       chan UserQuery
-	Prefix        string
-	Welcome       *template.Template
+	logger     *log.Logger
+	storage    *Storage
+	client     *discordgo.Session
+	Commands   []DiscordCommand
+	redditLink *regexp.Regexp
+	ChannelsID DiscordBotChannelsID
+	AdminID    string
+	AddUser    chan UserQuery
+	Prefix     string
+	Welcome    *template.Template
 }
 
 type DiscordBotChannelsID struct {
@@ -350,9 +349,9 @@ func (bot *DiscordBot) processRedditLink(msg DiscordMessage) error {
 }
 
 func (bot *DiscordBot) addRandomReactionTo(msg DiscordMessage) error {
-	nb_reactions := len(link_reactions)
+	nb_reactions := len(linkReactions)
 	rand_index := rand.Int31n(int32(nb_reactions))
-	reaction := link_reactions[rand_index]
+	reaction := linkReactions[rand_index]
 	return bot.client.MessageReactionAdd(msg.ChannelID, msg.ID, reaction)
 }
 

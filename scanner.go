@@ -13,9 +13,9 @@ import (
 	"time"
 )
 
-const access_token_url = "https://www.reddit.com/api/v1/access_token"
+const accessTokenURL = "https://www.reddit.com/api/v1/access_token"
 
-const request_base_url = "https://oauth.reddit.com"
+const requestBaseURL = "https://oauth.reddit.com"
 
 type RedditAuth struct {
 	Username string `json:"username"`
@@ -158,7 +158,7 @@ func (sc *Scanner) connect(auth RedditAuth) error {
 		"password":   {sc.Auth.Password}}
 	auth_form := strings.NewReader(auth_conf.Encode())
 
-	req, _ := http.NewRequest("POST", access_token_url, auth_form)
+	req, _ := http.NewRequest("POST", accessTokenURL, auth_form)
 
 	req.Header.Set("User-Agent", sc.UserAgent)
 	req.SetBasicAuth(sc.Auth.Id, sc.Auth.Secret)
@@ -218,7 +218,7 @@ func (sc *Scanner) rawRequest(verb string, path string, data io.Reader) ([]byte,
 
 	<-sc.ticker.C
 
-	req, err := http.NewRequest(verb, request_base_url+path, data)
+	req, err := http.NewRequest(verb, requestBaseURL+path, data)
 	if err != nil {
 		return nil, 0, err
 	}
