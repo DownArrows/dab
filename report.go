@@ -80,7 +80,7 @@ func (rt *ReportTyper) Report(start, end time.Time) ([]string, error) {
 	}
 
 	if len(comments) == 0 {
-		return nil, fmt.Errorf("No comment found between %s and %s.", start, end)
+		return nil, fmt.Errorf("no comment found between %s and %s", start, end)
 	}
 
 	stats, err := rt.storage.StatsBetween(start, end)

@@ -113,12 +113,12 @@ func yearAndWeek(path []string) (int, int, error) {
 
 	year, err := strconv.Atoi(path[0])
 	if err != nil {
-		return 0, 0, errors.New("Year must be a valid number.")
+		return 0, 0, errors.New("year must be a valid number")
 	}
 
 	week, err := strconv.Atoi(path[1])
 	if err != nil {
-		return 0, 0, errors.New("Week must be a valid number.")
+		return 0, 0, errors.New("week must be a valid number")
 	}
 
 	return year, week, nil

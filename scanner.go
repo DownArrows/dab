@@ -106,7 +106,7 @@ func (sc *Scanner) AboutUser(username string) UserQuery {
 	if status == 404 {
 		return query
 	} else if status != 200 {
-		query.Error = fmt.Errorf("Bad response status when looking up %s: %d", username, status)
+		query.Error = fmt.Errorf("bad response status when looking up %s: %d", username, status)
 		return query
 	}
 
@@ -195,7 +195,7 @@ func (sc *Scanner) getListing(path string, position string) ([]Comment, string, 
 	}
 
 	if status != 200 {
-		err = fmt.Errorf("Bad response status when fetching the listing %s: %d", path, status)
+		err = fmt.Errorf("bad response status when fetching the listing %s: %d", path, status)
 		return nil, position, status, err
 	}
 

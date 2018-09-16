@@ -105,7 +105,7 @@ func (storage *Storage) EnableWAL() error {
 	}
 
 	if journal_mode != "wal" {
-		return fmt.Errorf("Failed to set journal mode to Write-Ahead Log (WAL)")
+		return fmt.Errorf("failed to set journal mode to Write-Ahead Log (WAL)")
 	}
 
 	return nil
@@ -182,7 +182,7 @@ func (storage *Storage) DelUser(username string) error {
 		return err
 	}
 	if nb, _ := result.RowsAffected(); nb == 0 {
-		return fmt.Errorf("No user named '%s'", username)
+		return fmt.Errorf("no user named '%s'", username)
 	}
 	return nil
 }
@@ -219,7 +219,7 @@ func (storage *Storage) PurgeUser(username string) error {
 	}
 	if nb, _ := result.RowsAffected(); nb == 0 {
 		tx.Rollback()
-		return fmt.Errorf("No user named '%s'", username)
+		return fmt.Errorf("no user named '%s'", username)
 	}
 
 	return tx.Commit()
@@ -530,7 +530,7 @@ func (storage *Storage) getKarma(username, cond string) (int64, error) {
 	var karma sql.NullInt64
 	err = rows.Scan(&karma)
 	if !karma.Valid {
-		return 0, fmt.Errorf("No comments from user '%s' found", username)
+		return 0, fmt.Errorf("no comments from user '%s' found", username)
 	}
 	return karma.Int64, err
 }

@@ -49,7 +49,7 @@ const logger_opts int = log.Lshortfile
 func main() {
 	logger := log.New(os.Stderr, "", logger_opts)
 
-	defer logger.Print("DAB stopped.")
+	defer logger.Print("DAB stopped")
 
 	config := Config{}
 	if err := json.Unmarshal([]byte(defaults), &config); err != nil {
@@ -71,7 +71,7 @@ func main() {
 
 	// Storage
 	db_path := config.Database.Path
-	logger.Print("Using database ", db_path)
+	logger.Print("using database ", db_path)
 	storage, err := NewStorage(db_path)
 	if err != nil {
 		logger.Fatal(err)
@@ -131,7 +131,7 @@ func main() {
 	// Command line registration
 	if *useradd != "" {
 		if !reddit_ok {
-			logger.Fatal("Reddit bot must be running to register users")
+			logger.Fatal("reddit bot must be running to register users")
 		}
 		usernames := strings.Split(*useradd, ",")
 		fmt.Println(usernames)
@@ -160,7 +160,7 @@ func main() {
 
 	discord_ok := config.Discord.Token != ""
 	if !discord_ok {
-		logger.Print("Disabling discord bot; empty 'token' field in 'discord' section of the configuration file")
+		logger.Print("disabling discord bot; empty 'token' field in 'discord' section of the configuration file")
 	}
 
 	var discordbot *DiscordBot
@@ -217,10 +217,10 @@ func main() {
 		}()
 		defer wsrv.Close()
 	} else {
-		logger.Print("Disabling web server; empty 'listen' field in 'web' section of the configuration file")
+		logger.Print("disabling web server; empty 'listen' field in 'web' section of the configuration file")
 	}
 
-	logger.Print("All enabled components launched")
+	logger.Print("all enabled components launched")
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)

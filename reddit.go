@@ -55,21 +55,21 @@ func (bot *RedditBot) UpdateUsersFromCompendium() error {
 		} else if state == "in_listing" {
 			cells := strings.Split(line, "|")
 			if len(cells) < 6 {
-				return fmt.Errorf("The array of names/scores doesn't have the expected format")
+				return fmt.Errorf("the array of names/scores doesn't have the expected format")
 			}
 			name_link := cells[2]
 			start := strings.Index(name_link, "[")
 			end := strings.Index(name_link, "]")
 			escaped_name := name_link[start+1 : end]
 			if len(escaped_name) == 0 {
-				return fmt.Errorf("The names don't have the expected format")
+				return fmt.Errorf("the names don't have the expected format")
 			}
 			name := strings.Replace(escaped_name, `\`, "", -1)
 			names = append(names, name)
 		}
 	}
 
-	bot.logger.Printf("Found %d users in the compendium", len(names))
+	bot.logger.Printf("found %d users in the compendium", len(names))
 
 	added_counter := 0
 	for _, username := range names {
@@ -85,7 +85,7 @@ func (bot *RedditBot) UpdateUsersFromCompendium() error {
 		result := bot.AddUser(username, false, false)
 		if result.Error != nil {
 			if !result.Exists {
-				msg := "Update from compendium: error when adding the new user "
+				msg := "update from compendium: error when adding the new user "
 				bot.logger.Print(msg, result.User.Name, result.Error)
 			}
 		} else if result.Exists {
@@ -100,7 +100,7 @@ func (bot *RedditBot) UpdateUsersFromCompendium() error {
 
 	}
 
-	bot.logger.Printf("Added %d new user(s) from the compendium", added_counter)
+	bot.logger.Printf("added %d new user(s) from the compendium", added_counter)
 
 	return nil
 }
@@ -148,13 +148,13 @@ func (bot *RedditBot) StreamSub(sub string, ch chan Comment, sleep time.Duration
 }
 
 func (bot *RedditBot) AddUserServer(queries chan UserQuery) {
-	bot.logger.Print("Init addition of new users.")
+	bot.logger.Print("init addition of new users")
 	for query := range queries {
-		bot.logger.Print("Received query to add a new user: ", query)
+		bot.logger.Print("received query to add a new user: ", query)
 
 		query = bot.AddUser(query.User.Name, query.User.Hidden, false)
 		if query.Error != nil {
-			msg := "Error when adding the new user "
+			msg := "error when adding the new user "
 			bot.logger.Print(msg, query.User.Name, query.Error)
 		}
 
@@ -171,7 +171,7 @@ func (bot *RedditBot) StartHighScoresFeed(threshold int64) chan Comment {
 }
 
 func (bot *RedditBot) AddUser(username string, hidden bool, force_suspended bool) UserQuery {
-	bot.logger.Print("Trying to add user ", username)
+	bot.logger.Print("trying to add user ", username)
 	query := UserQuery{User: User{Name: username}}
 
 	query = bot.storage.GetUser(username)
@@ -190,14 +190,14 @@ func (bot *RedditBot) AddUser(username string, hidden bool, force_suspended bool
 	}
 
 	if !query.Exists {
-		bot.logger.Printf("User \"%s\" not found", username)
+		bot.logger.Printf("user \"%s\" not found", username)
 		return query
 	}
 
 	if query.User.Suspended {
-		bot.logger.Printf("User \"%s\" was suspended", query.User.Name)
+		bot.logger.Printf("user \"%s\" was suspended", query.User.Name)
 		if !force_suspended {
-			query.Error = fmt.Errorf("User '%s' can't be added, forced mode not enabled", query.User.Name)
+			query.Error = fmt.Errorf("user '%s' can't be added, forced mode not enabled", query.User.Name)
 			return query
 		}
 	}
@@ -207,7 +207,7 @@ func (bot *RedditBot) AddUser(username string, hidden bool, force_suspended bool
 		return query
 	}
 
-	bot.logger.Printf("New user \"%s\" sucessfully added", query.User.Name)
+	bot.logger.Printf("new user \"%s\" sucessfully added", query.User.Name)
 	return query
 }
 
@@ -229,20 +229,20 @@ func (bot *RedditBot) CheckUnsuspended(delay time.Duration) chan User {
 
 			suspended, err := bot.storage.ListSuspended()
 			if err != nil {
-				bot.logger.Print("Unsuspension checker, (re-)starting : ", err)
+				bot.logger.Print("unsuspension checker, (re-)starting : ", err)
 				continue
 			}
 
 			for _, user := range suspended {
 				res := bot.scanner.AboutUser(user.Name)
 				if res.Error != nil {
-					bot.logger.Printf("Unsuspension checker, while checking \"%s\": %s", user.Name, res.Error)
+					bot.logger.Printf("unsuspension checker, while checking \"%s\": %s", user.Name, res.Error)
 					continue
 				}
 
 				if res.Exists && !res.User.Suspended {
 					if err := bot.storage.SetSuspended(user.Name, false); err != nil {
-						bot.logger.Printf("Unsuspension checker, while checking \"%s\": %s", user.Name, res.Error)
+						bot.logger.Printf("unsuspension checker, while checking \"%s\": %s", user.Name, res.Error)
 						continue
 					}
 
@@ -322,7 +322,7 @@ func (bot *RedditBot) scanUsers(users []User) error {
 		if err := bot.allRelevantComments(user); err != nil {
 			// That error is probably network-related, so just log it
 			// and wait for the network or reddit to work again.
-			bot.logger.Print("Error when fetching and saving comments: ", err)
+			bot.logger.Print("error when fetching and saving comments: ", err)
 		}
 	}
 	return nil
@@ -368,9 +368,9 @@ func (bot *RedditBot) ifSuspended(user User, status int) (bool, error) {
 	forbidden := status == 403
 
 	if forbidden {
-		bot.logger.Printf("Trying to fetch '%s' resulted in a 403 error", user.Name)
+		bot.logger.Printf("trying to fetch '%s' resulted in a 403 error", user.Name)
 	} else if gone {
-		bot.logger.Printf("User '%s' not found", user.Name)
+		bot.logger.Printf("user '%s' not found", user.Name)
 	}
 
 	var about UserQuery
@@ -387,7 +387,7 @@ func (bot *RedditBot) ifSuspended(user User, status int) (bool, error) {
 		}
 
 		if bot.Suspended != nil {
-			bot.logger.Printf("User '%s' has been suspended or shadowbanned", user.Name)
+			bot.logger.Printf("user '%s' has been suspended or shadowbanned", user.Name)
 			bot.Suspended <- user
 		}
 
@@ -449,7 +449,7 @@ func (bot *RedditBot) AlertIfHighScore(comments []Comment) error {
 				continue
 			}
 
-			bot.logger.Printf("New high-scoring comment found: %+v", comment)
+			bot.logger.Printf("new high-scoring comment found: %+v", comment)
 			if err := bot.storage.SaveKnownObject(comment.Id); err != nil {
 				return err
 			}

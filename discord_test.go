@@ -8,7 +8,7 @@ func TestCommandMatch(t *testing.T) {
 		cmd := DiscordCommand{Command: "test"}
 		matches, _ := cmd.Match("!", "!test")
 		if !matches {
-			t.Errorf("Command %v should match with '!test'", cmd)
+			t.Errorf("command %v should match with '!test'", cmd)
 		}
 	})
 
@@ -16,7 +16,7 @@ func TestCommandMatch(t *testing.T) {
 		cmd := DiscordCommand{Command: "test"}
 		matches, _ := cmd.Match("!", "!cmd")
 		if matches {
-			t.Errorf("Command %v should NOT match with '!cmd'", cmd)
+			t.Errorf("command %v should NOT match with '!cmd'", cmd)
 		}
 	})
 
@@ -24,7 +24,7 @@ func TestCommandMatch(t *testing.T) {
 		cmd := DiscordCommand{Command: "test"}
 		matches, _ := cmd.Match("!", "!test something")
 		if matches {
-			t.Errorf("Command %v should NOT match with '!test something'", cmd)
+			t.Errorf("command %v should NOT match with '!test something'", cmd)
 		}
 	})
 
@@ -32,7 +32,7 @@ func TestCommandMatch(t *testing.T) {
 		cmd := DiscordCommand{Command: "test", HasArgs: true}
 		matches, _ := cmd.Match("!", "!test something")
 		if !matches {
-			t.Errorf("Command %v should match with '!test something'", cmd)
+			t.Errorf("command %v should match with '!test something'", cmd)
 		}
 	})
 
@@ -40,7 +40,7 @@ func TestCommandMatch(t *testing.T) {
 		cmd := DiscordCommand{Command: "test", HasArgs: true}
 		matches, _ := cmd.Match("!", "!cmd something")
 		if matches {
-			t.Errorf("Command %v should NOT match with '!cmd something'", cmd)
+			t.Errorf("command %v should NOT match with '!cmd something'", cmd)
 		}
 	})
 
@@ -48,7 +48,7 @@ func TestCommandMatch(t *testing.T) {
 		cmd := DiscordCommand{Command: "test", HasArgs: true}
 		matches, _ := cmd.Match("!", "!test")
 		if matches {
-			t.Errorf("Command %v should NOT match with '!test'", cmd)
+			t.Errorf("command %v should NOT match with '!test'", cmd)
 		}
 	})
 
@@ -56,7 +56,7 @@ func TestCommandMatch(t *testing.T) {
 		cmd := DiscordCommand{Command: "test", HasArgs: true}
 		matches, _ := cmd.Match("!", "!test ")
 		if matches {
-			t.Errorf("Command %v should NOT match with '!test '", cmd)
+			t.Errorf("command %v should NOT match with '!test '", cmd)
 		}
 	})
 
@@ -65,10 +65,10 @@ func TestCommandMatch(t *testing.T) {
 		expected := "something something"
 		matches, rest := cmd.Match("!", "!test "+expected)
 		if !matches {
-			t.Errorf("Command %v should match with '!test %s'", cmd, expected)
+			t.Errorf("command %v should match with '!test %s'", cmd, expected)
 		}
 		if rest != expected {
-			t.Errorf("Matching command %v with '!test %s' should return '%s'", cmd, expected, expected)
+			t.Errorf("matching command %v with '!test %s' should return '%s'", cmd, expected, expected)
 		}
 	})
 
@@ -89,7 +89,7 @@ func TestCommandFind(t *testing.T) {
 	t.Run("basic matching", func(t *testing.T) {
 		cmd, _ := bot.MatchCommand(DiscordMessage{Content: "!simple"})
 		if cmd.Command != "simple" {
-			t.Errorf("Incorrect command match %v for '!simple'", cmd)
+			t.Errorf("incorrect command match %v for '!simple'", cmd)
 		}
 	})
 
@@ -100,24 +100,24 @@ func TestCommandFind(t *testing.T) {
 		}
 		cmd, _ := bot.MatchCommand(msg)
 		if cmd.Command != "admin" {
-			t.Errorf("Incorrect command match %v for '!admin'", cmd)
+			t.Errorf("incorrect command match %v for '!admin'", cmd)
 		}
 	})
 
 	t.Run("admin privilege rejection", func(t *testing.T) {
 		cmd, _ := bot.MatchCommand(DiscordMessage{Content: "!admin"})
 		if cmd.Command == "admin" {
-			t.Errorf("Incorrect command match %v for '!admin', should be rejected", cmd)
+			t.Errorf("incorrect command match %v for '!admin', should be rejected", cmd)
 		}
 	})
 
 	t.Run("return message with arguments", func(t *testing.T) {
 		cmd, msg := bot.MatchCommand(DiscordMessage{Content: "!args a b"})
 		if cmd.Command != "args" {
-			t.Errorf("Incorrect command match %v for '!args'", cmd)
+			t.Errorf("incorrect command match %v for '!args'", cmd)
 		}
 		if !(len(msg.Args) == 2 && msg.Args[0] == "a" && msg.Args[1] == "b") {
-			t.Errorf("Arguments of '!args' weren't parsed correctly, was %v, should be 'a' and 'b'", msg.Args)
+			t.Errorf("arguments of '!args' weren't parsed correctly, was %v, should be 'a' and 'b'", msg.Args)
 		}
 	})
 

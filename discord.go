@@ -170,7 +170,7 @@ func (bot *DiscordBot) ChannelMessageSend(channelID, content string) error {
 
 func (bot *DiscordBot) onReady(conf DiscordBotConf) {
 	if err := bot.client.UpdateStatus(0, "Downvote Counter"); err != nil {
-		bot.logger.Fatal("Couldn't set status on discord")
+		bot.logger.Fatal("couldn't set status on discord")
 	}
 
 	if _, err := bot.client.Channel(conf.General); err != nil {
@@ -195,7 +195,7 @@ func (bot *DiscordBot) onReady(conf DiscordBotConf) {
 	}
 	bot.AdminID = conf.Admin
 
-	bot.logger.Print("Initialization ok")
+	bot.logger.Print("initialization ok")
 }
 
 func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
@@ -241,7 +241,7 @@ func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
 	}
 
 	if bot.isLoggableRedditLink(msg) {
-		bot.logger.Print("Link to a comment on reddit posted by ", msg.Author.FQN())
+		bot.logger.Print("link to a comment on reddit posted by ", msg.Author.FQN())
 		err = bot.processRedditLink(msg)
 	} else {
 		err = bot.command(msg)
@@ -254,11 +254,11 @@ func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
 
 func (bot *DiscordBot) RedditEvents(evts chan Comment) {
 	for comment := range evts {
-		bot.logger.Print("New event from reddit: ", comment)
+		bot.logger.Print("new event from reddit: ", comment)
 		if comment.Author == "DownvoteTrollingBot" || comment.Author == "DownvoteTrollingBot2" {
 			msg := "@everyone https://www.reddit.com" + comment.Permalink
 			if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
-				bot.logger.Print("Reddit events listener: ", err)
+				bot.logger.Print("reddit events listener: ", err)
 			}
 		}
 	}
@@ -268,7 +268,7 @@ func (bot *DiscordBot) SignalSuspensions(suspensions chan User) {
 	for user := range suspensions {
 		msg := fmt.Sprintf("RIP %s %s", user.Name, EmojiPrayingHands)
 		if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
-			bot.logger.Print("Suspensions listener: ", err)
+			bot.logger.Print("suspensions listener: ", err)
 		}
 	}
 }
@@ -277,7 +277,7 @@ func (bot *DiscordBot) SignalUnsuspensions(ch chan User) {
 	for user := range ch {
 		msg := fmt.Sprintf("%s %s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
 		if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
-			bot.logger.Print("Unsuspensions listener: ", err)
+			bot.logger.Print("unsuspensions listener: ", err)
 		}
 	}
 }
@@ -285,10 +285,10 @@ func (bot *DiscordBot) SignalUnsuspensions(ch chan User) {
 func (bot *DiscordBot) SignalHighScores(ch chan Comment) {
 	for comment := range ch {
 		link := "https://www.reddit.com" + comment.Permalink
-		tmpl := "A comment by %s has reached %d: %s"
+		tmpl := "a comment by %s has reached %d: %s"
 		msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
 		if err := bot.ChannelMessageSend(bot.ChannelsID.HighScores, msg); err != nil {
-			bot.logger.Print("High-scores listener: ", err)
+			bot.logger.Print("high-scores listener: ", err)
 		}
 	}
 }
