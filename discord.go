@@ -21,6 +21,8 @@ const (
 	EmojiPrayingHands string = "\U0001f64f"
 )
 
+const DiscordMessageLengthLimit = 2000
+
 type DiscordBotConf struct {
 	Token      string `json:"token"`
 	General    string `json:"general"`
@@ -425,12 +427,10 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 		statuses = append(statuses, status)
 	}
 
-	status := strings.Join(statuses, ", ")
-	// TODO post multiple messages instead
-	if len(status) > 1900 {
-		status = "registrations done, check the logs for more details."
+	response := fmt.Sprintf("<@%s> registration: %s", msg.Author.ID, strings.Join(statuses, ", "))
+	if len(response) > DiscordMessageLengthLimit {
+		response = fmt.Sprintf("<@%s> registrations done, check the bot's logs for more details.", msg.Author.ID)
 	}
-	response := fmt.Sprintf("<@%s> registration: %s", msg.Author.ID, status)
 	return bot.ChannelMessageSend(msg.ChannelID, response)
 }
 
@@ -450,6 +450,9 @@ func (bot *DiscordBot) editUsers(action_name string, action func(string) error) 
 
 		result := strings.Join(results, ", ")
 		response := fmt.Sprintf("<@%s> %s: %s", msg.Author.ID, action_name, result)
+		if len(response) > DiscordMessageLengthLimit {
+			response = fmt.Sprintf("<@%s> %s done, check the bot's logs for more details.", action_name, msg.Author.ID)
+		}
 		return bot.ChannelMessageSend(msg.ChannelID, response)
 	}
 }
