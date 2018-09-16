@@ -17,7 +17,7 @@ type WebServer struct {
 	Typer       *ReportTyper
 }
 
-func NewWebServer(typer *ReportTyper) *WebServer {
+func NewWebServer(listen string, typer *ReportTyper) *WebServer {
 	reports_tmpl := template.Must(template.New("html_report").Parse(reportPage))
 
 	wsrv := &WebServer{
@@ -31,7 +31,7 @@ func NewWebServer(typer *ReportTyper) *WebServer {
 	mux.HandleFunc("/reports/source/", wsrv.ReportSource)
 
 	wsrv.Server = &http.Server{
-		Addr:           ":12345",
+		Addr:           listen,
 		Handler:        mux,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,

@@ -57,6 +57,10 @@ type Config struct {
 		DiscordBotConf
 		HighScoreThreshold int64 `json:"highscore_threshold"`
 	}
+
+	Web struct {
+		Listen string `json:"listen"`
+	}
 }
 
 type Comment struct {

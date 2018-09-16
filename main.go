@@ -169,14 +169,16 @@ func main() {
 		}
 	}
 
-	wsrv := NewWebServer(rt)
-	go func() {
-		err := wsrv.Run()
-		if err != nil {
-			logger.Print(err)
-		}
-	}()
-	defer wsrv.Close()
+	if config.Web.Listen != "" {
+		wsrv := NewWebServer(config.Web.Listen, rt)
+		go func() {
+			err := wsrv.Run()
+			if err != nil {
+				logger.Print(err)
+			}
+		}()
+		defer wsrv.Close()
+	}
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
