@@ -20,9 +20,14 @@ type ReportConf struct {
 
 type ReportTyper struct {
 	Conf        ReportConf
-	storage     *Storage
+	storage     ReportTyperStorage
 	commentTmpl *template.Template
 	headTmpl    *template.Template
+}
+
+type ReportTyperStorage interface {
+	GetCommentsBelowBetween(int64, time.Time, time.Time) ([]Comment, error)
+	StatsBetween(time.Time, time.Time) (Stats, error)
 }
 
 type reportComment struct {
@@ -43,7 +48,7 @@ type reportHead struct {
 	End      string
 }
 
-func NewReportTyper(storage *Storage, conf ReportConf) *ReportTyper {
+func NewReportTyper(storage ReportTyperStorage, conf ReportConf) *ReportTyper {
 	comment_tmpl := template.Must(template.New("comment").Parse(commentTmpl))
 	head_tmpl := template.Must(template.New("report").Parse(reportHeadTmpl))
 
@@ -57,20 +62,12 @@ func NewReportTyper(storage *Storage, conf ReportConf) *ReportTyper {
 }
 
 func (rt *ReportTyper) ReportLastWeek() ([]string, error) {
-	now := time.Now().In(rt.Conf.Timezone.Value)
-	year, week := now.AddDate(0, 0, -7).ISOWeek()
-	return rt.ReportWeek(uint8(week), year)
+	return rt.ReportWeek(LastWeekCoordinates(rt.Conf.Timezone.Value))
 }
 
 func (rt *ReportTyper) ReportWeek(week_num uint8, year int) ([]string, error) {
-	week_start := WeekNumToStartDate(week_num, year, rt.Conf.Timezone.Value).Add(-rt.Conf.Leeway.Value)
-	week_end := week_start.AddDate(0, 0, 7)
-
-	batches, err := rt.Report(week_start, week_end)
-	if err != nil {
-		return nil, err
-	}
-	return batches, nil
+	start, end := WeekYearToDates(week_num, year, rt.Conf.Timezone.Value)
+	return rt.Report(start.Add(-rt.Conf.Leeway.Value), end.Add(-rt.Conf.Leeway.Value))
 }
 
 func (rt *ReportTyper) Report(start, end time.Time) ([]string, error) {
@@ -88,15 +85,8 @@ func (rt *ReportTyper) Report(start, end time.Time) ([]string, error) {
 		return nil, err
 	}
 
-	typed_comments, err := rt.typeComments(comments, stats)
-	if err != nil {
-		return nil, err
-	}
-
-	head, err := rt.typeReportHead(typed_comments[0], stats, start, end)
-	if err != nil {
-		return nil, err
-	}
+	typed_comments := rt.typeComments(comments, stats)
+	head := rt.typeReportHead(typed_comments[0], stats, start, end)
 
 	batches := make([]string, len(typed_comments))
 	batches[0] = head
@@ -107,7 +97,7 @@ func (rt *ReportTyper) Report(start, end time.Time) ([]string, error) {
 	return batches, nil
 }
 
-func (rt *ReportTyper) typeReportHead(comments []string, stats Stats, start, end time.Time) (string, error) {
+func (rt *ReportTyper) typeReportHead(comments []string, stats Stats, start, end time.Time) string {
 	deltas := stats.DeltasToScores().Sort()
 	if len(deltas) > rt.Conf.NbTop {
 		deltas = deltas[:rt.Conf.NbTop]
@@ -128,12 +118,12 @@ func (rt *ReportTyper) typeReportHead(comments []string, stats Stats, start, end
 
 	var output bytes.Buffer
 	if err := rt.headTmpl.Execute(&output, data); err != nil {
-		return "", err
+		panic(err)
 	}
-	return output.String(), nil
+	return output.String()
 }
 
-func (rt *ReportTyper) typeComments(comments []Comment, stats Stats) ([][]string, error) {
+func (rt *ReportTyper) typeComments(comments []Comment, stats Stats) [][]string {
 	nb_comments := len(comments)
 	batches := make([][]string, 0, 10)
 
@@ -141,10 +131,7 @@ func (rt *ReportTyper) typeComments(comments []Comment, stats Stats) ([][]string
 	var total_len uint64 = 0
 	for i, comment := range comments {
 		average := stats[comment.Author].Average
-		formatted, err := rt.CommentToString(uint64(i+1), comment, average)
-		if err != nil {
-			return nil, err
-		}
+		formatted := rt.CommentToString(uint64(i+1), comment, average)
 
 		len_formatted := uint64(len(formatted))
 		total_len += len_formatted
@@ -157,10 +144,10 @@ func (rt *ReportTyper) typeComments(comments []Comment, stats Stats) ([][]string
 	}
 
 	batches = append(batches, batch)
-	return batches, nil
+	return batches
 }
 
-func (rt *ReportTyper) CommentToString(number uint64, comment Comment, average float64) (string, error) {
+func (rt *ReportTyper) CommentToString(number uint64, comment Comment, average float64) string {
 	body := html.UnescapeString(comment.Body)
 	lines := strings.Split(body, "\n")
 	for i := 0; i < len(lines); i++ {
@@ -179,9 +166,21 @@ func (rt *ReportTyper) CommentToString(number uint64, comment Comment, average f
 
 	var output bytes.Buffer
 	if err := rt.commentTmpl.Execute(&output, data); err != nil {
-		return "", err
+		panic(err)
 	}
-	return output.String(), nil
+	return output.String()
+}
+
+func LastWeekCoordinates(location *time.Location) (uint8, int) {
+	now := time.Now().In(location)
+	year, week := now.AddDate(0, 0, -7).ISOWeek()
+	return uint8(week), year
+}
+
+func WeekYearToDates(week_num uint8, year int, location *time.Location) (time.Time, time.Time) {
+	week_start := WeekNumToStartDate(week_num, year, location)
+	week_end := week_start.AddDate(0, 0, 7)
+	return week_start, week_end
 }
 
 func WeekNumToStartDate(week_num uint8, year int, location *time.Location) time.Time {
