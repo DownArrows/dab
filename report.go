@@ -43,7 +43,7 @@ type reportHead struct {
 	End      string
 }
 
-func NewReportTyper(storage *Storage, conf ReportConf) (*ReportTyper, error) {
+func NewReportTyper(storage *Storage, conf ReportConf) *ReportTyper {
 	comment_tmpl := template.Must(template.New("comment").Parse(commentTmpl))
 	head_tmpl := template.Must(template.New("report").Parse(reportHeadTmpl))
 
@@ -53,7 +53,7 @@ func NewReportTyper(storage *Storage, conf ReportConf) (*ReportTyper, error) {
 		commentTmpl: comment_tmpl,
 		headTmpl:    head_tmpl,
 	}
-	return rt, nil
+	return rt
 }
 
 func (rt *ReportTyper) ReportLastWeek() ([]string, error) {

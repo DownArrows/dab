@@ -88,10 +88,8 @@ func main() {
 	}()
 
 	if *report {
-		rt, err := NewReportTyper(storage, config.Report)
-		if err != nil {
-			logger.Fatal(err)
-		}
+		rt := NewReportTyper(storage, config.Report)
+
 		report, err := rt.ReportLastWeek()
 		if err != nil {
 			logger.Fatal(err)
@@ -204,10 +202,7 @@ func main() {
 	// Web server for reports
 	if config.Web.Listen != "" {
 		logger.Print("lauching the web server")
-		rt, err := NewReportTyper(storage, config.Report)
-		if err != nil {
-			logger.Fatal(err)
-		}
+		rt := NewReportTyper(storage, config.Report)
 		wsrv := NewWebServer(config.Web.Listen, rt)
 		go func() {
 			err := wsrv.Run()
