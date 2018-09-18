@@ -28,8 +28,9 @@ const (
 const DiscordMessageLengthLimit = 2000
 
 var linkReactions = []string{
-	EmojiOkHand, EmojiOneHundred, EmojiRainbow, EmojiFire, EmojiThumbsUp,
-	EmojiCrossBones, EmojiWhiteFlower, EmojiGrowingHeart, EmojiHighVoltage,
+	EmojiOkHand, EmojiOneHundred, EmojiFire, EmojiThumbsUp,
+	EmojiCrossBones, EmojiWhiteFlower, EmojiGrowingHeart,
+	EmojiHighVoltage,
 }
 
 type DiscordBotConf struct {
