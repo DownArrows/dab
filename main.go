@@ -25,7 +25,6 @@ const defaults string = `{
 		"unsuspension_interval": "15m",
 		"inactivity_threshold": "2200h",
 		"full_scan_interval": "6h",
-		"compendium_update_interval": "24h",
 		"dvt_interval": "5m"
 	},
 
@@ -59,6 +58,7 @@ func main() {
 	report := flag.Bool("report", false, "Print the report for the last week.")
 	useradd := flag.String("useradd", "", "Add one or multiple comma-separated usernames to be tracked.")
 	config_path := flag.String("config", "./dab.conf.json", "Path to the configuration file.")
+	compendium := flag.Bool("compendium", false, "Start the reddit bot with an update from DVT's compendium.")
 	flag.Parse()
 
 	raw_config, err := ioutil.ReadFile(*config_path)
@@ -143,15 +143,25 @@ func main() {
 
 	// Launch reddit reddit_bot
 	if reddit_ok {
-		go reddit_bot.Run()
-		go func() {
-			for {
-				if err := reddit_bot.UpdateUsersFromCompendium(); err != nil {
-					logger.Print(err)
-				}
-				time.Sleep(config.Reddit.CompendiumUpdateInterval.Value)
+		if *compendium {
+			if err := reddit_bot.UpdateUsersFromCompendium(); err != nil {
+				logger.Print(err)
 			}
-		}()
+		}
+
+		go reddit_bot.Run()
+
+		compendium_interval := config.Reddit.CompendiumUpdateInterval.Value
+		if compendium_interval != 0*time.Second {
+			go func() {
+				for {
+					time.Sleep(compendium_interval)
+					if err := reddit_bot.UpdateUsersFromCompendium(); err != nil {
+						logger.Print(err)
+					}
+				}
+			}()
+		}
 	}
 
 	// Discord
