@@ -72,10 +72,7 @@ func main() {
 	// Storage
 	db_path := config.Database.Path
 	logger.Print("using database ", db_path)
-	storage, err := NewStorage(db_path)
-	if err != nil {
-		logger.Fatal(err)
-	}
+	storage := NewStorage(db_path)
 	defer storage.Close()
 
 	go func() {
@@ -132,7 +129,6 @@ func main() {
 			logger.Fatal("reddit bot must be running to register users")
 		}
 		usernames := strings.Split(*useradd, ",")
-		fmt.Println(usernames)
 		for _, username := range usernames {
 			if res := reddit_bot.AddUser(username, false, true); res.Error != nil && !res.Exists {
 				logger.Fatal(res.Error)

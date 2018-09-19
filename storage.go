@@ -12,25 +12,19 @@ type Storage struct {
 	Path string
 }
 
-func NewStorage(dbPath string) (*Storage, error) {
+func NewStorage(dbPath string) *Storage {
 	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", dbPath))
-	if err != nil {
-		return nil, err
-	}
+	autopanic(err)
 	storage := &Storage{db: db, Path: dbPath}
-	if err := storage.Init(); err != nil {
-		return nil, err
-	}
-	return storage, nil
+	storage.Init()
+	return storage
 }
 
-func (storage *Storage) Init() error {
+func (storage *Storage) Init() {
 	storage.db.SetMaxOpenConns(1)
 
 	if storage.Path != ":memory:" {
-		if err := storage.EnableWAL(); err != nil {
-			return err
-		}
+		storage.EnableWAL()
 	}
 
 	_, err := storage.db.Exec(`
@@ -45,9 +39,7 @@ func (storage *Storage) Init() error {
 			new BOOLEAN DEFAULT 1 NOT NULL,
 			position TEXT DEFAULT "" NOT NULL
 		) WITHOUT ROWID`)
-	if err != nil {
-		return err
-	}
+	autopanic(err)
 
 	_, err = storage.db.Exec(`
 		CREATE TABLE IF NOT EXISTS comments (
@@ -60,9 +52,7 @@ func (storage *Storage) Init() error {
 			body TEXT NOT NULL,
 			FOREIGN KEY (author) REFERENCES tracked(name)
 		) WITHOUT ROWID`)
-	if err != nil {
-		return err
-	}
+	autopanic(err)
 
 	_, err = storage.db.Exec(`
 		CREATE TABLE IF NOT EXISTS seen_posts (
@@ -70,18 +60,14 @@ func (storage *Storage) Init() error {
 			sub TEXT NOT NULL,
 			created TIMESTAMP NOT NULL
 		) WITHOUT ROWID`)
-	if err != nil {
-		return err
-	}
+	autopanic(err)
 
 	_, err = storage.db.Exec(`
 		CREATE TABLE IF NOT EXISTS known_objects (
 			id TEXT PRIMARY KEY,
 			date TIMESTAMP NOT NULL
 		) WITHOUT ROWID`)
-	if err != nil {
-		return err
-	}
+	autopanic(err)
 
 	_, err = storage.db.Exec(`
 		CREATE VIEW IF NOT EXISTS
@@ -90,25 +76,21 @@ func (storage *Storage) Init() error {
 			SELECT name, created, added, suspended, hidden, new, position, inactive
 			FROM tracked WHERE deleted = 0
 	`)
-	return err
+	autopanic(err)
 }
 
-func (storage *Storage) Close() error {
-	return storage.db.Close()
+func (storage *Storage) Close() {
+	autopanic(storage.db.Close())
 }
 
-func (storage *Storage) EnableWAL() error {
+func (storage *Storage) EnableWAL() {
 	var journal_mode string
 
-	if err := storage.db.QueryRow("PRAGMA journal_mode=WAL").Scan(&journal_mode); err != nil {
-		return err
-	}
+	autopanic(storage.db.QueryRow("PRAGMA journal_mode=WAL").Scan(&journal_mode))
 
 	if journal_mode != "wal" {
-		return fmt.Errorf("failed to set journal mode to Write-Ahead Log (WAL)")
+		autopanic(fmt.Errorf("failed to set journal mode to Write-Ahead Log (WAL)"))
 	}
-
-	return nil
 }
 
 func (storage *Storage) Vacuum() error {

@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+func autopanic(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
 type Duration struct {
 	Value time.Duration
 }
