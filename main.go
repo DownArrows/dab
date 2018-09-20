@@ -57,11 +57,15 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	report := flag.Bool("report", false, "Print the report for the last week.")
-	useradd := flag.String("useradd", "", "Add one or multiple comma-separated usernames to be tracked.")
+	report := flag.Bool("report", false, "Print the report for the last week and exit.")
+	useradd := flag.Bool("useradd", false, "Add one or multiple usernames to be tracked and exit.")
 	config_path := flag.String("config", "./dab.conf.json", "Path to the configuration file.")
 	compendium := flag.Bool("compendium", false, "Start the reddit bot with an update from DVT's compendium.")
 	flag.Parse()
+
+	if !*useradd && flag.NArg() > 0 {
+		logger.Fatal("No argument besides usernames when adding users is accepted")
+	}
 
 	raw_config, err := ioutil.ReadFile(*config_path)
 	if err != nil {
@@ -129,11 +133,11 @@ func main() {
 	}
 
 	// Command line registration
-	if *useradd != "" {
+	if *useradd {
 		if !reddit_ok {
 			logger.Fatal("reddit bot must be running to register users")
 		}
-		usernames := strings.Split(*useradd, ",")
+		usernames := flag.Args()
 		for _, username := range usernames {
 			hidden := strings.HasPrefix(username, config.HidePrefix)
 			username = strings.TrimPrefix(username, config.HidePrefix)
@@ -143,7 +147,6 @@ func main() {
 		}
 		return
 	}
-
 	// Launch reddit reddit_bot
 	if reddit_ok {
 		if *compendium {
