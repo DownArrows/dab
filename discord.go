@@ -12,17 +12,20 @@ import (
 )
 
 const (
-	EmojiFire         string = "\U0001f525"
-	EmojiThumbDown    string = "\U0001f44e"
-	EmojiOkHand       string = "\U0001f44c"
-	EmojiGrowingHeart string = "\U0001f497"
-	EmojiOneHundred   string = "\U0001f4af"
-	EmojiCrossBones   string = "\U00002620"
-	EmojiWhiteFlower  string = "\U0001f4ae"
-	EmojiRainbow      string = "\U0001f308"
-	EmojiHighVoltage  string = "\U000026a1"
-	EmojiThumbsUp     string = "\U0001f44d"
-	EmojiPrayingHands string = "\U0001f64f"
+	EmojiFire          string = "\U0001f525"
+	EmojiThumbDown     string = "\U0001f44e"
+	EmojiOkHand        string = "\U0001f44c"
+	EmojiGrowingHeart  string = "\U0001f497"
+	EmojiOneHundred    string = "\U0001f4af"
+	EmojiCrossBones    string = "\U00002620"
+	EmojiWhiteFlower   string = "\U0001f4ae"
+	EmojiRainbow       string = "\U0001f308"
+	EmojiHighVoltage   string = "\U000026a1"
+	EmojiThumbsUp      string = "\U0001f44d"
+	EmojiPrayingHands  string = "\U0001f64f"
+	EmojiWheelOfDharma string = "\u2638"
+	EmojiCheckMark     string = "\u2705"
+	EmojiCrossMark     string = "\u274c"
 )
 
 const DiscordMessageLengthLimit = 2000
@@ -442,11 +445,11 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 
 		var status string
 		if reply.Error != nil {
-			status = fmt.Sprintf("%s: %s", reply.User.Name, reply.Error)
+			status = fmt.Sprintf("%s%s: %s", EmojiCrossMark, reply.User.Name, reply.Error)
 		} else if !reply.Exists {
-			status = fmt.Sprintf("%s: not found", reply.User.Name)
+			status = fmt.Sprintf("%s%s: not found", EmojiCrossMark, reply.User.Name)
 		} else {
-			status = fmt.Sprintf("%s: ok", reply.User.Name)
+			status = fmt.Sprintf("%s%s", EmojiCheckMark, reply.User.Name)
 		}
 		statuses = append(statuses, status)
 	}
@@ -466,9 +469,9 @@ func (bot *DiscordBot) editUsers(action_name string, action func(string) error) 
 		results := make([]string, len(names))
 		for i, name := range names {
 			if err := action(name); err != nil {
-				results[i] = fmt.Sprintf("%s: error %s", name, err)
+				results[i] = fmt.Sprintf("%s%s: error %s", EmojiCrossMark, name, err)
 			} else {
-				results[i] = fmt.Sprintf("%s: ok", name)
+				results[i] = fmt.Sprintf("%s%s", EmojiCheckMark, name)
 			}
 		}
 
@@ -525,6 +528,6 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 		return err
 	}
 
-	reply := fmt.Sprintf("<@%s> karma for %s: %d / %d", msg.Author.ID, res.User.Name, total, negative)
+	reply := fmt.Sprintf("<@%s> karma%s for %s: %d / %d", msg.Author.ID, EmojiWheelOfDharma, res.User.Name, total, negative)
 	return bot.ChannelMessageSend(msg.ChannelID, reply)
 }
