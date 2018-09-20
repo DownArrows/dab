@@ -41,6 +41,7 @@ type DiscordBotConf struct {
 	Admin      string `json:"admin"`
 	Prefix     string `json:"prefix"`
 	Welcome    string `json:"welcome"`
+	HidePrefix string `json:"hide_prefix"`
 }
 
 type DiscordCommand struct {
@@ -68,6 +69,7 @@ type DiscordBot struct {
 	AddUser    chan UserQuery
 	Prefix     string
 	Welcome    *template.Template
+	HidePrefix string
 }
 
 type DiscordBotChannelsID struct {
@@ -135,6 +137,7 @@ func NewDiscordBot(storage *Storage, logger *log.Logger, conf DiscordBotConf) (*
 		redditLink: regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
 		AddUser:    make(chan UserQuery),
 		Prefix:     conf.Prefix,
+		HidePrefix: conf.HidePrefix,
 	}
 
 	bot.Commands = bot.GetCommandsDescriptors()
@@ -391,6 +394,16 @@ func (bot *DiscordBot) GetCommandsDescriptors() []DiscordCommand {
 			HasArgs:  true,
 		},
 		DiscordCommand{
+			Command:  "hide",
+			Callback: bot.editUsers("hide", func(u string) error { return bot.storage.EditHideUser(u, true) }),
+			HasArgs:  true,
+		},
+		DiscordCommand{
+			Command:  "unhide",
+			Callback: bot.editUsers("unhide", func(u string) error { return bot.storage.EditHideUser(u, false) }),
+			HasArgs:  true,
+		},
+		DiscordCommand{
 			Command: "sip",
 			Aliases: []string{"sipthebep"},
 			Callback: bot.simpleReply(fmt.Sprintf(
@@ -421,7 +434,10 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 			return err
 		}
 
-		bot.AddUser <- UserQuery{User: User{Name: name, Hidden: false}}
+		hidden := strings.HasPrefix(name, bot.HidePrefix)
+		name = strings.TrimPrefix(name, bot.HidePrefix)
+
+		bot.AddUser <- UserQuery{User: User{Name: name, Hidden: hidden}}
 		reply := <-bot.AddUser
 
 		var status string

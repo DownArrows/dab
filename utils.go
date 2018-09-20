@@ -48,6 +48,8 @@ type Config struct {
 		CleanupInterval Duration `json:"cleanup_interval"`
 	}
 
+	HidePrefix string `json:"hide_prefix"`
+
 	Reddit struct {
 		RedditAuth
 		RedditBotConf

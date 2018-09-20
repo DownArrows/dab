@@ -19,6 +19,8 @@ const defaults string = `{
 		"cleanup_interval": "1h"
 	},
 
+	"hide_prefix": "hide/",
+
 	"reddit": {
 		"max_batches": 5,
 		"max_age": "24h",
@@ -67,6 +69,9 @@ func main() {
 	}
 	if err := json.Unmarshal(raw_config, &config); err != nil {
 		logger.Fatal(err)
+	}
+	if config.HidePrefix == "" {
+		logger.Fatal("Prefix for 'hidden' users can't be an empty string")
 	}
 
 	// Storage
@@ -130,7 +135,9 @@ func main() {
 		}
 		usernames := strings.Split(*useradd, ",")
 		for _, username := range usernames {
-			if res := reddit_bot.AddUser(username, false, true); res.Error != nil && !res.Exists {
+			hidden := strings.HasPrefix(username, config.HidePrefix)
+			username = strings.TrimPrefix(username, config.HidePrefix)
+			if res := reddit_bot.AddUser(username, hidden, true); res.Error != nil && !res.Exists {
 				logger.Fatal(res.Error)
 			}
 		}
@@ -161,7 +168,9 @@ func main() {
 	}
 
 	// Discord
-
+	if config.Discord.DiscordBotConf.HidePrefix == "" {
+		config.Discord.DiscordBotConf.HidePrefix = config.HidePrefix
+	}
 	discord_ok := config.Discord.Token != ""
 	if !discord_ok {
 		logger.Print("disabling discord bot; empty 'token' field in 'discord' section of the configuration file")

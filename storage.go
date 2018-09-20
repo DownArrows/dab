@@ -207,6 +207,22 @@ func (storage *Storage) PurgeUser(username string) error {
 	return tx.Commit()
 }
 
+func (storage *Storage) EditHideUser(username string, hidden bool) error {
+	stmt, err := storage.db.Prepare("UPDATE tracked SET hidden = ? WHERE name = ? COLLATE NOCASE")
+	if err != nil {
+		return err
+	}
+
+	result, err := stmt.Exec(hidden, username)
+	if err != nil {
+		return err
+	}
+	if nb, _ := result.RowsAffected(); nb == 0 {
+		return fmt.Errorf("no user named '%s'", username)
+	}
+	return nil
+}
+
 func (storage *Storage) ListUsers() ([]User, error) {
 	rows, err := storage.db.Query(`
 		SELECT name, hidden, new, created, added, position, inactive
@@ -408,6 +424,7 @@ func (storage *Storage) GetCommentsBelowBetween(score int64, since, until time.T
 		ON comments.author = users.name
 		WHERE
 			comments.score <= ?
+			AND users.hidden = 0
 			AND comments.created BETWEEN ? AND ?
 		ORDER BY comments.score ASC`)
 	if err != nil {
@@ -526,7 +543,10 @@ func (storage *Storage) StatsBetween(since, until time.Time) (Stats, error) {
 			COUNT(comments.id) AS count
 		FROM comments JOIN users
 		ON comments.author = users.name
-		WHERE comments.created BETWEEN ? AND ? AND score < 0
+		WHERE
+			score < 0
+			AND users.hidden = 0
+			AND comments.created BETWEEN ? AND ?
 		GROUP BY comments.author`)
 	if err != nil {
 		return nil, err
