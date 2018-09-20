@@ -52,21 +52,42 @@ func NewReportTyper(storage ReportTyperStorage, conf ReportConf) *ReportTyper {
 	comment_tmpl := template.Must(template.New("comment").Parse(commentTmpl))
 	head_tmpl := template.Must(template.New("report").Parse(reportHeadTmpl))
 
-	rt := &ReportTyper{
+	return &ReportTyper{
 		Conf:        conf,
 		storage:     storage,
 		commentTmpl: comment_tmpl,
 		headTmpl:    head_tmpl,
 	}
-	return rt
 }
 
-func (rt *ReportTyper) ReportLastWeek() ([]string, error) {
-	return rt.ReportWeek(LastWeekCoordinates(rt.Conf.Timezone.Value))
+func (rt *ReportTyper) CurrentWeekCoordinates() (uint8, int) {
+	year, week := time.Now().In(rt.Conf.Timezone.Value).ISOWeek()
+	return uint8(week), year
+}
+
+func (rt *ReportTyper) LastWeekCoordinates() (uint8, int) {
+	year, week := time.Now().In(rt.Conf.Timezone.Value).AddDate(0, 0, -7).ISOWeek()
+	return uint8(week), year
+}
+
+func (rt *ReportTyper) WeekYearToDates(week_num uint8, year int) (time.Time, time.Time) {
+	week_start := rt.WeekNumToStartDate(week_num, year)
+	week_end := week_start.AddDate(0, 0, 7)
+	return week_start, week_end
+}
+
+func (rt *ReportTyper) WeekNumToStartDate(week_num uint8, year int) time.Time {
+	return rt.StartOfFirstWeek(year).AddDate(0, 0, int(week_num-1)*7)
+}
+
+func (rt *ReportTyper) StartOfFirstWeek(year int) time.Time {
+	in_first_week := time.Date(year, 1, 4, 0, 0, 0, 0, rt.Conf.Timezone.Value)
+	day_position := (in_first_week.Weekday() + 6) % 7
+	return in_first_week.AddDate(0, 0, -int(day_position))
 }
 
 func (rt *ReportTyper) ReportWeek(week_num uint8, year int) ([]string, error) {
-	start, end := WeekYearToDates(week_num, year, rt.Conf.Timezone.Value)
+	start, end := rt.WeekYearToDates(week_num, year)
 	return rt.Report(start.Add(-rt.Conf.Leeway.Value), end.Add(-rt.Conf.Leeway.Value))
 }
 
@@ -169,29 +190,6 @@ func (rt *ReportTyper) CommentToString(number uint64, comment Comment, average f
 		panic(err)
 	}
 	return output.String()
-}
-
-func LastWeekCoordinates(location *time.Location) (uint8, int) {
-	now := time.Now().In(location)
-	year, week := now.AddDate(0, 0, -7).ISOWeek()
-	return uint8(week), year
-}
-
-func WeekYearToDates(week_num uint8, year int, location *time.Location) (time.Time, time.Time) {
-	week_start := WeekNumToStartDate(week_num, year, location)
-	week_end := week_start.AddDate(0, 0, 7)
-	return week_start, week_end
-}
-
-func WeekNumToStartDate(week_num uint8, year int, location *time.Location) time.Time {
-	start := StartOfFirstWeek(year, location)
-	return start.AddDate(0, 0, int(week_num-1)*7)
-}
-
-func StartOfFirstWeek(year int, location *time.Location) time.Time {
-	in_first_week := time.Date(year, 1, 4, 0, 0, 0, 0, location)
-	day_position := (in_first_week.Weekday() + 6) % 7
-	return in_first_week.AddDate(0, 0, -int(day_position))
 }
 
 // TODO: post link to the rest if the max post length has been reached

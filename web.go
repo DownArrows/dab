@@ -12,22 +12,31 @@ import (
 )
 
 type WebServer struct {
-	Server      *http.Server
-	reportsTmpl *template.Template
-	Typer       *ReportTyper
+	Server          *http.Server
+	reportsTmpl     *template.Template
+	Typer           *ReportTyper
+	markdownOptions blackfriday.Option
+}
+
+type WebServerError struct {
+	Status int
+	Error  error
 }
 
 func NewWebServer(listen string, typer *ReportTyper) *WebServer {
-	reports_tmpl := template.Must(template.New("html_report").Parse(reportPage))
+	md_exts := blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis
 
 	wsrv := &WebServer{
-		reportsTmpl: reports_tmpl,
-		Typer:       typer,
+		Typer:           typer,
+		reportsTmpl:     template.Must(template.New("html_report").Parse(reportPage)),
+		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(md_exts)),
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/reports", wsrv.ReportIndex)
 	mux.HandleFunc("/reports/", wsrv.Report)
+	mux.HandleFunc("/reports/current", wsrv.ReportCurrent)
+	mux.HandleFunc("/reports/lastweek", wsrv.ReportLatest)
 	mux.HandleFunc("/reports/source/", wsrv.ReportSource)
 
 	wsrv.Server = &http.Server{
@@ -49,49 +58,96 @@ func (wsrv *WebServer) Close() error {
 	return wsrv.Server.Close()
 }
 
+func (wsrv *WebServer) newError(status int, err error) *WebServerError {
+	return &WebServerError{Status: status, Error: err}
+}
+
+func (wsrv *WebServer) processError(w http.ResponseWriter, err *WebServerError) {
+	w.WriteHeader(err.Status)
+	w.Write([]byte(fmt.Sprint(err.Error)))
+}
+
 func (wsrv *WebServer) ReportIndex(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
+func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
+	if source, _, _ := wsrv.getReportFromURL("/reports/source/", w, r); source != "" {
+		w.Write([]byte(source))
+	}
+}
+
 func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
-	year, week, source, err := wsrv.getReportFromURL("/reports/", w, r)
-	if err != nil {
+	source, week, year := wsrv.getReportFromURL("/reports/", w, r)
+	if source == "" {
 		return
 	}
+	write_page := wsrv.prepareReportPage(source, week, year)
+	write_page(w)
+}
 
-	opts := blackfriday.Extensions(blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis)
-	content := blackfriday.Run(source, blackfriday.WithExtensions(opts))
-	wsrv.reportsTmpl.Execute(w, map[string]interface{}{
+func (wsrv *WebServer) ReportCurrent(w http.ResponseWriter, r *http.Request) {
+	week, year := wsrv.Typer.CurrentWeekCoordinates()
+	source, err := wsrv.getReport(week, year)
+	if err != nil {
+		wsrv.processError(w, err)
+		return
+	}
+	write_page := wsrv.prepareReportPage(source, week, year)
+	write_page(w)
+}
+
+func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
+	week, year := wsrv.Typer.LastWeekCoordinates()
+	source, err := wsrv.getReport(week, year)
+	if err != nil {
+		wsrv.processError(w, err)
+		return
+	}
+	write_page := wsrv.prepareReportPage(source, week, year)
+	write_page(w)
+}
+
+func (wsrv *WebServer) getReportFromURL(prefix string, w http.ResponseWriter, r *http.Request) (string, uint8, int) {
+	week, year, ws_err := wsrv.getWeekYearFromURL(r, prefix)
+	if ws_err != nil {
+		wsrv.processError(w, ws_err)
+		return "", 0, 0
+	}
+	source, ws_err := wsrv.getReport(week, year)
+	if ws_err != nil {
+		wsrv.processError(w, ws_err)
+		return "", 0, 0
+	}
+	return source, week, year
+}
+
+func (wsrv *WebServer) prepareReportPage(source string, week uint8, year int) func(http.ResponseWriter) {
+	content := blackfriday.Run([]byte(source), wsrv.markdownOptions)
+	data := map[string]interface{}{
 		"Title":   fmt.Sprintf("Report of year %d week %d", year, week),
-		"Content": template.HTML(string(content)),
+		"Content": template.HTML(content),
 		"Year":    year,
 		"Week":    week,
-	})
-}
-
-func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
-	if _, _, report, err := wsrv.getReportFromURL("/reports/source/", w, r); err == nil {
-		w.Write(report)
 	}
+	return func(w http.ResponseWriter) { wsrv.reportsTmpl.Execute(w, data) }
 }
 
-func (wsrv *WebServer) getReportFromURL(leadingPath string, w http.ResponseWriter, r *http.Request) (int, int, []byte, error) {
+func (wsrv *WebServer) getReport(week uint8, year int) (string, *WebServerError) {
+	report, err := wsrv.Typer.ReportWeek(week, year)
+	if err != nil {
+		return "", wsrv.newError(404, fmt.Errorf("No report for week %d year %d.", week, year))
+	}
+	return strings.Join(report, ""), nil
+}
+
+func (wsrv *WebServer) getWeekYearFromURL(r *http.Request, leadingPath string) (uint8, int, *WebServerError) {
 	path := subPath(leadingPath, r)
-
-	year, week, err := yearAndWeek(path)
+	week, year, err := weekAndYear(path)
 	if err != nil {
-		w.WriteHeader(400)
-		w.Write([]byte(fmt.Sprint(err)))
-		return 0, 0, nil, err
+		return 0, 0, wsrv.newError(400, err)
 	}
-
-	report, err := wsrv.Typer.ReportWeek(uint8(week), year)
-	if err != nil {
-		http.NotFound(w, r)
-		return 0, 0, nil, err
-	}
-
-	return year, week, []byte(strings.Join(report, "")), nil
+	return week, year, nil
 }
 
 func subPath(prefix string, r *http.Request) []string {
@@ -106,7 +162,7 @@ func ignoreTrailing(path []string) []string {
 	return path
 }
 
-func yearAndWeek(path []string) (int, int, error) {
+func weekAndYear(path []string) (uint8, int, error) {
 	if len(path) != 2 {
 		return 0, 0, errors.New("URL must include '[year]/[week number]'")
 	}
@@ -121,7 +177,11 @@ func yearAndWeek(path []string) (int, int, error) {
 		return 0, 0, errors.New("week must be a valid number")
 	}
 
-	return year, week, nil
+	if week > 255 || week < 1 {
+		return 0, 0, errors.New("week must not be greater than 255 or lower than 1")
+	}
+
+	return uint8(week), year, nil
 }
 
 const reportPage = `<!DOCTYPE html>

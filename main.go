@@ -87,7 +87,7 @@ func main() {
 	if *report {
 		rt := NewReportTyper(storage, config.Report)
 
-		report, err := rt.ReportLastWeek()
+		report, err := rt.ReportWeek(rt.LastWeekCoordinates())
 		if err != nil {
 			logger.Fatal(err)
 		}
