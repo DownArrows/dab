@@ -461,7 +461,12 @@ func (storage *Storage) scanComments(rows *sql.Rows) ([]Comment, error) {
 }
 
 func (storage *Storage) saveComments(tx *sql.Tx, comments []Comment) error {
-	stmt, err := tx.Prepare("INSERT OR REPLACE INTO comments VALUES (?, ?, ?, ?, ?, ?, ?)")
+	stmt, err := tx.Prepare(`
+		INSERT INTO comments VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			score=excluded.score,
+			body=excluded.body
+	`)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -585,7 +590,10 @@ func (storage *Storage) SaveSubPostIDs(listing []Comment, sub string) error {
 		return err
 	}
 
-	stmt, err := tx.Prepare("INSERT OR REPLACE INTO seen_posts(id, sub, created) VALUES (?, ?, ?)")
+	stmt, err := tx.Prepare(`
+		INSERT INTO seen_posts(id, sub, created) VALUES (?, ?, ?)
+		ON CONFLICT(id) DO NOTHING
+	`)
 	if err != nil {
 		tx.Rollback()
 		return err
