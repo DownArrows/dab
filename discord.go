@@ -392,8 +392,8 @@ func (bot *DiscordBot) GetCommandsDescriptors() []DiscordCommand {
 			Admin:    true,
 		},
 		DiscordCommand{
-			Command:  "exists",
-			Callback: bot.userExists,
+			Command:  "info",
+			Callback: bot.userInfo,
 			HasArgs:  true,
 		},
 		DiscordCommand{
@@ -484,24 +484,32 @@ func (bot *DiscordBot) editUsers(action_name string, action func(string) error) 
 	}
 }
 
-func (bot *DiscordBot) userExists(msg DiscordMessage) error {
+func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 	username := msg.Content
 
-	users, err := bot.storage.ListUsers()
-	if err != nil {
-		return err
-	}
+	query := bot.storage.GetUser(username)
 
-	status := "not found"
-	for _, user := range users {
-		if user.Username(username) {
-			username = user.Name
-			status = "found"
-			break
+	var status string
+	if query.Exists {
+		user := query.User
+		info := []string{
+			user.Name + " has been created on " + user.Created.Format(time.RFC850),
+			"has been added to the database on " + user.Added.Format(time.RFC850),
 		}
+		if user.Hidden {
+			info = append(info, "is hidden from reports")
+		}
+		if user.Suspended {
+			info = append(info, "has been suspended or deleted")
+		} else if user.Inactive {
+			info = append(info, "seems to be inactive")
+		}
+		status = strings.Join(info[:len(info)-1], ", ") + ", and " + info[len(info)-1]
+	} else {
+		status = username + " not found in the database"
 	}
 
-	response := fmt.Sprintf("<@%s> User %s %s.", msg.Author.ID, username, status)
+	response := fmt.Sprintf("<@%s> user %s.", msg.Author.ID, status)
 	return bot.ChannelMessageSend(msg.ChannelID, response)
 }
 
