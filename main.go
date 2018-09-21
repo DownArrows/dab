@@ -16,7 +16,7 @@ import (
 const defaults string = `{
 	"database": {
 		"path": "./dab.db",
-		"cleanup_interval": "1h"
+		"cleanup_interval": "6h"
 	},
 
 	"hide_prefix": "hide/",
@@ -84,14 +84,19 @@ func main() {
 	storage := NewStorage(db_path)
 	defer storage.Close()
 
-	go func() {
-		for {
-			time.Sleep(config.Database.CleanupInterval.Value)
-			if err := storage.Vacuum(); err != nil {
-				logger.Fatal(err)
-			}
+	if cleanup := config.Database.CleanupInterval.Value; cleanup != 0*time.Second {
+		if cleanup < 1*time.Minute {
+			logger.Fatal("database cleanup interval can't be under a minute if superior to 0s")
 		}
-	}()
+		go func() {
+			for {
+				time.Sleep(cleanup)
+				if err := storage.Vacuum(); err != nil {
+					logger.Fatal(err)
+				}
+			}
+		}()
+	}
 
 	if *report {
 		rt := NewReportTyper(storage, config.Report)
