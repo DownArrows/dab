@@ -135,13 +135,6 @@ func (r Report) Len() int {
 	return len(r.Comments)
 }
 
-func (r Report) Chunk(i int) string {
-	if i == 0 {
-		return r.FormatHead()
-	}
-	return r.Comment(i - 1).String()
-}
-
 func (r Report) Comment(i int) ReportComment {
 	comment := r.Comments[i]
 	return NewReportComment(i+1, comment, r.Stats[comment.Author], r.CommentTemplate)

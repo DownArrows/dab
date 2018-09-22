@@ -15,20 +15,21 @@ func autopanic(err error) {
 }
 
 type Chunks interface {
-	Len() int
-	Chunk(int) string
+	Next(int) (string, int)
 }
 
-func Batches(chunks Chunks, limits func(int, int) int) ([][]string, error) {
+func Batches(chunks Chunks) ([][]string, error) {
 	var batches [][]string
 
 	var batch = []string{}
-	nb_chunks := chunks.Len()
 	len_batch := 0
-	for i := 0; i < nb_chunks; i++ {
-		chunk := chunks.Chunk(i)
+	for {
+		chunk, limit := chunks.Next(len(batches))
+		if limit == 0 {
+			break
+		}
+
 		len_chunk := len(chunk)
-		limit := limits(i, len(batches))
 
 		if len_chunk > limit {
 			return batches, fmt.Errorf("chunk '%s' is too long (%d > %d)", chunk, len_chunk, limit)
