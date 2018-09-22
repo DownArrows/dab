@@ -8,15 +8,28 @@ import (
 )
 
 type Storage struct {
-	db   *sql.DB
-	Path string
+	db              *sql.DB
+	Path            string
+	CleanupInterval time.Duration
 }
 
-func NewStorage(dbPath string) *Storage {
-	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", dbPath))
+func NewStorage(conf StorageConf) *Storage {
+	storage := &Storage{
+		Path:            conf.Path,
+		CleanupInterval: conf.CleanupInterval.Value,
+	}
+	if storage.CleanupInterval < 1*time.Minute {
+		panic("database cleanup interval can't be under a minute if superior to 0s")
+	}
+
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", storage.Path))
 	autopanic(err)
-	storage := &Storage{db: db, Path: dbPath}
+
+	storage.db = db
+
 	storage.Init()
+	storage.launchPeriodicVacuum()
+
 	return storage
 }
 
@@ -77,6 +90,19 @@ func (storage *Storage) Init() {
 			FROM tracked WHERE deleted = 0
 	`)
 	autopanic(err)
+}
+
+func (storage *Storage) launchPeriodicVacuum() {
+	if storage.CleanupInterval == 0*time.Second {
+		return
+	}
+
+	go func() {
+		for {
+			time.Sleep(storage.CleanupInterval)
+			autopanic(storage.Vacuum())
+		}
+	}()
 }
 
 func (storage *Storage) Close() {

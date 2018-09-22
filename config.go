@@ -38,6 +38,11 @@ const Defaults string = `{
 
 }`
 
+type StorageConf struct {
+	Path            string   `json:"path"`
+	CleanupInterval Duration `json:"cleanup_interval"`
+}
+
 type RedditAuth struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -72,10 +77,7 @@ type DiscordBotConf struct {
 }
 
 type Config struct {
-	Database struct {
-		Path            string   `json:"path"`
-		CleanupInterval Duration `json:"cleanup_interval"`
-	}
+	Database StorageConf
 
 	HidePrefix string `json:"hide_prefix"`
 

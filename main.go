@@ -34,24 +34,9 @@ func main() {
 	}
 
 	// Storage
-	db_path := config.Database.Path
-	logger.Print("using database ", db_path)
-	storage := NewStorage(db_path)
+	logger.Print("using database ", config.Database.Path)
+	storage := NewStorage(config.Database)
 	defer storage.Close()
-
-	if cleanup := config.Database.CleanupInterval.Value; cleanup != 0*time.Second {
-		if cleanup < 1*time.Minute {
-			logger.Fatal("database cleanup interval can't be under a minute if superior to 0s")
-		}
-		go func() {
-			for {
-				time.Sleep(cleanup)
-				if err := storage.Vacuum(); err != nil {
-					logger.Fatal(err)
-				}
-			}
-		}()
-	}
 
 	if *report {
 		rf := NewReportFactory(storage, config.Report)
