@@ -2,17 +2,57 @@ package main
 
 import (
 	"encoding/json"
-	"math"
-	"sort"
+	"fmt"
 	"strings"
 	"time"
 )
+
+// Simple utility functions
 
 func autopanic(err error) {
 	if err != nil {
 		panic(err)
 	}
 }
+
+type Chunks interface {
+	Len() int
+	Chunk(int) string
+}
+
+func Batches(chunks Chunks, limits func(int, int) int) ([][]string, error) {
+	var batches [][]string
+
+	var batch = []string{}
+	nb_chunks := chunks.Len()
+	len_batch := 0
+	for i := 0; i < nb_chunks; i++ {
+		chunk := chunks.Chunk(i)
+		len_chunk := len(chunk)
+		limit := limits(i, len(batches))
+
+		if len_chunk > limit {
+			return batches, fmt.Errorf("chunk '%s' is too long (%d > %d)", chunk, len_chunk, limit)
+		}
+
+		if len_batch+len_chunk > limit {
+			batches = append(batches, batch)
+			batch = []string{}
+			len_batch = 0
+		}
+
+		batch = append(batch, chunk)
+		len_batch += len(chunk)
+	}
+
+	if len(batch) > 0 {
+		batches = append(batches, batch)
+	}
+
+	return batches, nil
+}
+
+// Configuration
 
 type Duration struct {
 	Value time.Duration
@@ -71,6 +111,8 @@ type Config struct {
 	}
 }
 
+// Common models
+
 type Comment struct {
 	Id        string
 	Author    string
@@ -108,65 +150,4 @@ type UserQuery struct {
 	User   User
 	Exists bool
 	Error  error
-}
-
-type UserStats struct {
-	Author  string
-	Average float64
-	Delta   int64
-	Count   uint64
-}
-
-type Stats map[string]UserStats
-
-func (s Stats) DeltasToScores() Scores {
-	result := make([]GenStats, 0, len(s))
-	for name, data := range s {
-		result = append(result, GenStats{
-			Author: name,
-			Score:  data.Delta,
-			Count:  data.Count,
-		})
-	}
-	return Scores{v: result}
-}
-
-func (s Stats) AveragesToScores() Scores {
-	result := make([]GenStats, 0, len(s))
-	for name, data := range s {
-		result = append(result, GenStats{
-			Author: name,
-			Score:  int64(math.Round(data.Average)),
-			Count:  data.Count,
-		})
-	}
-	return Scores{v: result}
-}
-
-type GenStats struct {
-	Author string
-	Count  uint64
-	Score  int64
-}
-
-// We have to define this to be able to use sort.Sort
-type Scores struct {
-	v []GenStats
-}
-
-func (s Scores) Len() int {
-	return len(s.v)
-}
-
-func (s Scores) Less(i, j int) bool {
-	return s.v[i].Score < s.v[j].Score
-}
-
-func (s Scores) Swap(i, j int) {
-	s.v[i], s.v[j] = s.v[j], s.v[i]
-}
-
-func (s Scores) Sort() []GenStats {
-	sort.Sort(s)
-	return s.v
 }

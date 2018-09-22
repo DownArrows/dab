@@ -539,7 +539,7 @@ func (storage *Storage) getKarma(username, cond string) (int64, error) {
 	return karma.Int64, err
 }
 
-func (storage *Storage) StatsBetween(since, until time.Time) (Stats, error) {
+func (storage *Storage) StatsBetween(since, until time.Time) (UserStatsMap, error) {
 	stmt, err := storage.db.Prepare(`
 		SELECT
 			comments.author AS author,
@@ -564,13 +564,13 @@ func (storage *Storage) StatsBetween(since, until time.Time) (Stats, error) {
 	}
 	defer rows.Close()
 
-	stats := make(Stats)
+	var stats = UserStatsMap{}
 	for rows.Next() {
 		var data UserStats
-		if err := rows.Scan(&data.Author, &data.Average, &data.Delta, &data.Count); err != nil {
+		if err := rows.Scan(&data.Name, &data.Average, &data.Delta, &data.Count); err != nil {
 			return nil, err
 		}
-		stats[data.Author] = data
+		stats[data.Name] = data
 	}
 
 	if err = rows.Err(); err != nil {

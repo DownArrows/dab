@@ -99,15 +99,12 @@ func main() {
 	}
 
 	if *report {
-		rt := NewReportTyper(storage, config.Report)
-
-		report, err := rt.ReportWeek(rt.LastWeekCoordinates())
-		if err != nil {
-			logger.Fatal(err)
+		rf := NewReportFactory(storage, config.Report)
+		report := rf.ReportWeek(rf.LastWeekCoordinates())
+		if report.Len() == 0 {
+			logger.Fatal("empty report")
 		}
-		for _, chunk := range report {
-			fmt.Println(chunk)
-		}
+		fmt.Println(report)
 		return
 	}
 
@@ -225,8 +222,8 @@ func main() {
 	// Web server for reports
 	if config.Web.Listen != "" {
 		logger.Print("lauching the web server")
-		rt := NewReportTyper(storage, config.Report)
-		wsrv := NewWebServer(config.Web.Listen, rt)
+		rf := NewReportFactory(storage, config.Report)
+		wsrv := NewWebServer(config.Web.Listen, rf)
 		go func() {
 			err := wsrv.Run()
 			if err != nil {

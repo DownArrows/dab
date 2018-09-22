@@ -14,7 +14,7 @@ import (
 type WebServer struct {
 	Server          *http.Server
 	reportsTmpl     *template.Template
-	Typer           *ReportTyper
+	Reports         *ReportFactory
 	markdownOptions blackfriday.Option
 }
 
@@ -23,11 +23,11 @@ type WebServerError struct {
 	Error  error
 }
 
-func NewWebServer(listen string, typer *ReportTyper) *WebServer {
+func NewWebServer(listen string, reports *ReportFactory) *WebServer {
 	md_exts := blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis
 
 	wsrv := &WebServer{
-		Typer:           typer,
+		Reports:         reports,
 		reportsTmpl:     template.Must(template.New("html_report").Parse(reportPage)),
 		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(md_exts)),
 	}
@@ -87,7 +87,7 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wsrv *WebServer) ReportCurrent(w http.ResponseWriter, r *http.Request) {
-	week, year := wsrv.Typer.CurrentWeekCoordinates()
+	week, year := wsrv.Reports.CurrentWeekCoordinates()
 	source, err := wsrv.getReport(week, year)
 	if err != nil {
 		wsrv.processError(w, err)
@@ -98,7 +98,7 @@ func (wsrv *WebServer) ReportCurrent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
-	week, year := wsrv.Typer.LastWeekCoordinates()
+	week, year := wsrv.Reports.LastWeekCoordinates()
 	source, err := wsrv.getReport(week, year)
 	if err != nil {
 		wsrv.processError(w, err)
@@ -134,11 +134,11 @@ func (wsrv *WebServer) prepareReportPage(source string, week uint8, year int) fu
 }
 
 func (wsrv *WebServer) getReport(week uint8, year int) (string, *WebServerError) {
-	report, err := wsrv.Typer.ReportWeek(week, year)
-	if err != nil {
+	report := wsrv.Reports.ReportWeek(week, year)
+	if report.Len() == 0 {
 		return "", wsrv.newError(404, fmt.Errorf("No report for week %d year %d.", week, year))
 	}
-	return strings.Join(report, ""), nil
+	return fmt.Sprint(report), nil
 }
 
 func (wsrv *WebServer) getWeekYearFromURL(r *http.Request, leadingPath string) (uint8, int, *WebServerError) {
