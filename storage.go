@@ -18,7 +18,7 @@ func NewStorage(conf StorageConf) *Storage {
 		Path:            conf.Path,
 		CleanupInterval: conf.CleanupInterval.Value,
 	}
-	if storage.CleanupInterval < 1*time.Minute {
+	if storage.CleanupInterval < 1*time.Minute && storage.CleanupInterval != 0*time.Second {
 		panic("database cleanup interval can't be under a minute if superior to 0s")
 	}
 

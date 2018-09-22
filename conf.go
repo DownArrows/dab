@@ -76,7 +76,7 @@ type DiscordBotConf struct {
 	HidePrefix string `json:"hide_prefix"`
 }
 
-type Config struct {
+type Configuration struct {
 	Database StorageConf
 
 	HidePrefix string `json:"hide_prefix"`
@@ -102,25 +102,25 @@ type Config struct {
 	}
 }
 
-func NewConfig(path string) (Config, error) {
-	var config Config
+func NewConfiguration(path string) (Configuration, error) {
+	var conf Configuration
 
-	autopanic(json.Unmarshal([]byte(Defaults), &config))
+	autopanic(json.Unmarshal([]byte(Defaults), &conf))
 
-	raw_config, err := ioutil.ReadFile(path)
+	raw_conf, err := ioutil.ReadFile(path)
 	if err != nil {
-		return config, err
+		return conf, err
 	}
 
-	if err := json.Unmarshal(raw_config, &config); err != nil {
-		return config, err
+	if err := json.Unmarshal(raw_conf, &conf); err != nil {
+		return conf, err
 	}
 
-	if config.HidePrefix == "" {
+	if conf.HidePrefix == "" {
 		panic("Prefix for 'hidden' users can't be an empty string")
 	}
 
-	return config, nil
+	return conf, nil
 }
 
 type Duration struct {

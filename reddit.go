@@ -26,6 +26,19 @@ func NewRedditBot(scanner *Scanner, storage *Storage, logger *log.Logger, conf R
 	}
 }
 
+func (bot *RedditBot) AutoCompendiumUpdate(interval time.Duration) {
+	if interval == 0*time.Second {
+		bot.logger.Print("interval for auto-update from DVT's compendium is 0s, disabling")
+		return
+	}
+	for {
+		time.Sleep(interval)
+		if err := bot.UpdateUsersFromCompendium(); err != nil {
+			bot.logger.Print(err)
+		}
+	}
+}
+
 func (bot *RedditBot) UpdateUsersFromCompendium() error {
 	page, err := bot.scanner.WikiPage("DownvoteTrolling", "compendium")
 	if err != nil {
