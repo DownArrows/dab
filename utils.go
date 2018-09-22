@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -50,65 +49,6 @@ func Batches(chunks Chunks, limits func(int, int) int) ([][]string, error) {
 	}
 
 	return batches, nil
-}
-
-// Configuration
-
-type Duration struct {
-	Value time.Duration
-}
-
-func (d *Duration) UnmarshalJSON(raw []byte) error {
-	var value string
-	err := json.Unmarshal(raw, &value)
-	if err != nil {
-		return err
-	}
-	d.Value, err = time.ParseDuration(value)
-	return err
-}
-
-type Timezone struct {
-	Value *time.Location
-}
-
-func (tz *Timezone) UnmarshalJSON(raw []byte) error {
-	var value string
-	err := json.Unmarshal(raw, &value)
-	if err != nil {
-		return err
-	}
-	tz.Value, err = time.LoadLocation(value)
-	return err
-}
-
-type Config struct {
-	Database struct {
-		Path            string   `json:"path"`
-		CleanupInterval Duration `json:"cleanup_interval"`
-	}
-
-	HidePrefix string `json:"hide_prefix"`
-
-	Reddit struct {
-		RedditAuth
-		RedditBotConf
-		UserAgent                string   `json:"user_agent"`
-		UnsuspensionInterval     Duration `json:"unsuspension_interval"`
-		CompendiumUpdateInterval Duration `json:"compendium_update_interval"`
-		DVTInterval              Duration `json:"dvt_interval"`
-	}
-
-	Report ReportConf
-
-	Discord struct {
-		DiscordBotConf
-		HighScoreThreshold int64 `json:"highscore_threshold"`
-	}
-
-	Web struct {
-		Listen string `json:"listen"`
-	}
 }
 
 // Common models

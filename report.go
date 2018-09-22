@@ -10,14 +10,6 @@ import (
 	"time"
 )
 
-type ReportConf struct {
-	Leeway    Duration `json:"leeway"`
-	Timezone  Timezone `json:"timezone"`
-	Cutoff    int64    `json:"cutoff"`
-	MaxLength uint64   `json:"max_length"`
-	NbTop     int      `json:"nb_top"`
-}
-
 type ReportFactory struct {
 	storage         ReportFactoryStorage
 	Leeway          time.Duration

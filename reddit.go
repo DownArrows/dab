@@ -7,13 +7,6 @@ import (
 	"time"
 )
 
-type RedditBotConf struct {
-	MaxAge              Duration `json:"max_age"`
-	MaxBatches          uint     `json:"max_batches"`
-	InactivityThreshold Duration `json:"inactivity_threshold"`
-	FullScanInterval    Duration `json:"full_scan_interval"`
-}
-
 type RedditBot struct {
 	Conf           RedditBotConf
 	Suspended      chan User

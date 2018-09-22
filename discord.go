@@ -36,17 +36,6 @@ var linkReactions = []string{
 	EmojiHighVoltage,
 }
 
-type DiscordBotConf struct {
-	Token      string `json:"token"`
-	General    string `json:"general"`
-	Log        string `json:"log"`
-	HighScores string `json:"highscores"`
-	Admin      string `json:"admin"`
-	Prefix     string `json:"prefix"`
-	Welcome    string `json:"welcome"`
-	HidePrefix string `json:"hide_prefix"`
-}
-
 type DiscordCommand struct {
 	Command   string
 	Aliases   []string

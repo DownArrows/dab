@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -13,49 +11,12 @@ import (
 	"time"
 )
 
-const defaults string = `{
-	"database": {
-		"path": "./dab.db",
-		"cleanup_interval": "6h"
-	},
-
-	"hide_prefix": "hide/",
-
-	"reddit": {
-		"max_batches": 5,
-		"max_age": "24h",
-		"unsuspension_interval": "15m",
-		"inactivity_threshold": "2200h",
-		"full_scan_interval": "6h",
-		"dvt_interval": "5m"
-	},
-
-	"report": {
-		"timezone": "UTC",
-		"leeway": "12h",
-		"cutoff": -50,
-		"max_length": 400000,
-		"nb_top": 5
-	},
-
-	"discord": {
-		"highscore_threshold": -1000,
-		"prefix": "!"
-	}
-
-}`
-
 const logger_opts int = log.Lshortfile
 
 func main() {
 	logger := log.New(os.Stderr, "", logger_opts)
 
 	defer logger.Print("DAB stopped")
-
-	config := Config{}
-	if err := json.Unmarshal([]byte(defaults), &config); err != nil {
-		logger.Fatal(err)
-	}
 
 	report := flag.Bool("report", false, "Print the report for the last week and exit.")
 	useradd := flag.Bool("useradd", false, "Add one or multiple usernames to be tracked and exit.")
@@ -67,15 +28,9 @@ func main() {
 		logger.Fatal("No argument besides usernames when adding users is accepted")
 	}
 
-	raw_config, err := ioutil.ReadFile(*config_path)
+	config, err := NewConfig(*config_path)
 	if err != nil {
 		logger.Fatal(err)
-	}
-	if err := json.Unmarshal(raw_config, &config); err != nil {
-		logger.Fatal(err)
-	}
-	if config.HidePrefix == "" {
-		logger.Fatal("Prefix for 'hidden' users can't be an empty string")
 	}
 
 	// Storage
