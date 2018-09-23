@@ -36,46 +36,6 @@ var linkReactions = []string{
 	EmojiHighVoltage,
 }
 
-type DiscordCommand struct {
-	Command   string
-	Aliases   []string
-	Callback  func(DiscordMessage) error
-	Admin     bool
-	NoCleanUp bool
-	HasArgs   bool
-}
-
-type DiscordWelcomeData struct {
-	ChannelsID DiscordBotChannelsID
-	Member     DiscordMember
-}
-
-type DiscordBot struct {
-	logger     *log.Logger
-	storage    *Storage
-	client     *discordgo.Session
-	Commands   []DiscordCommand
-	redditLink *regexp.Regexp
-	ChannelsID DiscordBotChannelsID
-	AdminID    string
-	AddUser    chan UserQuery
-	Prefix     string
-	Welcome    *template.Template
-	HidePrefix string
-}
-
-type DiscordBotChannelsID struct {
-	General    string
-	Log        string
-	HighScores string
-}
-
-type DiscordMember struct {
-	ID            string
-	Name          string
-	Discriminator string
-}
-
 type DiscordMessage struct {
 	Args      []string
 	Author    DiscordMember
@@ -85,8 +45,23 @@ type DiscordMessage struct {
 	ID        string
 }
 
+type DiscordMember struct {
+	ID            string
+	Name          string
+	Discriminator string
+}
+
 func (member DiscordMember) FQN() string {
 	return member.Name + "#" + member.Discriminator
+}
+
+type DiscordCommand struct {
+	Command   string
+	Aliases   []string
+	Callback  func(DiscordMessage) error
+	Admin     bool
+	NoCleanUp bool
+	HasArgs   bool
 }
 
 func (cmd DiscordCommand) Match(prefix, content string) (bool, string) {
@@ -114,6 +89,31 @@ func (cmd DiscordCommand) SingleMatch(name, prefix, content string) (bool, strin
 		}
 	}
 	return false, ""
+}
+
+type DiscordWelcomeData struct {
+	ChannelsID DiscordBotChannelsID
+	Member     DiscordMember
+}
+
+type DiscordBotChannelsID struct {
+	General    string
+	Log        string
+	HighScores string
+}
+
+type DiscordBot struct {
+	logger     *log.Logger
+	storage    *Storage
+	client     *discordgo.Session
+	Commands   []DiscordCommand
+	redditLink *regexp.Regexp
+	ChannelsID DiscordBotChannelsID
+	AdminID    string
+	AddUser    chan UserQuery
+	Prefix     string
+	Welcome    *template.Template
+	HidePrefix string
 }
 
 func NewDiscordBot(storage *Storage, logger *log.Logger, conf DiscordBotConf) (*DiscordBot, error) {
