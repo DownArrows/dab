@@ -82,53 +82,47 @@ func TestCRUDComments(t *testing.T) {
 		t.Fail()
 	}
 
-	comments := []Comment{
-		Comment{
-			Id:        "comment1",
-			Author:    "Author1",
-			Score:     -100,
-			Permalink: "https://example.org/comment1",
-			Sub:       "sub",
-			Created:   rnow().Unix(),
-			Body:      "This is the first test comment.",
-		},
-		Comment{
-			Id:        "comment2",
-			Author:    "Author2",
-			Score:     -70,
-			Permalink: "https://example.org/comment2",
-			Sub:       "sub",
-			Created:   rnow().Unix(),
-			Body:      "This is the second test comment.",
-		},
-		Comment{
-			Id:        "comment3",
-			Author:    "Author1",
-			Score:     75,
-			Permalink: "https://example.org/comment3",
-			Sub:       "sub",
-			Created:   rnow().Unix(),
-			Body:      "This is the third test comment.",
-		},
-		Comment{
-			Id:        "comment4",
-			Author:    "Author2",
-			Score:     -140,
-			Permalink: "https://example.org/comment4",
-			Sub:       "sub",
-			Created:   rnow().Add(-2 * time.Hour).Unix(),
-			Body:      "This is the fourth test comment.",
-		},
-		Comment{
-			Id:        "comment5",
-			Author:    "Author3",
-			Score:     -340,
-			Permalink: "https://example.org/comment5",
-			Sub:       "sub",
-			Created:   rnow().Add(-2 * time.Hour).Unix(),
-			Body:      "This is the fifth test comment.",
-		},
-	}
+	comments := []Comment{{
+		Id:        "comment1",
+		Author:    "Author1",
+		Score:     -100,
+		Permalink: "https://example.org/comment1",
+		Sub:       "sub",
+		Created:   rnow().Unix(),
+		Body:      "This is the first test comment.",
+	}, {
+		Id:        "comment2",
+		Author:    "Author2",
+		Score:     -70,
+		Permalink: "https://example.org/comment2",
+		Sub:       "sub",
+		Created:   rnow().Unix(),
+		Body:      "This is the second test comment.",
+	}, {
+		Id:        "comment3",
+		Author:    "Author1",
+		Score:     75,
+		Permalink: "https://example.org/comment3",
+		Sub:       "sub",
+		Created:   rnow().Unix(),
+		Body:      "This is the third test comment.",
+	}, {
+		Id:        "comment4",
+		Author:    "Author2",
+		Score:     -140,
+		Permalink: "https://example.org/comment4",
+		Sub:       "sub",
+		Created:   rnow().Add(-2 * time.Hour).Unix(),
+		Body:      "This is the fourth test comment.",
+	}, {
+		Id:        "comment5",
+		Author:    "Author3",
+		Score:     -340,
+		Permalink: "https://example.org/comment5",
+		Sub:       "sub",
+		Created:   rnow().Add(-2 * time.Hour).Unix(),
+		Body:      "This is the fifth test comment.",
+	}}
 
 	start := time.Now().Add(-time.Hour)
 	end := time.Now().Add(time.Hour)

@@ -352,62 +352,51 @@ func (bot *DiscordBot) addRandomReactionTo(msg DiscordMessage) error {
 }
 
 func (bot *DiscordBot) GetCommandsDescriptors() []DiscordCommand {
-	return []DiscordCommand{
-		DiscordCommand{
-			Command:  "karma",
-			Callback: bot.karma,
-			HasArgs:  true,
-		},
-		DiscordCommand{
-			Command:  "ping",
-			Callback: bot.simpleReply("pong"),
-			Admin:    true,
-		},
-		DiscordCommand{
-			Command:  "register",
-			Callback: bot.register,
-			HasArgs:  true,
-		},
-		DiscordCommand{
-			Command:  "unregister",
-			Callback: bot.editUsers("unregister", bot.storage.DelUser),
-			HasArgs:  true,
-			Admin:    true,
-		},
-		DiscordCommand{
-			Command:  "purge",
-			Callback: bot.editUsers("purge", bot.storage.PurgeUser),
-			HasArgs:  true,
-			Admin:    true,
-		},
-		DiscordCommand{
-			Command:  "info",
-			Callback: bot.userInfo,
-			HasArgs:  true,
-		},
-		DiscordCommand{
-			Command:  "hide",
-			Callback: bot.editUsers("hide", bot.storage.HideUser),
-			HasArgs:  true,
-		},
-		DiscordCommand{
-			Command:  "unhide",
-			Callback: bot.editUsers("unhide", bot.storage.UnHideUser),
-			HasArgs:  true,
-		},
-		DiscordCommand{
-			Command: "sip",
-			Aliases: []string{"sipthebep"},
-			Callback: bot.simpleReply(fmt.Sprintf(
-				"More like N0000 1 cares %s This shitpost is horrible %s",
-				EmojiFire, strings.Repeat(EmojiThumbDown, 3))),
-		},
-		DiscordCommand{
-			Command:  "separator",
-			Aliases:  []string{"sep", "="},
-			Callback: bot.simpleReply("══════════════════"),
-		},
-	}
+	return []DiscordCommand{{
+		Command:  "karma",
+		Callback: bot.karma,
+		HasArgs:  true,
+	}, {
+		Command:  "ping",
+		Callback: bot.simpleReply("pong"),
+		Admin:    true,
+	}, {
+		Command:  "register",
+		Callback: bot.register,
+		HasArgs:  true,
+	}, {
+		Command:  "unregister",
+		Callback: bot.editUsers("unregister", bot.storage.DelUser),
+		HasArgs:  true,
+		Admin:    true,
+	}, {
+		Command:  "purge",
+		Callback: bot.editUsers("purge", bot.storage.PurgeUser),
+		HasArgs:  true,
+		Admin:    true,
+	}, {
+		Command:  "info",
+		Callback: bot.userInfo,
+		HasArgs:  true,
+	}, {
+		Command:  "hide",
+		Callback: bot.editUsers("hide", bot.storage.HideUser),
+		HasArgs:  true,
+	}, {
+		Command:  "unhide",
+		Callback: bot.editUsers("unhide", bot.storage.UnHideUser),
+		HasArgs:  true,
+	}, {
+		Command: "sip",
+		Aliases: []string{"sipthebep"},
+		Callback: bot.simpleReply(fmt.Sprintf(
+			"More like N0000 1 cares %s This shitpost is horrible %s",
+			EmojiFire, strings.Repeat(EmojiThumbDown, 3))),
+	}, {
+		Command:  "separator",
+		Aliases:  []string{"sep", "="},
+		Callback: bot.simpleReply("══════════════════"),
+	}}
 }
 
 func (bot *DiscordBot) simpleReply(reply string) func(DiscordMessage) error {
