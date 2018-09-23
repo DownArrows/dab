@@ -178,4 +178,30 @@ func TestCRUDComments(t *testing.T) {
 			t.Errorf("expected author1 and author2 to be active, not %v", active)
 		}
 	})
+
+	t.Run("purge", func(t *testing.T) {
+		err := s.PurgeUser("Author1")
+		if err != nil {
+			t.Error(err)
+		}
+		active := s.ListUsers()
+		if len(active) != 2 {
+			t.Errorf("after purge of Author1 there should only be Author2 and Author3 left, not %v", active)
+		}
+	})
+
+	t.Run("purge fail", func(t *testing.T) {
+		err := s.PurgeUser("NotUser")
+		if err == nil {
+			t.Error("NotUser doesn't exist and should lead to an error")
+		}
+		active := s.ListUsers()
+		if len(active) != 2 {
+			t.Errorf("list of users should be left unchanged, instead of getting %v", active)
+		}
+		comments := s.GetCommentsBelowBetween(-50, start, end)
+		if len(comments) != 1 {
+			t.Errorf("comments should be left unchanged, instead of getting %v", comments)
+		}
+	})
 }
