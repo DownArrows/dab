@@ -205,3 +205,45 @@ func TestCRUDComments(t *testing.T) {
 		}
 	})
 }
+
+func TestKeyValue(t *testing.T) {
+	s := NewStorage(StorageConf{Path: ":memory:"})
+	t.Run("known object write", func(t *testing.T) {
+		if err := s.SaveKnownObject("someid"); err != nil {
+			t.Error(err)
+		}
+	})
+
+	t.Run("known object read", func(t *testing.T) {
+		if !s.IsKnownObject("someid") {
+			t.Errorf("'someid' should be a known object")
+		}
+	})
+
+	t.Run("unknown object read", func(t *testing.T) {
+		if s.IsKnownObject("unknownid") {
+			t.Errorf("'unknown' should not be a known object")
+		}
+	})
+
+	t.Run("write sub posts' IDs", func(t *testing.T) {
+		if err := s.SaveSubPostIDs([]Comment{{Id: "a"}, {Id: "b"}}, "sub"); err != nil {
+			t.Error(err)
+		}
+	})
+
+	t.Run("read sub posts' IDs", func(t *testing.T) {
+		ids := s.SeenPostIDs("sub")
+		if !(len(ids) == 2) {
+			t.Errorf("should have got 2 seen posts IDs instead of %v", ids)
+		}
+	})
+
+	t.Run("read no sub posts' IDs", func(t *testing.T) {
+		ids := s.SeenPostIDs("othersub")
+		if !(len(ids) == 0) {
+			t.Errorf("should have got no seen posts IDs instead of %v", ids)
+		}
+	})
+
+}
