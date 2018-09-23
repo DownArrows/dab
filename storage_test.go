@@ -158,11 +158,11 @@ func TestCRUDComments(t *testing.T) {
 		}
 	})
 
-	t.Run("read", func(t *testing.T) {
+	t.Run("statistics only include negative comments", func(t *testing.T) {
 		stats := s.StatsBetween(start, end)
-		if !(len(stats) == 2 && stats[author1.Name].Count == 2 && stats[author1.Name].Average == -12.5 &&
+		if !(len(stats) == 2 && stats[author1.Name].Count == 1 && stats[author1.Name].Average == -100 &&
 			stats[author2.Name].Average == -70 && stats[author2.Name].Count == 1) {
-			t.Errorf("expected two users with average -70 and -12.5, not %v", stats)
+			t.Errorf("expected two users with average -70 and -100, not %v", stats)
 		}
 	})
 

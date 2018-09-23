@@ -340,7 +340,8 @@ func (s *Storage) StatsBetween(since, until time.Time) UserStatsMap {
 		FROM comments JOIN users
 		ON comments.author = users.name
 		WHERE
-			users.hidden = 0
+			comments.score < 0
+			AND users.hidden = 0
 			AND comments.created BETWEEN ? AND ?
 		GROUP BY comments.author`)
 	autopanic(err)
