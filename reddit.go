@@ -80,11 +80,7 @@ func (bot *RedditBot) UpdateUsersFromCompendium() error {
 	added_counter := 0
 	for _, username := range names {
 
-		is_known, err := bot.storage.IsKnownObject("username-" + username)
-		if err != nil {
-			return err
-		}
-		if is_known {
+		if bot.storage.IsKnownObject("username-" + username) {
 			continue
 		}
 
@@ -113,11 +109,8 @@ func (bot *RedditBot) UpdateUsersFromCompendium() error {
 
 func (bot *RedditBot) StreamSub(sub string, ch chan Comment, sleep time.Duration) {
 	bot.logger.Print("streaming new posts from ", sub)
-	seen, err := bot.storage.SeenPostIDs(sub)
-	if err != nil {
-		bot.logger.Fatal("event streamer: ", err)
-	}
 
+	seen := bot.storage.SeenPostIDs(sub)
 	first_time := len(seen) == 0
 
 	for {
@@ -233,13 +226,7 @@ func (bot *RedditBot) CheckUnsuspended(delay time.Duration) chan User {
 
 			time.Sleep(delay)
 
-			suspended, err := bot.storage.ListSuspended()
-			if err != nil {
-				bot.logger.Print("unsuspension checker, (re-)starting : ", err)
-				continue
-			}
-
-			for _, user := range suspended {
+			for _, user := range bot.storage.ListSuspended() {
 				res := bot.scanner.AboutUser(user.Name)
 				if res.Error != nil {
 					bot.logger.Printf("unsuspension checker, while checking \"%s\": %s", user.Name, res.Error)
@@ -247,7 +234,7 @@ func (bot *RedditBot) CheckUnsuspended(delay time.Duration) chan User {
 				}
 
 				if res.Exists && !res.User.Suspended {
-					if err := bot.storage.SetSuspended(user.Name, false); err != nil {
+					if err := bot.storage.UnSuspendUser(user.Name); err != nil {
 						bot.logger.Printf("unsuspension checker, while checking \"%s\": %s", user.Name, res.Error)
 						continue
 					}
@@ -297,18 +284,13 @@ func (bot *RedditBot) scanOnce(full_scan bool) error {
 
 func (bot *RedditBot) getUsersOrWait(full_scan bool) ([]User, error) {
 	var users []User
-	var err error
 
 	for {
 
 		if full_scan {
-			users, err = bot.storage.ListUsers()
+			users = bot.storage.ListUsers()
 		} else {
-			users, err = bot.storage.ListActiveUsers()
-		}
-
-		if err != nil {
-			return nil, err
+			users = bot.storage.ListActiveUsers()
 		}
 
 		if len(users) > 0 {
@@ -388,7 +370,7 @@ func (bot *RedditBot) ifSuspended(user User, status int) (bool, error) {
 	}
 
 	if gone || about.User.Suspended {
-		if err := bot.storage.SetSuspended(user.Name, true); err != nil {
+		if err := bot.storage.SuspendUser(user.Name); err != nil {
 			return false, err
 		}
 
@@ -446,12 +428,7 @@ func (bot *RedditBot) AlertIfHighScore(comments []Comment) error {
 
 		if comment.Score < bot.highScore {
 
-			is_known, err := bot.storage.IsKnownObject(comment.Id)
-			if err != nil {
-				return err
-			}
-
-			if is_known {
+			if bot.storage.IsKnownObject(comment.Id) {
 				continue
 			}
 

@@ -22,8 +22,8 @@ type ReportFactory struct {
 }
 
 type ReportFactoryStorage interface {
-	GetCommentsBelowBetween(int64, time.Time, time.Time) ([]Comment, error)
-	StatsBetween(time.Time, time.Time) (UserStatsMap, error)
+	GetCommentsBelowBetween(int64, time.Time, time.Time) []Comment
+	StatsBetween(time.Time, time.Time) UserStatsMap
 }
 
 func NewReportFactory(storage ReportFactoryStorage, conf ReportConf) ReportFactory {
@@ -48,18 +48,12 @@ func (rf ReportFactory) ReportWeek(week_num uint8, year int) Report {
 }
 
 func (rf ReportFactory) Report(start, end time.Time) Report {
-	comments, err := rf.storage.GetCommentsBelowBetween(rf.Cutoff, start, end)
-	autopanic(err)
-
-	stats, err := rf.storage.StatsBetween(start, end)
-	autopanic(err)
-
 	return Report{
-		Comments:          comments,
+		Comments:          rf.storage.GetCommentsBelowBetween(rf.Cutoff, start, end),
+		Stats:             rf.storage.StatsBetween(start, end),
 		Start:             start,
 		End:               end,
 		DateFormat:        time.RFC822,
-		Stats:             stats,
 		MaxStatsSummaries: rf.NbTop,
 		HeadTemplate:      rf.HeadTemplate,
 		CommentTemplate:   rf.CommentTemplate,

@@ -55,15 +55,15 @@ func Batches(chunks Chunks) ([][]string, error) {
 // Common models
 
 type Comment struct {
-	Id        string
-	Author    string
-	Score     int64
-	Permalink string
-	Sub       string `json:"subreddit"`
+	Id        string `json:"id" db:"id"`
+	Author    string `json:"author" db:"author"`
+	Score     int64  `json:"score" db:"score"`
+	Permalink string `json:"permalink" db:"permalink"`
+	Sub       string `json:"subreddit" db:"sub"`
 	// This is only used for decoding JSON, otherwise user Created
-	RawCreated float64   `json:"created_utc"`
-	Created    time.Time `json:"-"` // This field exists in reddit's JSON with another type and meaning
-	Body       string
+	RawCreated float64   `json:"created_utc" db:"-"`
+	Created    time.Time `json:"-" db:"created"` // This field exists in reddit's JSON with another type and meaning
+	Body       string    `json:"body" db:"body"`
 }
 
 func (comment Comment) FinishDecoding() Comment {

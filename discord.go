@@ -387,12 +387,12 @@ func (bot *DiscordBot) GetCommandsDescriptors() []DiscordCommand {
 		},
 		DiscordCommand{
 			Command:  "hide",
-			Callback: bot.editUsers("hide", func(u string) error { return bot.storage.EditHideUser(u, true) }),
+			Callback: bot.editUsers("hide", bot.storage.HideUser),
 			HasArgs:  true,
 		},
 		DiscordCommand{
 			Command:  "unhide",
-			Callback: bot.editUsers("unhide", func(u string) error { return bot.storage.EditHideUser(u, false) }),
+			Callback: bot.editUsers("unhide", bot.storage.UnHideUser),
 			HasArgs:  true,
 		},
 		DiscordCommand{
