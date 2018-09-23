@@ -8,6 +8,42 @@ import (
 	"time"
 )
 
+type RedditBotStorage interface {
+	// Users
+	AddUser(string, bool, time.Time) error
+	GetUser(string) UserQuery
+	ListUsers() []User
+	ListSuspended() []User
+	ListActiveUsers() []User
+	SuspendUser(string) error
+	UnSuspendUser(string) error
+	NotNewUser(string) error
+	ResetPosition(string) error
+	// Comments
+	SaveCommentsPage([]Comment, User) error
+	UpdateInactiveStatus(time.Duration) error
+	// Key-value
+	SeenPostIDs(string) []string
+	SaveSubPostIDs([]Comment, string) error
+	IsKnownObject(string) bool
+	SaveKnownObject(string) error
+}
+
+type DiscordBotStorage interface {
+	DelUser(string) error
+	PurgeUser(string) error
+	HideUser(string) error
+	UnHideUser(string) error
+	GetUser(string) UserQuery
+	GetTotalKarma(string) (int64, error)
+	GetNegativeKarma(string) (int64, error)
+}
+
+type ReportFactoryStorage interface {
+	GetCommentsBelowBetween(int64, time.Time, time.Time) []Comment
+	StatsBetween(time.Time, time.Time) UserStatsMap
+}
+
 type Storage struct {
 	client          *sql.DB
 	db              *sqlx.DB
@@ -268,7 +304,6 @@ func (s *Storage) GetCommentsBelowBetween(score int64, since, until time.Time) [
 	if err != nil && err != sql.ErrNoRows {
 		panic(err)
 	}
-	fmt.Println(comments)
 	return comments
 }
 

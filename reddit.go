@@ -13,11 +13,11 @@ type RedditBot struct {
 	highScoresFeed chan Comment
 	highScore      int64
 	scanner        *Scanner
-	storage        *Storage
+	storage        RedditBotStorage
 	logger         *log.Logger
 }
 
-func NewRedditBot(scanner *Scanner, storage *Storage, logger *log.Logger, conf RedditBotConf) *RedditBot {
+func NewRedditBot(scanner *Scanner, storage RedditBotStorage, logger *log.Logger, conf RedditBotConf) *RedditBot {
 	return &RedditBot{
 		scanner: scanner,
 		storage: storage,

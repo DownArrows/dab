@@ -104,7 +104,7 @@ type DiscordBotChannelsID struct {
 
 type DiscordBot struct {
 	logger     *log.Logger
-	storage    *Storage
+	storage    DiscordBotStorage
 	client     *discordgo.Session
 	Commands   []DiscordCommand
 	redditLink *regexp.Regexp
@@ -116,7 +116,7 @@ type DiscordBot struct {
 	HidePrefix string
 }
 
-func NewDiscordBot(storage *Storage, logger *log.Logger, conf DiscordBotConf) (*DiscordBot, error) {
+func NewDiscordBot(storage DiscordBotStorage, logger *log.Logger, conf DiscordBotConf) (*DiscordBot, error) {
 	session, err := discordgo.New("Bot " + conf.Token)
 	if err != nil {
 		return nil, err

@@ -21,11 +21,6 @@ type ReportFactory struct {
 	CommentTemplate *template.Template
 }
 
-type ReportFactoryStorage interface {
-	GetCommentsBelowBetween(int64, time.Time, time.Time) []Comment
-	StatsBetween(time.Time, time.Time) UserStatsMap
-}
-
 func NewReportFactory(storage ReportFactoryStorage, conf ReportConf) ReportFactory {
 	return ReportFactory{
 		storage:         storage,
