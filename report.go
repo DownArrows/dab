@@ -26,8 +26,8 @@ type ReportFactoryStorage interface {
 	StatsBetween(time.Time, time.Time) (UserStatsMap, error)
 }
 
-func NewReportFactory(storage ReportFactoryStorage, conf ReportConf) *ReportFactory {
-	return &ReportFactory{
+func NewReportFactory(storage ReportFactoryStorage, conf ReportConf) ReportFactory {
+	return ReportFactory{
 		storage:         storage,
 		Leeway:          conf.Leeway.Value,
 		Timezone:        conf.Timezone.Value,
@@ -39,7 +39,7 @@ func NewReportFactory(storage ReportFactoryStorage, conf ReportConf) *ReportFact
 	}
 }
 
-func (rf *ReportFactory) ReportWeek(week_num uint8, year int) Report {
+func (rf ReportFactory) ReportWeek(week_num uint8, year int) Report {
 	start, end := rf.WeekYearToDates(week_num, year)
 	report := rf.Report(start.Add(-rf.Leeway), end.Add(-rf.Leeway))
 	report.Week = week_num
@@ -47,7 +47,7 @@ func (rf *ReportFactory) ReportWeek(week_num uint8, year int) Report {
 	return report
 }
 
-func (rf *ReportFactory) Report(start, end time.Time) Report {
+func (rf ReportFactory) Report(start, end time.Time) Report {
 	comments, err := rf.storage.GetCommentsBelowBetween(rf.Cutoff, start, end)
 	autopanic(err)
 
@@ -66,27 +66,27 @@ func (rf *ReportFactory) Report(start, end time.Time) Report {
 	}
 }
 
-func (rf *ReportFactory) CurrentWeekCoordinates() (uint8, int) {
+func (rf ReportFactory) CurrentWeekCoordinates() (uint8, int) {
 	year, week := time.Now().In(rf.Timezone).ISOWeek()
 	return uint8(week), year
 }
 
-func (rf *ReportFactory) LastWeekCoordinates() (uint8, int) {
+func (rf ReportFactory) LastWeekCoordinates() (uint8, int) {
 	year, week := time.Now().In(rf.Timezone).AddDate(0, 0, -7).ISOWeek()
 	return uint8(week), year
 }
 
-func (rf *ReportFactory) WeekYearToDates(week_num uint8, year int) (time.Time, time.Time) {
+func (rf ReportFactory) WeekYearToDates(week_num uint8, year int) (time.Time, time.Time) {
 	week_start := rf.WeekNumToStartDate(week_num, year)
 	week_end := week_start.AddDate(0, 0, 7)
 	return week_start, week_end
 }
 
-func (rf *ReportFactory) WeekNumToStartDate(week_num uint8, year int) time.Time {
+func (rf ReportFactory) WeekNumToStartDate(week_num uint8, year int) time.Time {
 	return rf.StartOfFirstWeek(year).AddDate(0, 0, int(week_num-1)*7)
 }
 
-func (rf *ReportFactory) StartOfFirstWeek(year int) time.Time {
+func (rf ReportFactory) StartOfFirstWeek(year int) time.Time {
 	in_first_week := time.Date(year, 1, 4, 0, 0, 0, 0, rf.Timezone)
 	day_position := (in_first_week.Weekday() + 6) % 7
 	return in_first_week.AddDate(0, 0, -int(day_position))

@@ -14,7 +14,7 @@ import (
 type WebServer struct {
 	Server          *http.Server
 	reportsTmpl     *template.Template
-	Reports         *ReportFactory
+	Reports         ReportFactory
 	markdownOptions blackfriday.Option
 }
 
@@ -23,7 +23,7 @@ type WebServerError struct {
 	Error  error
 }
 
-func NewWebServer(listen string, reports *ReportFactory) *WebServer {
+func NewWebServer(listen string, reports ReportFactory) *WebServer {
 	md_exts := blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis
 
 	wsrv := &WebServer{

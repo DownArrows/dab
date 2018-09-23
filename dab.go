@@ -31,7 +31,7 @@ type DownArrowsBot struct {
 		Storage *Storage
 		Reddit  *RedditBot
 		Discord *DiscordBot
-		Report  *ReportFactory
+		Report  ReportFactory
 		Web     *WebServer
 	}
 }
