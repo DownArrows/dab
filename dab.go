@@ -17,9 +17,9 @@ type DownArrowsBot struct {
 	Conf Configuration
 
 	RuntimeConf struct {
-		//	Path       string
 		UserAdd    bool
 		Report     bool
+		InitDB     bool
 		Compendium bool
 		Reddit     bool
 		Discord    bool
@@ -51,6 +51,10 @@ func (dab *DownArrowsBot) Launch(args []string) bool {
 	dab.init(args)
 
 	dab.initStorage()
+
+	if dab.RuntimeConf.InitDB {
+		return false
+	}
 
 	dab.Components.Report = NewReportFactory(dab.Components.Storage, dab.Conf.Report)
 	if dab.RuntimeConf.Report {
@@ -115,6 +119,7 @@ func (dab *DownArrowsBot) Close() {
 
 func (dab *DownArrowsBot) init(args []string) {
 	path := dab.FlagSet.String("config", "./dab.conf.json", "Path to the configuration file.")
+	dab.FlagSet.BoolVar(&dab.RuntimeConf.InitDB, "initdb", false, "Initialize the database and exit.")
 	dab.FlagSet.BoolVar(&dab.RuntimeConf.Report, "report", false, "Print the report for the last week and exit.")
 	dab.FlagSet.BoolVar(&dab.RuntimeConf.UserAdd, "useradd", false, "Add one or multiple usernames to be tracked and exit.")
 	dab.FlagSet.BoolVar(&dab.RuntimeConf.Compendium, "compendium", false, "Start the reddit bot with an update from DVT's compendium.")
