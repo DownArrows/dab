@@ -28,7 +28,7 @@ func NewWebServer(listen string, reports ReportFactory) *WebServer {
 
 	wsrv := &WebServer{
 		Reports:         reports,
-		reportsTmpl:     template.Must(template.New("html_report").Parse(reportPage)),
+		reportsTmpl:     template.Must(template.New("HTMLReport").Parse(tHTMLReport)),
 		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(md_exts)),
 	}
 
@@ -184,7 +184,7 @@ func weekAndYear(path []string) (uint8, int, error) {
 	return uint8(week), year, nil
 }
 
-const reportPage = `<!DOCTYPE html>
+const tHTMLReport = `<!DOCTYPE html>
 <head>
 	<meta charset="utf-8"/>
 	<title>{{ .Title }}</title>
