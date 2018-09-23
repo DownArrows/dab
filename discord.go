@@ -482,8 +482,8 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 	if query.Exists {
 		user := query.User
 		info := []string{
-			user.Name + " has been created on " + user.Created.Format(time.RFC850),
-			"has been added to the database on " + user.Added.Format(time.RFC850),
+			user.Name + " has been created on " + user.CreatedTime().Format(time.RFC850),
+			"has been added to the database on " + user.AddedTime().Format(time.RFC850),
 		}
 		if user.Hidden {
 			info = append(info, "is hidden from reports")

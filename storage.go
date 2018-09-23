@@ -10,7 +10,7 @@ import (
 
 type RedditBotStorage interface {
 	// Users
-	AddUser(string, bool, time.Time) error
+	AddUser(string, bool, int64) error
 	GetUser(string) UserQuery
 	ListUsers() []User
 	ListSuspended() []User
@@ -78,11 +78,11 @@ func (s *Storage) Init() {
 	s.db.MustExec(`
 		CREATE TABLE IF NOT EXISTS tracked (
 			name TEXT PRIMARY KEY,
-			created TIMESTAMP NOT NULL,
+			created INTEGER NOT NULL,
 			inactive BOOLEAN DEFAULT 0 NOT NULL,
 			suspended BOOLEAN DEFAULT 0 NOT NULL,
 			deleted BOOLEAN DEFAULT 0 NOT NULL,
-			added TIMESTAMP NOT NULL,
+			added INTEGER NOT NULL,
 			hidden BOOLEAN NOT NULL,
 			new BOOLEAN DEFAULT 1 NOT NULL,
 			position TEXT DEFAULT "" NOT NULL
@@ -94,7 +94,7 @@ func (s *Storage) Init() {
 			score INTEGER NOT NULL,
 			permalink TEXT NOT NULL,
 			sub TEXT NOT NULL,
-			created TIMESTAMP NOT NULL,
+			created INTEGER NOT NULL,
 			body TEXT NOT NULL,
 			FOREIGN KEY (author) REFERENCES tracked(name)
 		) WITHOUT ROWID`)
@@ -102,12 +102,12 @@ func (s *Storage) Init() {
 		CREATE TABLE IF NOT EXISTS seen_posts (
 			id TEXT PRIMARY KEY,
 			sub TEXT NOT NULL,
-			created TIMESTAMP NOT NULL
+			created INTEGER NOT NULL
 		) WITHOUT ROWID`)
 	s.db.MustExec(`
 		CREATE TABLE IF NOT EXISTS known_objects (
 			id TEXT PRIMARY KEY,
-			date TIMESTAMP NOT NULL
+			date INTEGER NOT NULL
 		) WITHOUT ROWID`)
 	s.db.MustExec(`
 		CREATE VIEW IF NOT EXISTS
@@ -146,13 +146,13 @@ func (s *Storage) EnableWAL() {
  Users
 ******/
 
-func (s *Storage) AddUser(username string, hidden bool, created time.Time) error {
+func (s *Storage) AddUser(username string, hidden bool, created int64) error {
 	stmt, err := s.db.Prepare(`
 		INSERT INTO tracked(name, hidden, created, added)
 		VALUES (?, ?, ?, strftime("%s", CURRENT_TIMESTAMP))`)
 	autopanic(err)
 	defer stmt.Close()
-	_, err = stmt.Exec(username, hidden, created.Unix())
+	_, err = stmt.Exec(username, hidden, created)
 	return err
 }
 
@@ -340,8 +340,7 @@ func (s *Storage) StatsBetween(since, until time.Time) UserStatsMap {
 		FROM comments JOIN users
 		ON comments.author = users.name
 		WHERE
-			score < 0
-			AND users.hidden = 0
+			users.hidden = 0
 			AND comments.created BETWEEN ? AND ?
 		GROUP BY comments.author`)
 	autopanic(err)
@@ -379,7 +378,7 @@ func (s *Storage) SaveSubPostIDs(listing []Comment, sub string) error {
 	defer stmt.Close()
 
 	for _, post := range listing {
-		stmt.MustExec(post.Id, sub, post.Created.Unix())
+		stmt.MustExec(post.Id, sub, post.Created)
 	}
 
 	return tx.Commit()
@@ -395,7 +394,7 @@ func (s *Storage) SeenPostIDs(sub string) []string {
 }
 
 func (s *Storage) SaveKnownObject(id string) error {
-	_, err := s.db.Exec("INSERT INTO known_objects VALUES (?, ?)", id, time.Now())
+	_, err := s.db.Exec("INSERT INTO known_objects VALUES (?, strftime(\"%s\", CURRENT_TIMESTAMP))", id)
 	return err
 }
 

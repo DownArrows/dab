@@ -55,21 +55,23 @@ func Batches(chunks Chunks) ([][]string, error) {
 // Common models
 
 type Comment struct {
-	Id        string `json:"id" db:"id"`
-	Author    string `json:"author" db:"author"`
-	Score     int64  `json:"score" db:"score"`
-	Permalink string `json:"permalink" db:"permalink"`
-	Sub       string `json:"subreddit" db:"sub"`
-	// This is only used for decoding JSON, otherwise user Created
-	RawCreated float64   `json:"created_utc" db:"-"`
-	Created    time.Time `json:"-" db:"created"` // This field exists in reddit's JSON with another type and meaning
-	Body       string    `json:"body" db:"body"`
+	Id         string  `json:"id" db:"id"`
+	Author     string  `json:"author" db:"author"`
+	Score      int64   `json:"score" db:"score"`
+	Permalink  string  `json:"permalink" db:"permalink"`
+	Sub        string  `json:"subreddit" db:"sub"`
+	RawCreated float64 `json:"created_utc" db:"-"`
+	Created    int64   `json:"-" db:"created"`
+	Body       string  `json:"body" db:"body"`
 }
 
 func (comment Comment) FinishDecoding() Comment {
-	comment.Created = time.Unix(int64(comment.RawCreated), 0)
-	comment.RawCreated = 0
+	comment.Created = int64(comment.RawCreated)
 	return comment
+}
+
+func (c Comment) CreatedTime() time.Time {
+	return time.Unix(c.Created, 0)
 }
 
 type User struct {
@@ -77,10 +79,18 @@ type User struct {
 	Hidden    bool
 	New       bool
 	Suspended bool
-	Created   time.Time
-	Added     time.Time
+	Created   int64
+	Added     int64
 	Position  string
 	Inactive  bool
+}
+
+func (u User) CreatedTime() time.Time {
+	return time.Unix(u.Created, 0)
+}
+
+func (u User) AddedTime() time.Time {
+	return time.Unix(u.Created, 0)
 }
 
 func (user *User) Username(username string) bool {

@@ -411,7 +411,7 @@ func (bot *RedditBot) saveCommentsPage(user User) (string, int, error) {
 func (bot *RedditBot) maxAgeReached(comments []Comment) bool {
 	last_comment := comments[len(comments)-1]
 
-	oldest := last_comment.Created
+	oldest := last_comment.CreatedTime()
 	// Use time.Time.Round to remove the monotonic clock measurement, as
 	// we don't need it for the precision we want and one parameter depends
 	// on an external source (the comments' timestamps).

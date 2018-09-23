@@ -111,7 +111,7 @@ func (sc *Scanner) AboutUser(username string) UserQuery {
 
 	query.Exists = true
 	query.User.Name = about.Data.Name
-	query.User.Created = time.Unix(int64(about.Data.Created), 0)
+	query.User.Created = int64(about.Data.Created)
 	query.User.Suspended = about.Data.Suspended
 	return query
 }
@@ -198,9 +198,9 @@ func (sc *Scanner) getListing(path string, position string) ([]Comment, string, 
 	}
 
 	children := parsed.Data.Children
-	comments := make([]Comment, len(children))
-	for i, child := range children {
-		comments[i] = child.Data.FinishDecoding()
+	comments := []Comment{}
+	for _, child := range children {
+		comments = append(comments, child.Data.FinishDecoding())
 	}
 
 	new_position := parsed.Data.After
