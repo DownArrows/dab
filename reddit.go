@@ -252,6 +252,14 @@ func (bot *RedditBot) CheckUnsuspended(delay time.Duration) chan User {
 }
 
 func (bot *RedditBot) Run() {
+	// Band-aid until proper closing sequence is written.
+	defer func() {
+		if r := recover(); r != nil {
+			if err, ok := r.(error); ok {
+				bot.logger.Print(err)
+			}
+		}
+	}()
 	var last_full_scan time.Time
 
 	for {
