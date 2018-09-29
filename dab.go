@@ -14,9 +14,11 @@ type DownArrowsBot struct {
 	LogOut     io.Writer
 	FlagSet    *flag.FlagSet
 
-	Conf Configuration
+	Daemon bool
+	Conf   Configuration
 
 	RuntimeConf struct {
+		Launched   bool
 		UserAdd    bool
 		Report     bool
 		InitDB     bool
@@ -45,21 +47,20 @@ func NewDownArrowsBot(log_out io.Writer, logger_opts int) *DownArrowsBot {
 	}
 }
 
-func (dab *DownArrowsBot) Launch(args []string) bool {
-	var daemon bool
+func (dab *DownArrowsBot) Launch(args []string) {
 
 	dab.init(args)
 
 	dab.initStorage()
 
 	if dab.RuntimeConf.InitDB {
-		return false
+		return
 	}
 
 	dab.Components.Report = NewReportFactory(dab.Components.Storage, dab.Conf.Report)
 	if dab.RuntimeConf.Report {
 		dab.report()
-		return false
+		return
 	}
 
 	dab.checkRedditConf()
@@ -72,18 +73,16 @@ func (dab *DownArrowsBot) Launch(args []string) bool {
 			dab.Logger.Fatal("reddit bot must be running to register users")
 		}
 		dab.userAdd()
-		return false
+		return
 	}
 
 	if dab.RuntimeConf.Reddit {
 		dab.launchReddit()
-		daemon = true
 	}
 
 	dab.checkDiscordConf()
 	if dab.RuntimeConf.Discord {
 		dab.launchDiscord()
-		daemon = true
 	}
 
 	if dab.RuntimeConf.Reddit && dab.RuntimeConf.Discord {
@@ -93,12 +92,11 @@ func (dab *DownArrowsBot) Launch(args []string) bool {
 	dab.checkWebConf()
 	if dab.RuntimeConf.Web {
 		dab.launchWeb()
-		daemon = true
 	}
 
 	dab.Logger.Print("launched the following components: ", strings.Join(dab.Components.Enabled, ", "))
 
-	return daemon
+	dab.RuntimeConf.Launched = true
 }
 
 func (dab *DownArrowsBot) Close() {
@@ -212,6 +210,8 @@ func (dab *DownArrowsBot) launchReddit() {
 	go dab.Components.Reddit.Run()
 
 	go dab.Components.Reddit.AutoCompendiumUpdate(dab.Conf.Reddit.CompendiumUpdateInterval.Value)
+
+	dab.Daemon = true
 }
 
 func (dab *DownArrowsBot) launchDiscord() {
@@ -227,6 +227,8 @@ func (dab *DownArrowsBot) launchDiscord() {
 	if err := dab.Components.Discord.Run(); err != nil {
 		dab.Logger.Fatal(err)
 	}
+
+	dab.Daemon = true
 	dab.Logger.Print("discord bot connected")
 }
 
@@ -269,4 +271,5 @@ func (dab *DownArrowsBot) launchWeb() {
 			dab.Logger.Print(err)
 		}
 	}()
+	dab.Daemon = true
 }
