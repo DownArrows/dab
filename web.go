@@ -1,10 +1,12 @@
 package main
 
 import (
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"gopkg.in/russross/blackfriday.v2"
 	"html/template"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -73,7 +75,17 @@ func (wsrv *WebServer) ReportIndex(w http.ResponseWriter, r *http.Request) {
 
 func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 	if source, _, _ := wsrv.getReportFromURL("/reports/source/", w, r); source != "" {
-		w.Write([]byte(source))
+		var output io.Writer = w
+
+		w.Header().Set("Content-Type", "text/plain")
+
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			w.Header().Set("Content-Encoding", "gzip")
+			output = gzip.NewWriter(w)
+			defer output.(io.WriteCloser).Close()
+		}
+
+		output.Write([]byte(source))
 	}
 }
 
@@ -83,7 +95,7 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write_page := wsrv.prepareReportPage(source, week, year)
-	write_page(w)
+	write_page(w, r)
 }
 
 func (wsrv *WebServer) ReportCurrent(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +106,7 @@ func (wsrv *WebServer) ReportCurrent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write_page := wsrv.prepareReportPage(source, week, year)
-	write_page(w)
+	write_page(w, r)
 }
 
 func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
@@ -105,7 +117,7 @@ func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write_page := wsrv.prepareReportPage(source, week, year)
-	write_page(w)
+	write_page(w, r)
 }
 
 func (wsrv *WebServer) getReportFromURL(prefix string, w http.ResponseWriter, r *http.Request) (string, uint8, int) {
@@ -122,7 +134,7 @@ func (wsrv *WebServer) getReportFromURL(prefix string, w http.ResponseWriter, r 
 	return source, week, year
 }
 
-func (wsrv *WebServer) prepareReportPage(source string, week uint8, year int) func(http.ResponseWriter) {
+func (wsrv *WebServer) prepareReportPage(source string, week uint8, year int) func(http.ResponseWriter, *http.Request) {
 	content := blackfriday.Run([]byte(source), wsrv.markdownOptions)
 	data := map[string]interface{}{
 		"Title":   fmt.Sprintf("Report of year %d week %d", year, week),
@@ -130,7 +142,19 @@ func (wsrv *WebServer) prepareReportPage(source string, week uint8, year int) fu
 		"Year":    year,
 		"Week":    week,
 	}
-	return func(w http.ResponseWriter) { wsrv.reportsTmpl.Execute(w, data) }
+	return func(w http.ResponseWriter, r *http.Request) {
+		var output io.Writer = w
+
+		w.Header().Set("Content-Type", "text/html")
+
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			w.Header().Set("Content-Encoding", "gzip")
+			output = gzip.NewWriter(w)
+			defer output.(io.WriteCloser).Close()
+		}
+
+		wsrv.reportsTmpl.Execute(output, data)
+	}
 }
 
 func (wsrv *WebServer) getReport(week uint8, year int) (string, *WebServerError) {
