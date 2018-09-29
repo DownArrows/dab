@@ -88,8 +88,8 @@ func (s *Storage) Init() {
 			position TEXT DEFAULT "" NOT NULL
 		) WITHOUT ROWID`)
 	s.db.MustExec(`
-		CREATE INDEX IF NOT EXISTS tracked_idx
-		ON tracked (name, suspended, deleted, hidden)`)
+			CREATE INDEX IF NOT EXISTS tracked_idx
+			ON tracked (suspended, deleted, hidden)`)
 	s.db.MustExec(`
 		CREATE TABLE IF NOT EXISTS comments (
 			id TEXT PRIMARY KEY,
@@ -102,8 +102,8 @@ func (s *Storage) Init() {
 			FOREIGN KEY (author) REFERENCES tracked(name)
 		) WITHOUT ROWID`)
 	s.db.MustExec(`
-		CREATE INDEX IF NOT EXISTS comments_stats_idx
-		ON comments (id, created)`)
+			CREATE INDEX IF NOT EXISTS comments_stats_idx
+			ON comments (created)`)
 	s.db.MustExec(`
 		CREATE TABLE IF NOT EXISTS seen_posts (
 			id TEXT PRIMARY KEY,
@@ -298,7 +298,7 @@ func (s *Storage) GetCommentsBelowBetween(score int64, since, until time.Time) [
 	q := `SELECT
 			comments.id, comments.author, comments.score, comments.sub,
 			comments.permalink, comments.body, comments.created
-		FROM comments JOIN users
+		FROM users JOIN comments
 		ON comments.author = users.name
 		WHERE
 			comments.score <= ?
@@ -343,7 +343,7 @@ func (s *Storage) StatsBetween(since, until time.Time) UserStatsMap {
 			AVG(comments.score) AS average,
 			SUM(comments.score) AS delta,
 			COUNT(comments.id) AS count
-		FROM comments JOIN users
+		FROM users JOIN comments
 		ON comments.author = users.name
 		WHERE
 			comments.score < 0
