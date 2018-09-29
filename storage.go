@@ -88,6 +88,9 @@ func (s *Storage) Init() {
 			position TEXT DEFAULT "" NOT NULL
 		) WITHOUT ROWID`)
 	s.db.MustExec(`
+		CREATE INDEX IF NOT EXISTS tracked_idx
+		ON tracked (name, suspended, deleted, hidden)`)
+	s.db.MustExec(`
 		CREATE TABLE IF NOT EXISTS comments (
 			id TEXT PRIMARY KEY,
 			author TEXT NOT NULL,
@@ -98,6 +101,9 @@ func (s *Storage) Init() {
 			body TEXT NOT NULL,
 			FOREIGN KEY (author) REFERENCES tracked(name)
 		) WITHOUT ROWID`)
+	s.db.MustExec(`
+		CREATE INDEX IF NOT EXISTS comments_stats_idx
+		ON comments (id, created)`)
 	s.db.MustExec(`
 		CREATE TABLE IF NOT EXISTS seen_posts (
 			id TEXT PRIMARY KEY,
