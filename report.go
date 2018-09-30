@@ -16,7 +16,7 @@ type ReportFactory struct {
 	Timezone        *time.Location
 	Cutoff          int64
 	MaxLength       uint64
-	NbTop           int
+	NbTop           uint
 	HeadTemplate    *template.Template
 	CommentTemplate *template.Template
 }
@@ -91,7 +91,7 @@ type Report struct {
 	DateFormat string
 	// Stats
 	Stats             UserStatsMap
-	MaxStatsSummaries int
+	MaxStatsSummaries uint
 	// Formating
 	HeadTemplate    *template.Template
 	CommentTemplate *template.Template
@@ -99,12 +99,12 @@ type Report struct {
 
 func (r Report) FormatHead() string {
 	deltas := r.Stats.DeltasToSummaries().Sort()
-	if len(deltas) > r.MaxStatsSummaries {
+	if uint(len(deltas)) > r.MaxStatsSummaries {
 		deltas = deltas[:r.MaxStatsSummaries]
 	}
 
 	averages := r.Stats.AveragesToSummaries().Sort()
-	if len(averages) > r.MaxStatsSummaries {
+	if uint(len(averages)) > r.MaxStatsSummaries {
 		averages = averages[:r.MaxStatsSummaries]
 	}
 

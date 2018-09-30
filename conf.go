@@ -62,7 +62,7 @@ type ReportConf struct {
 	Timezone  Timezone `json:"timezone"`
 	Cutoff    int64    `json:"cutoff"`
 	MaxLength uint64   `json:"max_length"`
-	NbTop     int      `json:"nb_top"`
+	NbTop     uint     `json:"nb_top"`
 }
 
 type DiscordBotConf struct {
