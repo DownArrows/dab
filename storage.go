@@ -322,7 +322,7 @@ func (s *Storage) GetTotalKarma(username string) (int64, error) {
 }
 
 func (s *Storage) GetNegativeKarma(username string) (int64, error) {
-	return s.getKarma("SELECT SUM(score) FROM comments WHERE score < 0 AND author = ?", username)
+	return s.getKarma("SELECT SUM(score) FROM comments WHERE score < 0 AND author = ? COLLATE NOCASE", username)
 }
 
 func (s *Storage) getKarma(q, username string) (int64, error) {
