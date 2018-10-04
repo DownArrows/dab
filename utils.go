@@ -90,7 +90,7 @@ func (u User) CreatedTime() time.Time {
 }
 
 func (u User) AddedTime() time.Time {
-	return time.Unix(u.Created, 0)
+	return time.Unix(u.Added, 0)
 }
 
 func (user *User) Username(username string) bool {
