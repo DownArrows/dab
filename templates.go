@@ -34,6 +34,8 @@ func init() {
 
 		Author: [/u/{{.Author}}](https://reddit.com/user/{{.Author}})^(Avg. this week = {{.Average}} per comment)
 
+		Date: {{.Created.Format "Monday 02 January 15:04 PM"}}
+
 		Score: **{{.Score}}**
 
 		Subreddit: [/r/{{.Sub}}](https://reddit.com/r/{{.Sub}})
