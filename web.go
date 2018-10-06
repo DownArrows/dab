@@ -15,7 +15,6 @@ import (
 
 type WebServer struct {
 	Server          *http.Server
-	reportsTmpl     *template.Template
 	Reports         ReportFactory
 	markdownOptions blackfriday.Option
 }
@@ -30,7 +29,6 @@ func NewWebServer(listen string, reports ReportFactory) *WebServer {
 
 	wsrv := &WebServer{
 		Reports:         reports,
-		reportsTmpl:     template.Must(template.New("HTMLReport").Parse(tHTMLReport)),
 		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(md_exts)),
 	}
 
@@ -74,7 +72,7 @@ func (wsrv *WebServer) ReportIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
-	if source, _, _ := wsrv.getReportFromURL("/reports/source/", w, r); source != "" {
+	if report := wsrv.getReportFromURL("/reports/source/", w, r); report.Len() != 0 {
 		var output io.Writer = w
 
 		w.Header().Set("Content-Type", "text/plain")
@@ -85,63 +83,77 @@ func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 			defer output.(io.WriteCloser).Close()
 		}
 
-		output.Write([]byte(source))
+		autopanic(WriteMarkdownReport(report, output))
 	}
 }
 
 func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
-	source, week, year := wsrv.getReportFromURL("/reports/", w, r)
-	if source == "" {
+	report := wsrv.getReportFromURL("/reports/", w, r)
+	if report.Len() == 0 {
 		return
 	}
-	write_page := wsrv.prepareReportPage(source, week, year)
+	write_page := wsrv.prepareReportPage(report)
 	write_page(w, r)
 }
 
 func (wsrv *WebServer) ReportCurrent(w http.ResponseWriter, r *http.Request) {
 	week, year := wsrv.Reports.CurrentWeekCoordinates()
-	source, err := wsrv.getReport(week, year)
+	report, err := wsrv.getReport(week, year)
 	if err != nil {
 		wsrv.processError(w, err)
 		return
 	}
-	write_page := wsrv.prepareReportPage(source, week, year)
+	write_page := wsrv.prepareReportPage(report)
 	write_page(w, r)
 }
 
 func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
 	week, year := wsrv.Reports.LastWeekCoordinates()
-	source, err := wsrv.getReport(week, year)
+	report, err := wsrv.getReport(week, year)
 	if err != nil {
 		wsrv.processError(w, err)
 		return
 	}
-	write_page := wsrv.prepareReportPage(source, week, year)
+	write_page := wsrv.prepareReportPage(report)
 	write_page(w, r)
 }
 
-func (wsrv *WebServer) getReportFromURL(prefix string, w http.ResponseWriter, r *http.Request) (string, uint8, int) {
+func (wsrv *WebServer) getReportFromURL(prefix string, w http.ResponseWriter, r *http.Request) Report {
+	var report Report
 	week, year, ws_err := wsrv.getWeekYearFromURL(r, prefix)
 	if ws_err != nil {
 		wsrv.processError(w, ws_err)
-		return "", 0, 0
+		return report
 	}
-	source, ws_err := wsrv.getReport(week, year)
+	report, ws_err = wsrv.getReport(week, year)
 	if ws_err != nil {
 		wsrv.processError(w, ws_err)
-		return "", 0, 0
+		return report
 	}
-	return source, week, year
+	return report
 }
 
-func (wsrv *WebServer) prepareReportPage(source string, week uint8, year int) func(http.ResponseWriter, *http.Request) {
-	content := blackfriday.Run([]byte(source), wsrv.markdownOptions)
-	data := map[string]interface{}{
-		"Title":   fmt.Sprintf("Report of year %d week %d", year, week),
-		"Content": template.HTML(content),
-		"Year":    year,
-		"Week":    week,
+type HTMLReportComment struct {
+	ReportComment
+	HTMLBody template.HTML
+}
+
+func (wsrv *WebServer) prepareReportPage(report Report) func(http.ResponseWriter, *http.Request) {
+	var comments []HTMLReportComment
+	for _, src := range report.Comments() {
+		var comment HTMLReportComment
+		comment.ReportComment = src
+		html := blackfriday.Run([]byte(src.Body), wsrv.markdownOptions)
+		comment.HTMLBody = template.HTML(html)
+		comments = append(comments, comment)
 	}
+	data := map[string]interface{}{
+		"Year":     report.Year,
+		"Week":     report.Week,
+		"Head":     report.Head(),
+		"Comments": comments,
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		var output io.Writer = w
 
@@ -153,16 +165,16 @@ func (wsrv *WebServer) prepareReportPage(source string, week uint8, year int) fu
 			defer output.(io.WriteCloser).Close()
 		}
 
-		wsrv.reportsTmpl.Execute(output, data)
+		autopanic(HTMLReportPage.Execute(output, data))
 	}
 }
 
-func (wsrv *WebServer) getReport(week uint8, year int) (string, *WebServerError) {
+func (wsrv *WebServer) getReport(week uint8, year int) (Report, *WebServerError) {
 	report := wsrv.Reports.ReportWeek(week, year)
 	if report.Len() == 0 {
-		return "", wsrv.newError(404, fmt.Errorf("No report for week %d year %d.", week, year))
+		return report, wsrv.newError(404, fmt.Errorf("No report for week %d year %d.", week, year))
 	}
-	return fmt.Sprint(report), nil
+	return report, nil
 }
 
 func (wsrv *WebServer) getWeekYearFromURL(r *http.Request, leadingPath string) (uint8, int, *WebServerError) {
@@ -207,74 +219,3 @@ func weekAndYear(path []string) (uint8, int, error) {
 
 	return uint8(week), year, nil
 }
-
-const tHTMLReport = `<!DOCTYPE html>
-<head>
-	<meta charset="utf-8"/>
-	<title>{{ .Title }}</title>
-	<style>
-		body {
-			max-width: 63rem;
-			margin: 1rem auto;
-			color: #555;
-		}
-
-		blockquote blockquote {
-			background: #eee;
-			border-left: solid 5px #aaa;
-			margin-left: 0;
-			padding: 0.2em;
-			padding-left: 0.4em;
-		}
-
-		h1 { color: #6a6 }
-
-		#title {
-			text-align: center;
-			font-size: 2rem;
-			margin-bottom: 2rem;
-		}
-
-		aside {
-			float: right;
-			font-weight: bold;
-			margin-right: 1em;
-		}
-
-		aside a::after {
-			content: "M↓";
-			color: white;
-			background: black;
-			border-radius: 0.2em;
-			font-weight: bold;
-			padding: 0.1em;
-			margin: 0.1em;
-			font-size: smaller;
-		}
-
-		article h1 {
-			font-size: 1.25rem;
-		}
-
-		a {
-			color: #5af;
-			text-decoration: none;
-		}
-
-		a:hover {
-			text-decoration: underline;
-		}
-
-		a:visited {
-			color: #9bd;
-			text-decoration: none;
-		}
-	</style>
-</head>
-<body>
-	<h1 id="title">{{ .Title }}</h1>
-	<aside><a href="/reports/source/{{ .Year }}/{{ .Week }}">source</a></aside>
-	<article>
-		{{ .Content }}
-	</article>
-</body>`

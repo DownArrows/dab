@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"io"
 	"log"
 	"strings"
@@ -13,6 +12,7 @@ type DownArrowsBot struct {
 	Logger     *log.Logger
 	LogOut     io.Writer
 	FlagSet    *flag.FlagSet
+	StdOut     io.Writer
 
 	Daemon bool
 	Conf   Configuration
@@ -38,12 +38,13 @@ type DownArrowsBot struct {
 	}
 }
 
-func NewDownArrowsBot(log_out io.Writer, logger_opts int) *DownArrowsBot {
+func NewDownArrowsBot(log_out io.Writer, logger_opts int, output io.Writer) *DownArrowsBot {
 	return &DownArrowsBot{
 		LoggerOpts: logger_opts,
 		Logger:     log.New(log_out, "", logger_opts),
 		LogOut:     log_out,
 		FlagSet:    flag.NewFlagSet("DownArrowsBot", flag.ExitOnError),
+		StdOut:     output,
 	}
 }
 
@@ -182,11 +183,12 @@ func (dab *DownArrowsBot) initReport() {
 
 func (dab *DownArrowsBot) report() {
 	dab.Logger.Print("printing report for last week")
-	report := dab.Components.Report.ReportWeek(dab.Components.Report.LastWeekCoordinates())
+	year, week := dab.Components.Report.LastWeekCoordinates()
+	report := dab.Components.Report.ReportWeek(year, week)
 	if report.Len() == 0 {
 		dab.Logger.Fatal("empty report")
 	}
-	fmt.Println(report)
+	autopanic(WriteMarkdownReport(report, dab.StdOut))
 }
 
 func (dab *DownArrowsBot) userAdd() {

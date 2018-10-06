@@ -1,36 +1,30 @@
 package main
 
 import (
-	"bytes"
 	"html"
 	"math"
 	"sort"
 	"strings"
-	"text/template"
 	"time"
 )
 
 type ReportFactory struct {
-	storage         ReportFactoryStorage
-	Leeway          time.Duration
-	Timezone        *time.Location
-	Cutoff          int64
-	MaxLength       uint64
-	NbTop           uint
-	HeadTemplate    *template.Template
-	CommentTemplate *template.Template
+	storage   ReportFactoryStorage
+	Leeway    time.Duration
+	Timezone  *time.Location
+	Cutoff    int64
+	MaxLength uint64
+	NbTop     uint
 }
 
 func NewReportFactory(storage ReportFactoryStorage, conf ReportConf) ReportFactory {
 	return ReportFactory{
-		storage:         storage,
-		Leeway:          conf.Leeway.Value,
-		Timezone:        conf.Timezone.Value,
-		Cutoff:          conf.Cutoff,
-		MaxLength:       conf.MaxLength,
-		NbTop:           conf.NbTop,
-		HeadTemplate:    template.Must(template.New("Head").Parse(tReportHead)),
-		CommentTemplate: template.Must(template.New("Comment").Parse(tReportComment)),
+		storage:   storage,
+		Leeway:    conf.Leeway.Value,
+		Timezone:  conf.Timezone.Value,
+		Cutoff:    conf.Cutoff,
+		MaxLength: conf.MaxLength,
+		NbTop:     conf.NbTop,
 	}
 }
 
@@ -44,14 +38,12 @@ func (rf ReportFactory) ReportWeek(week_num uint8, year int) Report {
 
 func (rf ReportFactory) Report(start, end time.Time) Report {
 	return Report{
-		Comments:          rf.storage.GetCommentsBelowBetween(rf.Cutoff, start, end),
+		RawComments:       rf.storage.GetCommentsBelowBetween(rf.Cutoff, start, end),
 		Stats:             rf.storage.StatsBetween(start, end),
 		Start:             start,
 		End:               end,
-		DateFormat:        time.RFC822,
 		MaxStatsSummaries: rf.NbTop,
-		HeadTemplate:      rf.HeadTemplate,
-		CommentTemplate:   rf.CommentTemplate,
+		Timezone:          rf.Timezone,
 	}
 }
 
@@ -82,22 +74,17 @@ func (rf ReportFactory) StartOfFirstWeek(year int) time.Time {
 }
 
 type Report struct {
-	Comments []Comment
-	// Time
-	Week       uint8
-	Year       int
-	Start      time.Time
-	End        time.Time
-	DateFormat string
-	// Stats
+	RawComments       []Comment
+	Week              uint8
+	Year              int
+	Start             time.Time
+	End               time.Time
 	Stats             UserStatsMap
 	MaxStatsSummaries uint
-	// Formating
-	HeadTemplate    *template.Template
-	CommentTemplate *template.Template
+	Timezone          *time.Location
 }
 
-func (r Report) FormatHead() string {
+func (r Report) Head() ReportHead {
 	deltas := r.Stats.DeltasToSummaries().Sort()
 	if uint(len(deltas)) > r.MaxStatsSummaries {
 		deltas = deltas[:r.MaxStatsSummaries]
@@ -108,74 +95,65 @@ func (r Report) FormatHead() string {
 		averages = averages[:r.MaxStatsSummaries]
 	}
 
-	data := map[string]interface{}{
-		"Delta":   deltas,
-		"Average": averages,
-		"Start":   r.Start.Format(r.DateFormat),
-		"End":     r.End.Format(r.DateFormat),
+	return ReportHead{
+		Delta:   deltas,
+		Average: averages,
+		Start:   r.Start,
+		End:     r.End,
 	}
-
-	var output bytes.Buffer
-	autopanic(r.HeadTemplate.Execute(&output, data))
-	return output.String()
 }
 
-func (r Report) Len() int {
-	return len(r.Comments)
+func (r Report) Comments() []ReportComment {
+	var comments []ReportComment
+	n := r.Len()
+	for i := 0; i < n; i++ {
+		comments = append(comments, r.Comment(i))
+	}
+	return comments
 }
 
 func (r Report) Comment(i int) ReportComment {
-	comment := r.Comments[i]
-	return NewReportComment(i+1, comment, r.Stats[comment.Author], r.CommentTemplate)
+	comment := r.RawComments[i]
+	return NewReportComment(i+1, comment, r.Stats[comment.Author], r.Timezone)
 }
 
-func (r Report) String() string {
-	formatted := []string{r.FormatHead()}
+func (r Report) Len() int {
+	return len(r.RawComments)
+}
 
-	nb_comments := r.Len()
-	for i := 0; i < nb_comments; i++ {
-		formatted = append(formatted, r.Comment(i).String())
-	}
-
-	return strings.Join(formatted, "\n\n\n")
+type ReportHead struct {
+	Delta   StatsSummaries
+	Average StatsSummaries
+	Start   time.Time
+	End     time.Time
 }
 
 type ReportComment struct {
-	Number     int
-	Average    int64
-	Author     string
-	Score      int64
-	Sub        string
-	Permalink  string
-	Body       string
-	QuotedBody string
-	Template   *template.Template
+	Number    int
+	Average   int64
+	Author    string
+	Created   time.Time
+	Score     int64
+	Sub       string
+	Permalink string
+	Body      string
 }
 
-func NewReportComment(number int, comment Comment, stats UserStats, tmpl *template.Template) ReportComment {
-	body := html.UnescapeString(comment.Body)
-	lines := strings.Split(body, "\n")
-	for i := 0; i < len(lines); i++ {
-		lines[i] = "> " + lines[i]
-	}
-
+func NewReportComment(number int, comment Comment, stats UserStats, tz *time.Location) ReportComment {
 	return ReportComment{
-		Number:     number,
-		Average:    int64(math.Round(stats.Average)),
-		Author:     comment.Author,
-		Score:      comment.Score,
-		Sub:        comment.Sub,
-		Body:       comment.Body,
-		Permalink:  comment.Permalink,
-		QuotedBody: strings.Join(lines, "\n"),
-		Template:   tmpl,
+		Number:    number,
+		Average:   int64(math.Round(stats.Average)),
+		Author:    comment.Author,
+		Created:   comment.CreatedTime().In(tz),
+		Score:     comment.Score,
+		Sub:       comment.Sub,
+		Body:      html.UnescapeString(comment.Body),
+		Permalink: comment.Permalink,
 	}
 }
 
-func (rc ReportComment) String() string {
-	var output bytes.Buffer
-	autopanic(rc.Template.Execute(&output, rc))
-	return output.String()
+func (rc ReportComment) BodyLines() []string {
+	return strings.Split(rc.Body, "\n")
 }
 
 // Statistics
@@ -237,34 +215,3 @@ func (s StatsSummaries) Sort() StatsSummaries {
 	sort.Sort(s)
 	return s
 }
-
-const tReportHead = `From {{ .Start }} to {{ .End }}.
-
-Top {{ .Delta | len }} negative **Δk** for this week:
-^([**Δk** or "delta k" refers to the total change in karma])
-{{ range .Delta }}
- - **{{ .Summary }}** with {{ .Count }} posts,
-   by [/u/{{ .Name }}](https://reddit.com/user/{{ .Name }})
-{{- end }}
-
-Top {{ .Average | len}} lowest average karma per comment:
-{{ range .Average }}
- - **{{ .Summary }}** with {{ .Count }} posts,
-   by [/u/{{ .Name }}](https://reddit.com/user/{{ .Name }})
-{{- end }}
-
-* * *`
-
-const tReportComment = `# \#{{ .Number }}
-
-Author: [/u/{{ .Author }}](https://reddit.com/user/{{ .Author }})^(Avg. this week = {{ .Average }} per comment)
-
-Score: **{{ .Score }}**
-
-Subreddit: [/r/{{ .Sub }}](https://reddit.com/r/{{ .Sub }})
-
-Link: [{{ .Permalink }}](https://reddit.com{{ .Permalink }})
-
-Post text:
-
-{{ .QuotedBody }}`

@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	dab := NewDownArrowsBot(os.Stderr, log.Lshortfile)
+	dab := NewDownArrowsBot(os.Stderr, log.Lshortfile, os.Stdout)
 	defer dab.Close()
 	dab.Launch(os.Args[1:])
 	if dab.Daemon {
