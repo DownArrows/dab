@@ -187,31 +187,32 @@ func init() {
 
 			<dl>
 
-			<span class="ditem">
+			<div class="ditem">
 			<dt>Author</dt>
 			<dd><a href="https://reddit.com/user/{{.Author}}">/u/{{.Author}}</a><sup>(Avg. this week = {{.Average}} per comment)</sup></dd>
-			</span>
+			</div>
 
-			<span class="ditem">
-			<dt>Date</td>
+			<div class="ditem">
+			<dt>Date</dt>
 			<dd>{{.Created.Format "Monday 02 January 15:04 PM"}}</dd>
-			</span>
+			</div>
 
-			<span class="ditem">
+			<div class="ditem">
 			<dt>Score</dt>
 			<dd class="score">{{.Score}}</dd>
-			</span>
+			</div>
 
-			<span class="ditem">
-			<dt>Subreddit</td>
+			<div class="ditem">
+			<dt>Subreddit</dt>
 			<dd><a href="https://reddit.com/r/{{.Sub}}">/r/{{.Sub}}</a></dd>
-			</span>
+			</div>
 
-			<span class="ditem">
+			<div class="ditem">
 			<dt>Link</dt>
 			<dd><a href="https://reddit.com{{.Permalink}}">{{.Permalink}}</a></dd>
+			</div>
+
 			</dl>
-			</span>
 
 			<blockquote>
 			{{.HTMLBody}}
