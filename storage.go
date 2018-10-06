@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
@@ -43,6 +44,8 @@ type ReportFactoryStorage interface {
 	GetCommentsBelowBetween(int64, time.Time, time.Time) []Comment
 	StatsBetween(time.Time, time.Time) UserStatsMap
 }
+
+var ErrNoComment = errors.New("no comment found")
 
 type Storage struct {
 	client          *sql.DB
@@ -326,14 +329,14 @@ func (s *Storage) GetNegativeKarma(username string) (int64, error) {
 }
 
 func (s *Storage) getKarma(q, username string) (int64, error) {
-	var score int64
+	var score sql.NullInt64
 	err := s.db.Get(&score, q, username)
 	if err != nil {
 		return 0, err
-	} else if err == sql.ErrNoRows {
-		return 0, fmt.Errorf("no comments from user '%s' found", username)
+	} else if !score.Valid {
+		return 0, ErrNoComment
 	}
-	return score, nil
+	return score.Int64, nil
 }
 
 func (s *Storage) StatsBetween(since, until time.Time) UserStatsMap {

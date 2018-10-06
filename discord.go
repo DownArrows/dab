@@ -505,12 +505,18 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 	}
 
 	total, err := bot.storage.GetTotalKarma(username)
-	if err != nil {
+	if err == ErrNoComment {
+		reply := fmt.Sprintf("<@%s> no comment found from %s", msg.Author.ID, res.User.Name)
+		return bot.ChannelMessageSend(msg.ChannelID, reply)
+	} else if err != nil {
 		return err
 	}
 
 	negative, err := bot.storage.GetNegativeKarma(username)
-	if err != nil {
+	if err == ErrNoComment {
+		reply := fmt.Sprintf("<@%s> karma%s %d (no negative comment)", msg.Author.ID, EmojiWheelOfDharma, res.User.Name, total)
+		return bot.ChannelMessageSend(msg.ChannelID, reply)
+	} else if err != nil {
 		return err
 	}
 
