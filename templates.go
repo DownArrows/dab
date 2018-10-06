@@ -126,7 +126,11 @@ func init() {
 					border-left: solid var(--spacing) var(--main-color);
 					margin-left: 0;
 					padding: var(--spacing);
-					padding-left: calc(2*var(--spacing));
+					padding-left: calc(2 * var(--spacing));
+				}
+
+				main {
+					margin-bottom: 1em;
 				}
 
 				a {
@@ -141,6 +145,11 @@ func init() {
 				a:visited {
 					color: #9bd;
 					text-decoration: none;
+				}
+
+				footer a {
+					display: block;
+					text-align: center;
 				}
 			</style>
 		</head>
@@ -169,6 +178,7 @@ func init() {
 		<hr/>
 		{{- end}}
 
+		<main>
 		{{range .Comments}}
 		<article class="comment">
 			<h1>#{{.Number}}</h1>
@@ -206,6 +216,8 @@ func init() {
 			</blockquote>
 		</article>
 		{{end}}
+		</main>
+		<footer><a href="#title">back to top</a></footer>
 		</body>`)
 }
 
