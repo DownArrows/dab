@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"gopkg.in/russross/blackfriday.v2"
 	"html/template"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -22,6 +21,36 @@ type WebServer struct {
 type WebServerError struct {
 	Status int
 	Error  error
+}
+
+type Response struct {
+	Actual http.ResponseWriter
+	Gzip   *gzip.Writer
+}
+
+func (r Response) Write(data []byte) (int, error) {
+	if r.Gzip == nil {
+		return r.Actual.Write(data)
+	}
+	return r.Gzip.Write(data)
+}
+
+func (r Response) Close() error {
+	if r.Gzip == nil {
+		return nil
+	}
+	return r.Gzip.Close()
+}
+
+func NewResponse(w http.ResponseWriter, r *http.Request) Response {
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Set("Content-Encoding", "gzip")
+		return Response{
+			Actual: w,
+			Gzip:   gzip.NewWriter(w),
+		}
+	}
+	return Response{Actual: w}
 }
 
 func NewWebServer(listen string, reports ReportFactory) *WebServer {
@@ -63,8 +92,7 @@ func (wsrv *WebServer) newError(status int, err error) *WebServerError {
 }
 
 func (wsrv *WebServer) processError(w http.ResponseWriter, err *WebServerError) {
-	w.WriteHeader(err.Status)
-	w.Write([]byte(fmt.Sprint(err.Error)))
+	http.Error(w, fmt.Sprint(err.Error), err.Status)
 }
 
 func (wsrv *WebServer) ReportIndex(w http.ResponseWriter, r *http.Request) {
@@ -73,16 +101,9 @@ func (wsrv *WebServer) ReportIndex(w http.ResponseWriter, r *http.Request) {
 
 func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 	if report := wsrv.getReportFromURL("/reports/source/", w, r); report.Len() != 0 {
-		var output io.Writer = w
-
-		w.Header().Set("Content-Type", "text/plain")
-
-		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-			w.Header().Set("Content-Encoding", "gzip")
-			output = gzip.NewWriter(w)
-			defer output.(io.WriteCloser).Close()
-		}
-
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		output := NewResponse(w, r)
+		defer output.Close()
 		autopanic(WriteMarkdownReport(report, output))
 	}
 }
@@ -155,16 +176,9 @@ func (wsrv *WebServer) prepareReportPage(report Report) func(http.ResponseWriter
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		var output io.Writer = w
-
 		w.Header().Set("Content-Type", "text/html")
-
-		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-			w.Header().Set("Content-Encoding", "gzip")
-			output = gzip.NewWriter(w)
-			defer output.(io.WriteCloser).Close()
-		}
-
+		output := NewResponse(w, r)
+		defer output.Close()
 		autopanic(HTMLReportPage.Execute(output, data))
 	}
 }
