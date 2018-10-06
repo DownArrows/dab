@@ -19,8 +19,7 @@ const Defaults string = `{
 		"max_age": "24h",
 		"unsuspension_interval": "15m",
 		"inactivity_threshold": "2200h",
-		"full_scan_interval": "6h",
-		"dvt_interval": "5m"
+		"full_scan_interval": "6h"
 	},
 
 	"report": {

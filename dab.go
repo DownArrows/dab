@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"strings"
+	"time"
 )
 
 type DownArrowsBot struct {
@@ -238,9 +239,11 @@ func (dab *DownArrowsBot) connectRedditAndDiscord() {
 	dab.Logger.Print("connecting the discord bot and the reddit bot together")
 	go dab.Components.Reddit.AddUserServer(dab.Components.Discord.AddUser)
 
-	reddit_evts := make(chan Comment)
-	go dab.Components.Discord.RedditEvents(reddit_evts)
-	go dab.Components.Reddit.StreamSub("DownvoteTrolling", reddit_evts, dab.Conf.Reddit.DVTInterval.Value)
+	if dab.Conf.Reddit.DVTInterval.Value != 0*time.Second {
+		reddit_evts := make(chan Comment)
+		go dab.Components.Discord.RedditEvents(reddit_evts)
+		go dab.Components.Reddit.StreamSub("DownvoteTrolling", reddit_evts, dab.Conf.Reddit.DVTInterval.Value)
+	}
 
 	suspensions := dab.Components.Reddit.Suspensions()
 	go dab.Components.Discord.SignalSuspensions(suspensions)
