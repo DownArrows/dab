@@ -38,8 +38,6 @@ func init() {
 
 		Subreddit: [/r/{{.Sub}}](https://reddit.com/r/{{.Sub}})
 
-		Link: [{{.Permalink}}](https://reddit.com{{.Permalink}})
-
 		Post text:
 
 		{{range .BodyLines}}
