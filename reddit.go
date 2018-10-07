@@ -40,7 +40,7 @@ func (bot *RedditBot) AutoCompendiumUpdate(interval time.Duration) {
 }
 
 func (bot *RedditBot) UpdateUsersFromCompendium() error {
-	page, err := bot.scanner.WikiPage("DownvoteTrolling", "compendium")
+	page, err := bot.scanner.WikiPage("downvote_trolls", "compendium")
 	if err != nil {
 		return err
 	}
