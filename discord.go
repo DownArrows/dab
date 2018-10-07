@@ -514,7 +514,7 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 	negative, err := bot.storage.GetNegativeKarma(username)
 	if err == ErrNoComment {
-		reply := fmt.Sprintf("<@%s> karma%s %d (no negative comment)", msg.Author.ID, EmojiWheelOfDharma, res.User.Name, total)
+		reply := fmt.Sprintf("<@%s> karma%s for %s: %d (no negative comment)", msg.Author.ID, EmojiWheelOfDharma, res.User.Name, total)
 		return bot.ChannelMessageSend(msg.ChannelID, reply)
 	} else if err != nil {
 		return err
