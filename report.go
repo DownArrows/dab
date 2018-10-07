@@ -47,13 +47,19 @@ func (rf ReportFactory) Report(start, end time.Time) Report {
 	}
 }
 
+func (rf ReportFactory) DurationUntilNextWeek() time.Duration {
+	year, week := rf.CurrentWeekCoordinates()
+	start := rf.WeekNumToStartDate(year, week+1)
+	return rf.Now().Sub(start)
+}
+
 func (rf ReportFactory) CurrentWeekCoordinates() (uint8, int) {
-	year, week := time.Now().In(rf.Timezone).ISOWeek()
+	year, week := rf.Now().ISOWeek()
 	return uint8(week), year
 }
 
 func (rf ReportFactory) LastWeekCoordinates() (uint8, int) {
-	year, week := time.Now().In(rf.Timezone).AddDate(0, 0, -7).ISOWeek()
+	year, week := rf.Now().AddDate(0, 0, -7).ISOWeek()
 	return uint8(week), year
 }
 
@@ -72,6 +78,12 @@ func (rf ReportFactory) StartOfFirstWeek(year int) time.Time {
 	day_position := (in_first_week.Weekday() + 6) % 7
 	return in_first_week.AddDate(0, 0, -int(day_position))
 }
+
+func (rf ReportFactory) Now() time.Time {
+	return time.Now().In(rf.Timezone)
+}
+
+// Report data structures
 
 type Report struct {
 	RawComments       []Comment
@@ -114,7 +126,17 @@ func (r Report) Comments() []ReportComment {
 
 func (r Report) Comment(i int) ReportComment {
 	comment := r.RawComments[i]
-	return NewReportComment(i+1, comment, r.Stats[comment.Author], r.Timezone)
+	stats := r.Stats[comment.Author]
+	return ReportComment{
+		Number:    i + 1,
+		Average:   int64(math.Round(stats.Average)),
+		Author:    comment.Author,
+		Created:   comment.CreatedTime().In(r.Timezone),
+		Score:     comment.Score,
+		Sub:       comment.Sub,
+		Body:      html.UnescapeString(comment.Body),
+		Permalink: comment.Permalink,
+	}
 }
 
 func (r Report) Len() int {
@@ -139,24 +161,11 @@ type ReportComment struct {
 	Body      string
 }
 
-func NewReportComment(number int, comment Comment, stats UserStats, tz *time.Location) ReportComment {
-	return ReportComment{
-		Number:    number,
-		Average:   int64(math.Round(stats.Average)),
-		Author:    comment.Author,
-		Created:   comment.CreatedTime().In(tz),
-		Score:     comment.Score,
-		Sub:       comment.Sub,
-		Body:      html.UnescapeString(comment.Body),
-		Permalink: comment.Permalink,
-	}
-}
-
 func (rc ReportComment) BodyLines() []string {
 	return strings.Split(rc.Body, "\n")
 }
 
-// Statistics
+// Statistics data structures
 
 type UserStats struct {
 	Name    string
