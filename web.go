@@ -19,10 +19,9 @@ type Response struct {
 func NewResponse(w http.ResponseWriter, r *http.Request) Response {
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		w.Header().Set("Content-Encoding", "gzip")
-		return Response{
-			Actual: w,
-			Gzip:   gzip.NewWriter(w),
-		}
+		gw, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+		autopanic(err)
+		return Response{Actual: w, Gzip: gw}
 	}
 	return Response{Actual: w}
 }
