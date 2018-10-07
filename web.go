@@ -106,23 +106,9 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 	week, year, err := weekAndYear(ignoreTrailing(subPath("/reports/", r)))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
-	} else {
-		report := wsrv.Reports.ReportWeek(week, year)
-		wsrv.serveHTMLReport(report, w, r)
+		return
 	}
-}
-
-func (wsrv *WebServer) ReportCurrent(w http.ResponseWriter, r *http.Request) {
-	week, year := wsrv.Reports.CurrentWeekCoordinates()
-	redirectToReport(week, year, w, r)
-}
-
-func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
-	week, year := wsrv.Reports.LastWeekCoordinates()
-	redirectToReport(week, year, w, r)
-}
-
-func (wsrv *WebServer) serveHTMLReport(report Report, w http.ResponseWriter, r *http.Request) {
+	report := wsrv.Reports.ReportWeek(week, year)
 	if report.Len() == 0 {
 		http.NotFound(w, r)
 		return
@@ -147,6 +133,16 @@ func (wsrv *WebServer) serveHTMLReport(report Report, w http.ResponseWriter, r *
 	output := NewResponse(w, r)
 	defer output.Close()
 	autopanic(HTMLReportPage.Execute(output, data))
+}
+
+func (wsrv *WebServer) ReportCurrent(w http.ResponseWriter, r *http.Request) {
+	week, year := wsrv.Reports.CurrentWeekCoordinates()
+	redirectToReport(week, year, w, r)
+}
+
+func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
+	week, year := wsrv.Reports.LastWeekCoordinates()
+	redirectToReport(week, year, w, r)
 }
 
 func redirectToReport(week uint8, year int, w http.ResponseWriter, r *http.Request) {
