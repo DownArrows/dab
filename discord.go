@@ -103,17 +103,18 @@ type DiscordBotChannelsID struct {
 }
 
 type DiscordBot struct {
-	logger     *log.Logger
-	storage    DiscordBotStorage
 	client     *discordgo.Session
-	Commands   []DiscordCommand
+	logger     *log.Logger
 	redditLink *regexp.Regexp
-	ChannelsID DiscordBotChannelsID
-	AdminID    string
+	storage    DiscordBotStorage
 	AddUser    chan UserQuery
-	Prefix     string
-	Welcome    *template.Template
+	AdminID    string
+	ChannelsID DiscordBotChannelsID
+	Commands   []DiscordCommand
 	HidePrefix string
+	Prefix     string
+	Timezone   *time.Location
+	Welcome    *template.Template
 }
 
 func NewDiscordBot(storage DiscordBotStorage, logger *log.Logger, conf DiscordBotConf) (*DiscordBot, error) {
@@ -125,11 +126,12 @@ func NewDiscordBot(storage DiscordBotStorage, logger *log.Logger, conf DiscordBo
 	bot := &DiscordBot{
 		client:     session,
 		logger:     logger,
-		storage:    storage,
 		redditLink: regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
+		storage:    storage,
 		AddUser:    make(chan UserQuery),
-		Prefix:     conf.Prefix,
 		HidePrefix: conf.HidePrefix,
+		Prefix:     conf.Prefix,
+		Timezone:   conf.Timezone.Value,
 	}
 
 	bot.Commands = bot.GetCommandsDescriptors()
@@ -471,8 +473,8 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 	if query.Exists {
 		user := query.User
 		info := []string{
-			user.Name + " has been created on " + user.CreatedTime().Format(time.RFC850),
-			"has been added to the database on " + user.AddedTime().Format(time.RFC850),
+			user.Name + " has been created on " + user.CreatedTime().In(bot.Timezone).Format(time.RFC850),
+			"has been added to the database on " + user.AddedTime().In(bot.Timezone).Format(time.RFC850),
 		}
 		if user.Hidden {
 			info = append(info, "is hidden from reports")

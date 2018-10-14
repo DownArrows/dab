@@ -7,6 +7,8 @@ import (
 )
 
 const Defaults string = `{
+	"timezone": "UTC",
+
 	"database": {
 		"path": "./dab.db",
 		"cleanup_interval": "6h"
@@ -23,7 +25,6 @@ const Defaults string = `{
 	},
 
 	"report": {
-		"timezone": "UTC",
 		"leeway": "12h",
 		"cutoff": -50,
 		"max_length": 400000,
@@ -34,7 +35,6 @@ const Defaults string = `{
 		"highscore_threshold": -1000,
 		"prefix": "!"
 	}
-
 }`
 
 type StorageConf struct {
@@ -58,27 +58,29 @@ type RedditBotConf struct {
 
 type ReportConf struct {
 	Leeway    Duration `json:"leeway"`
-	Timezone  Timezone `json:"timezone"`
+	Timezone  Timezone `json:"-"`
 	Cutoff    int64    `json:"cutoff"`
 	MaxLength uint64   `json:"max_length"`
 	NbTop     uint     `json:"nb_top"`
 }
 
 type DiscordBotConf struct {
-	Token      string `json:"token"`
-	General    string `json:"general"`
-	Log        string `json:"log"`
-	HighScores string `json:"highscores"`
-	Admin      string `json:"admin"`
-	Prefix     string `json:"prefix"`
-	Welcome    string `json:"welcome"`
-	HidePrefix string `json:"hide_prefix"`
+	Token      string   `json:"token"`
+	General    string   `json:"general"`
+	Log        string   `json:"log"`
+	HighScores string   `json:"highscores"`
+	Admin      string   `json:"admin"`
+	Prefix     string   `json:"prefix"`
+	Welcome    string   `json:"welcome"`
+	HidePrefix string   `json:"hide_prefix"`
+	Timezone   Timezone `json:"-"`
 }
 
 type Configuration struct {
-	Database StorageConf
+	Timezone   Timezone `json:"timezone"`
+	HidePrefix string   `json:"hide_prefix"`
 
-	HidePrefix string `json:"hide_prefix"`
+	Database StorageConf
 
 	Reddit struct {
 		RedditAuth

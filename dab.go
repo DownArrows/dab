@@ -9,42 +9,43 @@ import (
 )
 
 type DownArrowsBot struct {
-	LoggerOpts int
-	Logger     *log.Logger
-	LogOut     io.Writer
 	FlagSet    *flag.FlagSet
+	Logger     *log.Logger
+	LoggerOpts int
+	LogOut     io.Writer
 	StdOut     io.Writer
 
-	Daemon bool
 	Conf   Configuration
+	Daemon bool
 
 	RuntimeConf struct {
-		Launched   bool
-		UserAdd    bool
-		Report     bool
-		InitDB     bool
 		Compendium bool
-		Reddit     bool
 		Discord    bool
+		InitDB     bool
+		Launched   bool
+		Reddit     bool
+		Report     bool
+		Timezone   *time.Location
+		UserAdd    bool
 		Web        bool
 	}
 
 	Components struct {
 		Enabled []string
-		Storage *Storage
-		Reddit  *RedditBot
 		Discord *DiscordBot
+		Reddit  *RedditBot
 		Report  ReportFactory
+		Storage *Storage
 		Web     *WebServer
 	}
 }
 
 func NewDownArrowsBot(log_out io.Writer, logger_opts int, output io.Writer) *DownArrowsBot {
 	return &DownArrowsBot{
-		LoggerOpts: logger_opts,
-		Logger:     log.New(log_out, "", logger_opts),
-		LogOut:     log_out,
 		FlagSet:    flag.NewFlagSet("DownArrowsBot", flag.ExitOnError),
+		Logger:     log.New(log_out, "", logger_opts),
+		LoggerOpts: logger_opts,
+		LogOut:     log_out,
 		StdOut:     output,
 	}
 }
@@ -59,7 +60,7 @@ func (dab *DownArrowsBot) Launch(args []string) {
 		return
 	}
 
-	dab.Components.Report = NewReportFactory(dab.Components.Storage, dab.Conf.Report)
+	dab.initReport()
 	if dab.RuntimeConf.Report {
 		dab.report()
 		return
@@ -119,10 +120,10 @@ func (dab *DownArrowsBot) Close() {
 
 func (dab *DownArrowsBot) init(args []string) {
 	path := dab.FlagSet.String("config", "./dab.conf.json", "Path to the configuration file.")
+	dab.FlagSet.BoolVar(&dab.RuntimeConf.Compendium, "compendium", false, "Start the reddit bot with an update from DVT's compendium.")
 	dab.FlagSet.BoolVar(&dab.RuntimeConf.InitDB, "initdb", false, "Initialize the database and exit.")
 	dab.FlagSet.BoolVar(&dab.RuntimeConf.Report, "report", false, "Print the report for the last week and exit.")
 	dab.FlagSet.BoolVar(&dab.RuntimeConf.UserAdd, "useradd", false, "Add one or multiple usernames to be tracked and exit.")
-	dab.FlagSet.BoolVar(&dab.RuntimeConf.Compendium, "compendium", false, "Start the reddit bot with an update from DVT's compendium.")
 	dab.FlagSet.Parse(args)
 
 	if !dab.RuntimeConf.UserAdd && dab.FlagSet.NArg() > 0 {
@@ -134,6 +135,9 @@ func (dab *DownArrowsBot) init(args []string) {
 	if err != nil {
 		dab.Logger.Fatal(err)
 	}
+
+	dab.Conf.Report.Timezone = dab.Conf.Timezone
+	dab.Conf.Discord.Timezone = dab.Conf.Timezone
 }
 
 func (dab *DownArrowsBot) checkRedditConf() {
@@ -222,6 +226,10 @@ func (dab *DownArrowsBot) launchDiscord() {
 
 	dab.Logger.Print("attempting to connect discord bot")
 	bot_logger := log.New(dab.LogOut, "", dab.LoggerOpts)
+
+	if dab.Conf.Discord.Timezone.Value == nil {
+		dab.Conf.Discord.Timezone.Value = dab.RuntimeConf.Timezone
+	}
 
 	dab.Components.Discord, err = NewDiscordBot(dab.Components.Storage, bot_logger, dab.Conf.Discord.DiscordBotConf)
 	if err != nil {
