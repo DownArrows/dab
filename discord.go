@@ -411,7 +411,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 	names := msg.Args
 	bot.logger.Printf("%s wants to register %v", msg.Author.FQN(), names)
 
-	statuses := make([]string, 0, len(names))
+	var statuses []string
 	for _, name := range names {
 		if err := bot.client.ChannelTyping(msg.ChannelID); err != nil {
 			return err
