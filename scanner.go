@@ -25,13 +25,11 @@ type OAuthResponse struct {
 	Scope   string `json:"scope"`
 }
 
-type Scanner struct {
-	sync.Mutex
-	Client    *http.Client
-	UserAgent string
-	OAuth     OAuthResponse
-	Auth      RedditAuth
-	ticker    *time.Ticker
+type wikiPage struct {
+	Data struct {
+		RevisionDate float64
+		Content      string `json:"content_md"`
+	}
 }
 
 type commentListing struct {
@@ -45,17 +43,26 @@ type commentListing struct {
 
 type aboutUser struct {
 	Data struct {
-		Name      string
+		Name      string  `json:"name"`
 		Created   float64 `json:"created_utc"`
 		Suspended bool    `json:"is_suspended"`
+		ModHash   string  `json:"modhash"`
 	}
 }
 
-type wikiPage struct {
-	Data struct {
-		RevisionDate float64
-		Content      string `json:"content_md"`
-	}
+type redditResponse struct {
+	Data   []byte
+	Status int
+	Error  error
+}
+
+type Scanner struct {
+	sync.Mutex
+	Client    *http.Client
+	UserAgent string
+	OAuth     OAuthResponse
+	Auth      RedditAuth
+	ticker    *time.Ticker
 }
 
 func NewScanner(auth RedditAuth, userAgent string) (*Scanner, error) {
@@ -88,23 +95,21 @@ func (sc *Scanner) AboutUser(username string) UserQuery {
 		return query
 	}
 
-	sc.Lock()
-	defer sc.Unlock()
-	res, status, err := sc.rawRequest("GET", "/u/"+username+"/about", nil)
-	if err != nil {
-		query.Error = err
+	res := sc.Request("GET", "/u/"+username+"/about", nil)
+	if res.Error != nil {
+		query.Error = res.Error
 		return query
 	}
 
-	if status == 404 {
+	if res.Status == 404 {
 		return query
-	} else if status != 200 {
-		query.Error = fmt.Errorf("bad response status when looking up %s: %d", username, status)
+	} else if res.Status != 200 {
+		query.Error = fmt.Errorf("bad response status when looking up %s: %d", username, res.Status)
 		return query
 	}
 
 	about := &aboutUser{}
-	if err := json.Unmarshal(res, about); err != nil {
+	if err := json.Unmarshal(res.Data, about); err != nil {
 		query.Error = err
 		return query
 	}
@@ -117,25 +122,26 @@ func (sc *Scanner) AboutUser(username string) UserQuery {
 }
 
 func (sc *Scanner) WikiPage(sub, page string) (string, error) {
-	sc.Lock()
-	defer sc.Unlock()
-
 	path := "/r/" + sub + "/wiki/" + page
-	res, status, err := sc.rawRequest("GET", path, nil)
-	if err != nil {
-		return "", err
+	res := sc.Request("GET", path, nil)
+	if res.Error != nil {
+		return "", res.Error
 	}
-	if status != 200 {
-		return "", fmt.Errorf("invalid status when fetching '%s': %d", path, status)
+	if res.Status != 200 {
+		return "", fmt.Errorf("invalid status when fetching '%s': %d", path, res.Status)
 	}
 
 	parsed := &wikiPage{}
-	if err := json.Unmarshal(res, parsed); err != nil {
+	if err := json.Unmarshal(res.Data, parsed); err != nil {
 		return "", err
 	}
 
 	return parsed.Data.Content, nil
 }
+
+//func (sc *Scanner) EditWikiPage(sub, page, summary, content string) error {
+//
+//}
 
 func (sc *Scanner) SubPosts(sub string, position string) ([]Comment, string, error) {
 	comments, position, _, err := sc.getListing("/r/"+sub+"/new", position)
@@ -143,6 +149,9 @@ func (sc *Scanner) SubPosts(sub string, position string) ([]Comment, string, err
 }
 
 func (sc *Scanner) connect(auth RedditAuth) error {
+	sc.Lock()
+	defer sc.Unlock()
+
 	sc.Auth = auth
 
 	var auth_conf = url.Values{
@@ -175,26 +184,23 @@ func (sc *Scanner) getListing(path string, position string) ([]Comment, string, 
 		params += "&after=" + position
 	}
 
-	sc.Lock()
-	defer sc.Unlock()
-
-	res, status, err := sc.rawRequest("GET", path+params, nil)
-	if err != nil {
-		return nil, position, 0, err
+	res := sc.Request("GET", path+params, nil)
+	if res.Error != nil {
+		return nil, position, res.Status, res.Error
 	}
 
-	if strings.HasPrefix(path, "/u/") && (status == 403 || status == 404) {
-		return nil, position, status, nil
+	if strings.HasPrefix(path, "/u/") && (res.Status == 403 || res.Status == 404) {
+		return nil, position, res.Status, res.Error
 	}
 
-	if status != 200 {
-		err = fmt.Errorf("bad response status when fetching the listing %s: %d", path, status)
-		return nil, position, status, err
+	if res.Status != 200 {
+		err := fmt.Errorf("bad response status when fetching the listing %s: %d", path, res.Status)
+		return nil, position, res.Status, err
 	}
 
 	parsed := &commentListing{}
-	if err := json.Unmarshal(res, parsed); err != nil {
-		return nil, position, status, err
+	if err := json.Unmarshal(res.Data, parsed); err != nil {
+		return nil, position, res.Status, err
 	}
 
 	children := parsed.Data.Children
@@ -204,39 +210,50 @@ func (sc *Scanner) getListing(path string, position string) ([]Comment, string, 
 	}
 
 	new_position := parsed.Data.After
-	return comments, new_position, status, nil
+	return comments, new_position, res.Status, nil
 }
 
-func (sc *Scanner) rawRequest(verb string, path string, data io.Reader) ([]byte, int, error) {
+func (sc *Scanner) Request(verb, path string, data io.Reader) redditResponse {
+	make_req := func() (*http.Request, error) {
+		return http.NewRequest(verb, requestBaseURL+path, data)
+	}
+	return sc.rawRequest(make_req)
+}
+
+func (sc *Scanner) rawRequest(makeReq func() (*http.Request, error)) redditResponse {
 
 	<-sc.ticker.C
 
-	req, err := http.NewRequest(verb, requestBaseURL+path, data)
+	req, err := makeReq()
 	if err != nil {
-		return nil, 0, err
+		return redditResponse{Error: err}
 	}
 
 	sc.prepareRequest(req)
-	res, res_err := sc.Client.Do(req)
-	if res_err != nil {
-		return nil, 0, res_err
+	raw_res, err := sc.Client.Do(req)
+	if err != nil {
+		return redditResponse{Error: err}
 	}
 
 	// The response's body must be read and closed to make sure the underlying TCP connection can be re-used.
-	raw_data, read_err := ioutil.ReadAll(res.Body)
-	res.Body.Close()
-	if read_err != nil {
-		return nil, 0, read_err
+	raw_data, err := ioutil.ReadAll(raw_res.Body)
+	raw_res.Body.Close()
+
+	res := redditResponse{
+		Status: raw_res.StatusCode,
+		Data:   raw_data,
+		Error:  err,
 	}
 
-	if res.StatusCode == 401 {
+	if res.Status == 401 {
 		if err := sc.connect(sc.Auth); err != nil {
-			return nil, 0, err
+			res.Error = err
+			return res
 		}
-		return sc.rawRequest(verb, path, data)
+		return sc.rawRequest(makeReq)
 	}
 
-	return raw_data, res.StatusCode, nil
+	return res
 }
 
 func (sc *Scanner) prepareRequest(req *http.Request) *http.Request {
