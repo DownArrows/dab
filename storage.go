@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
+	"sync"
 	"time"
 )
 
@@ -48,10 +49,14 @@ type ReportFactoryStorage interface {
 var ErrNoComment = errors.New("no comment found")
 
 type Storage struct {
-	client          *sql.DB
-	db              *sqlx.DB
-	Path            string
-	CleanupInterval time.Duration
+	client            *sql.DB
+	db                *sqlx.DB
+	Path              string
+	CleanupInterval   time.Duration
+	knownObjectsCache struct {
+		sync.Mutex
+		Has map[string]bool
+	}
 }
 
 func NewStorage(conf StorageConf) *Storage {
@@ -66,6 +71,7 @@ func NewStorage(conf StorageConf) *Storage {
 	s.db = sqlx.MustConnect("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", s.Path))
 
 	s.Init()
+	s.initKnownObjects()
 	s.launchPeriodicVacuum()
 
 	return s
@@ -148,6 +154,22 @@ func (s *Storage) EnableWAL() {
 	autopanic(s.db.Get(&journal_mode, "PRAGMA journal_mode=WAL"))
 	if journal_mode != "wal" {
 		autopanic(fmt.Errorf("failed to set journal mode to Write-Ahead Log (WAL)"))
+	}
+}
+
+/*******
+ Caching
+********/
+
+func (s *Storage) initKnownObjects() {
+	s.knownObjectsCache.Lock()
+	defer s.knownObjectsCache.Unlock()
+
+	s.knownObjectsCache.Has = make(map[string]bool)
+
+	objs := s.GetKnownObjects()
+	for _, obj := range objs {
+		s.knownObjectsCache.Has[obj] = true
 	}
 }
 
@@ -405,15 +427,29 @@ func (s *Storage) SeenPostIDs(sub string) []string {
 
 func (s *Storage) SaveKnownObject(id string) error {
 	_, err := s.db.Exec("INSERT INTO known_objects VALUES (?, strftime(\"%s\", CURRENT_TIMESTAMP))", id)
-	return err
+	if err != nil {
+		return err
+	}
+
+	s.knownObjectsCache.Lock()
+	s.knownObjectsCache.Has[id] = true
+	s.knownObjectsCache.Unlock()
+	return nil
 }
 
 func (s *Storage) IsKnownObject(id string) bool {
-	var result string
-	err := s.db.Get(&result, "SELECT id FROM known_objects WHERE id = ?", id)
+	s.knownObjectsCache.Lock()
+	_, ok := s.knownObjectsCache.Has[id]
+	s.knownObjectsCache.Unlock()
+	return ok
+}
+
+func (s *Storage) GetKnownObjects() []string {
+	var ids []string
+	err := s.db.Select(&ids, "SELECT id FROM known_objects")
 	if err == sql.ErrNoRows {
-		return false
+		return []string{}
 	}
 	autopanic(err)
-	return true
+	return ids
 }

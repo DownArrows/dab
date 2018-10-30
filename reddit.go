@@ -110,8 +110,11 @@ func (bot *RedditBot) UpdateUsersFromCompendium() error {
 func (bot *RedditBot) StreamSub(sub string, ch chan Comment, sleep time.Duration) {
 	bot.logger.Print("streaming new posts from ", sub)
 
-	seen := bot.storage.SeenPostIDs(sub)
-	first_time := len(seen) == 0
+	seen := make(map[string]bool)
+	for _, id := range bot.storage.SeenPostIDs(sub) {
+		seen[id] = true
+	}
+	first_time := (len(seen) == 0)
 
 	for {
 		posts, _, err := bot.scanner.SubPosts(sub, "")
@@ -127,19 +130,17 @@ func (bot *RedditBot) StreamSub(sub string, ch chan Comment, sleep time.Duration
 			if first_time {
 				break
 			}
-			if !StringInSlice(post.Id, seen) {
-				ch <- post
-			} else {
+			if _, ok := seen[post.Id]; ok {
 				break
+			} else {
+				ch <- post
 			}
 		}
 
-		ids := make([]string, 0, len(posts))
 		for _, post := range posts {
-			ids = append(ids, post.Id)
+			seen[post.Id] = true
 		}
 
-		seen = append(seen, ids...)
 		first_time = false
 
 		time.Sleep(sleep)
@@ -451,13 +452,4 @@ func (bot *RedditBot) AlertIfHighScore(comments []Comment) error {
 	}
 
 	return nil
-}
-
-func StringInSlice(str string, slice []string) bool {
-	for _, elem := range slice {
-		if str == elem {
-			return true
-		}
-	}
-	return false
 }
