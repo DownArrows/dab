@@ -75,8 +75,6 @@ func (bot *RedditBot) UpdateUsersFromCompendium() error {
 		}
 	}
 
-	bot.logger.Printf("found %d users in the compendium", len(names))
-
 	added_counter := 0
 	for _, username := range names {
 
@@ -102,7 +100,9 @@ func (bot *RedditBot) UpdateUsersFromCompendium() error {
 
 	}
 
-	bot.logger.Printf("added %d new user(s) from the compendium", added_counter)
+	if added_counter > 0 {
+		bot.logger.Printf("found %d user(s) in the compendium, added %d new one(s)", len(names), added_counter)
+	}
 
 	return nil
 }
@@ -440,7 +440,6 @@ func (bot *RedditBot) AlertIfHighScore(comments []Comment) error {
 				continue
 			}
 
-			bot.logger.Printf("new high-scoring comment found: %+v", comment)
 			if err := bot.storage.SaveKnownObject(comment.Id); err != nil {
 				return err
 			}
