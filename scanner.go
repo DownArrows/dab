@@ -91,8 +91,25 @@ func NewScanner(auth RedditAuth, userAgent *template.Template) (*Scanner, error)
 	return client, nil
 }
 
-func (sc *Scanner) UserComments(username string, position string) ([]Comment, string, int, error) {
-	return sc.getListing("/u/"+username+"/comments", position)
+func (sc *Scanner) UserComments(user User) ([]Comment, User, error) {
+	comments, position, status, err := sc.getListing("/u/"+user.Name+"/comments", user.Position)
+	if err != nil {
+		return []Comment{}, user, err
+	}
+	user.Position = position
+
+	// Fetching the comments of a user that's been suspended can return 403,
+	// so the status doesn't really give enough information.
+	if status == 403 || status == 404 {
+		about := sc.AboutUser(user.Name)
+		if about.Error != nil {
+			return []Comment{}, user, about.Error
+		}
+		user.Suspended = about.User.Suspended
+		user.NotFound = !about.Exists
+	}
+
+	return comments, user, nil
 }
 
 func (sc *Scanner) AboutUser(username string) UserQuery {
@@ -113,6 +130,7 @@ func (sc *Scanner) AboutUser(username string) UserQuery {
 	}
 
 	if res.Status == 404 {
+		query.User.NotFound = true
 		return query
 	} else if res.Status != 200 {
 		query.Error = fmt.Errorf("bad response status when looking up %s: %d", username, res.Status)

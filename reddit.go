@@ -214,7 +214,7 @@ func (bot *RedditBot) Suspensions() chan User {
 	return bot.Suspended
 }
 
-func (bot *RedditBot) CheckUnsuspended(delay time.Duration) chan User {
+func (bot *RedditBot) CheckUnsuspendedAndNotFound(delay time.Duration) chan User {
 	ch := make(chan User)
 
 	go func() {
@@ -223,22 +223,61 @@ func (bot *RedditBot) CheckUnsuspended(delay time.Duration) chan User {
 
 			time.Sleep(delay)
 
-			for _, user := range bot.storage.ListSuspended() {
+			for _, user := range bot.storage.ListSuspendedAndNotFound() {
+
 				res := bot.scanner.AboutUser(user.Name)
 				if res.Error != nil {
-					bot.logger.Printf("unsuspension checker, while checking \"%s\": %s", user.Name, res.Error)
+					bot.logger.Print(res.Error)
 					continue
 				}
 
-				if res.Exists && !res.User.Suspended {
-					if err := bot.storage.UnSuspendUser(user.Name); err != nil {
-						bot.logger.Printf("unsuspension checker, while checking \"%s\": %s", user.Name, res.Error)
+				/* Actions depending in change of status (from is "user", to is "res"):
+
+				 from \ to | Alive  | Suspended | Deleted
+				-----------|------------------------------
+				 Alive     | NA     | NA        | NA
+				------------------------------------------
+				 Suspended | signal | ignore    | update
+				------------------------------------------
+				 Deleted   | signal | update    | ignore
+
+				ignore: don't signal, don't update
+				signal: update the database and signal the change
+				update: update the database, don't signal the change
+				NA: not applicable (we only have suspended or deleted users to begin with)
+
+				*/
+
+				if user.NotFound && res.Exists { // undeletion
+					if err := bot.storage.FoundUser(user.Name); err != nil {
+						bot.logger.Print(err)
 						continue
 					}
-
-					bot.logger.Print(user.Name, " has been unsuspended")
-					ch <- user
+					if res.User.Suspended {
+						if err := bot.storage.SuspendUser(user.Name); err != nil {
+							bot.logger.Print(err)
+						}
+						continue // don't signal accounts that went from deleted to suspended
+					}
+				} else if user.Suspended && !res.Exists { // deletion of a suspended account
+					if err := bot.storage.NotFoundUser(user.Name); err != nil {
+						bot.logger.Print(err)
+						continue
+					}
+					continue // don't signal it, we only need to keep track of it
+				} else if user.Suspended && !res.User.Suspended { // unsuspension
+					if err := bot.storage.UnSuspendUser(user.Name); err != nil {
+						bot.logger.Print(err)
+						continue
+					}
+				} else { // no change
+					continue
 				}
+
+				user.NotFound = res.Exists
+				user.Suspended = res.User.Suspended
+				ch <- res.User
+
 			}
 
 		}
@@ -249,7 +288,7 @@ func (bot *RedditBot) CheckUnsuspended(delay time.Duration) chan User {
 }
 
 func (bot *RedditBot) Run() {
-	// Band-aid until proper closing sequence is written.
+	// Band-aid until a proper closing sequence is written.
 	defer func() {
 		if r := recover(); r != nil {
 			if err, ok := r.(error); ok {
@@ -257,21 +296,21 @@ func (bot *RedditBot) Run() {
 			}
 		}
 	}()
+
 	var last_full_scan time.Time
 
 	for {
 
 		now := time.Now().Round(0)
 		full_scan := now.Sub(last_full_scan) >= bot.Conf.FullScanInterval.Value
+		users := bot.getUsersOrWait(full_scan)
 
-		if err := bot.scanOnce(full_scan); err != nil {
-			log.Fatal(err)
-		}
+		bot.scan(users)
 
 		if full_scan {
 			last_full_scan = now
 			if err := bot.storage.UpdateInactiveStatus(bot.Conf.InactivityThreshold.Value); err != nil {
-				log.Fatal(err)
+				bot.logger.Fatal(err)
 			}
 		}
 
@@ -279,15 +318,54 @@ func (bot *RedditBot) Run() {
 
 }
 
-func (bot *RedditBot) scanOnce(full_scan bool) error {
-	users, err := bot.getUsersOrWait(full_scan)
-	if err != nil {
-		return err
+func (bot *RedditBot) scan(users []User) {
+	for _, user := range users {
+
+		for i := uint(0); i < bot.Conf.MaxBatches; i++ {
+			var err error
+			var comments []Comment
+
+			if comments, user, err = bot.scanner.UserComments(user); err != nil {
+				bot.logger.Printf("error while scanning user %s: %v", user.Name, err)
+			}
+
+			if reset, err := bot.storage.SaveCommentsUpdateUser(comments, user, bot.maxAgeReached(comments)); err != nil {
+				bot.logger.Printf("error while registering comments of user %s: %v", user.Name, err)
+			} else if reset {
+				break
+			}
+
+			if user.Suspended || user.NotFound {
+				if bot.Suspended != nil {
+					bot.Suspended <- user
+				}
+				break
+			}
+
+			if err := bot.AlertIfHighScore(comments); err != nil {
+				bot.logger.Print(err)
+			}
+		}
+
 	}
-	return bot.scanUsers(users)
 }
 
-func (bot *RedditBot) getUsersOrWait(full_scan bool) ([]User, error) {
+func (bot *RedditBot) maxAgeReached(comments []Comment) bool {
+	if len(comments) == 0 {
+		return false
+	}
+
+	last_comment := comments[len(comments)-1]
+
+	oldest := last_comment.CreatedTime()
+	// Use time.Time.Round to remove the monotonic clock measurement, as
+	// we don't need it for the precision we want and one parameter depends
+	// on an external source (the comments' timestamps).
+	now := time.Now().Round(0)
+	return now.Sub(oldest) > bot.Conf.MaxAge.Value
+}
+
+func (bot *RedditBot) getUsersOrWait(full_scan bool) []User {
 	var users []User
 
 	for {
@@ -306,122 +384,7 @@ func (bot *RedditBot) getUsersOrWait(full_scan bool) ([]User, error) {
 		// is used in production only once, when the database is empty.
 		time.Sleep(time.Second)
 	}
-	return users, nil
-}
-
-func (bot *RedditBot) scanUsers(users []User) error {
-	for _, user := range users {
-
-		if err := bot.allRelevantComments(user); err != nil {
-			// That error is probably network-related, so just log it
-			// and wait for the network or reddit to work again.
-			bot.logger.Print("error when fetching and saving comments: ", err)
-		}
-	}
-	return nil
-}
-
-func (bot *RedditBot) allRelevantComments(user User) error {
-	var err error
-	var status int
-
-	for i := uint(0); i < bot.Conf.MaxBatches; i++ {
-		user.Position, status, err = bot.saveCommentsPage(user)
-		if err != nil {
-			return err
-		}
-
-		suspended, err := bot.ifSuspended(user, status)
-		if err != nil {
-			return err
-		} else if suspended {
-			break
-		}
-
-		if user.Position == "" && user.New {
-			if err := bot.storage.NotNewUser(user.Name); err != nil {
-				return err
-			}
-		}
-
-		if user.Position == "" {
-			if err := bot.storage.ResetPosition(user.Name); err != nil {
-				return err
-			}
-			break
-		}
-
-	}
-
-	return nil
-}
-
-func (bot *RedditBot) ifSuspended(user User, status int) (bool, error) {
-	gone := status == 404
-	forbidden := status == 403
-
-	if forbidden {
-		bot.logger.Printf("trying to fetch '%s' resulted in a 403 error", user.Name)
-	} else if gone {
-		bot.logger.Printf("user '%s' not found", user.Name)
-	}
-
-	var about UserQuery
-	if forbidden {
-		about = bot.scanner.AboutUser(user.Name)
-		if about.Error != nil {
-			return false, about.Error
-		}
-	}
-
-	if gone || about.User.Suspended {
-		if err := bot.storage.SuspendUser(user.Name); err != nil {
-			return false, err
-		}
-
-		if bot.Suspended != nil {
-			bot.logger.Printf("user '%s' has been suspended or shadowbanned", user.Name)
-			bot.Suspended <- user
-		}
-
-		return true, nil
-	}
-
-	return false, nil
-}
-
-func (bot *RedditBot) saveCommentsPage(user User) (string, int, error) {
-	comments, position, status, err := bot.scanner.UserComments(user.Name, user.Position)
-	if err != nil {
-		return "", status, err
-	}
-	if status == 403 || status == 404 {
-		return position, status, nil
-	}
-
-	if err := bot.storage.SaveCommentsPage(comments, user); err != nil {
-		return "", status, err
-	}
-
-	if err := bot.AlertIfHighScore(comments); err != nil {
-		return "", status, err
-	}
-
-	if len(comments) > 0 && bot.maxAgeReached(comments) && !user.New {
-		return "", status, nil
-	}
-	return position, status, nil
-}
-
-func (bot *RedditBot) maxAgeReached(comments []Comment) bool {
-	last_comment := comments[len(comments)-1]
-
-	oldest := last_comment.CreatedTime()
-	// Use time.Time.Round to remove the monotonic clock measurement, as
-	// we don't need it for the precision we want and one parameter depends
-	// on an external source (the comments' timestamps).
-	now := time.Now().Round(0)
-	return now.Sub(oldest) > bot.Conf.MaxAge.Value
+	return users
 }
 
 func (bot *RedditBot) AlertIfHighScore(comments []Comment) error {

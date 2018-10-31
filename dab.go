@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const Version = "0.233"
+const Version = "0.234"
 
 type DownArrowsBot struct {
 	FlagSet    *flag.FlagSet
@@ -264,7 +264,7 @@ func (dab *DownArrowsBot) connectRedditAndDiscord() {
 	suspensions := dab.Components.Reddit.Suspensions()
 	go dab.Components.Discord.SignalSuspensions(suspensions)
 
-	unsuspensions := dab.Components.Reddit.CheckUnsuspended(dab.Conf.Reddit.UnsuspensionInterval.Value)
+	unsuspensions := dab.Components.Reddit.CheckUnsuspendedAndNotFound(dab.Conf.Reddit.UnsuspensionInterval.Value)
 	go dab.Components.Discord.SignalUnsuspensions(unsuspensions)
 
 	if dab.Conf.Discord.HighScores != "" {

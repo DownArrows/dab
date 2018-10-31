@@ -13,16 +13,16 @@ import (
 type RedditBotStorage interface {
 	// Users
 	AddUser(string, bool, int64) error
+	FoundUser(string) error
 	GetUser(string) UserQuery
-	ListUsers() []User
-	ListSuspended() []User
 	ListActiveUsers() []User
-	SuspendUser(string) error
+	ListSuspendedAndNotFound() []User
+	ListUsers() []User
+	NotFoundUser(string) error
 	UnSuspendUser(string) error
-	NotNewUser(string) error
-	ResetPosition(string) error
+	SuspendUser(string) error
 	// Comments
-	SaveCommentsPage([]Comment, User) error
+	SaveCommentsUpdateUser([]Comment, User, bool) (bool, error)
 	UpdateInactiveStatus(time.Duration) error
 	// Key-value
 	IsKnownSubPostID(string, string) bool
@@ -90,17 +90,18 @@ func (s *Storage) Init() {
 		CREATE TABLE IF NOT EXISTS tracked (
 			name TEXT PRIMARY KEY,
 			created INTEGER NOT NULL,
-			inactive BOOLEAN DEFAULT 0 NOT NULL,
+			not_found BOOLEAN DEFAULT 0 NOT NULL,
 			suspended BOOLEAN DEFAULT 0 NOT NULL,
-			deleted BOOLEAN DEFAULT 0 NOT NULL,
 			added INTEGER NOT NULL,
+			deleted BOOLEAN DEFAULT 0 NOT NULL,
 			hidden BOOLEAN NOT NULL,
+			inactive BOOLEAN DEFAULT 0 NOT NULL,
 			new BOOLEAN DEFAULT 1 NOT NULL,
 			position TEXT DEFAULT "" NOT NULL
 		) WITHOUT ROWID`)
 	s.db.MustExec(`
 			CREATE INDEX IF NOT EXISTS tracked_idx
-			ON tracked (suspended, deleted, hidden)`)
+			ON tracked (deleted, inactive, suspended, not_found, hidden)`)
 	s.db.MustExec(`
 		CREATE TABLE IF NOT EXISTS comments (
 			id TEXT PRIMARY KEY,
@@ -128,9 +129,9 @@ func (s *Storage) Init() {
 		) WITHOUT ROWID`)
 	s.db.MustExec(`
 		CREATE VIEW IF NOT EXISTS
-			users(name, created, added, suspended, hidden, new, position, inactive)
+			users(name, created, not_found, suspended, added, hidden, inactive, new, position)
 		AS
-			SELECT name, created, added, suspended, hidden, new, position, inactive
+			SELECT name, created, not_found, suspended, added, hidden, inactive, new, position
 			FROM tracked WHERE deleted = 0`)
 }
 
@@ -226,12 +227,12 @@ func (s *Storage) UnSuspendUser(username string) error {
 	return s.simpleEditUser("UPDATE tracked SET suspended = 0 WHERE name = ?", username)
 }
 
-func (s *Storage) NotNewUser(username string) error {
-	return s.simpleEditUser("UPDATE tracked SET new = 0 WHERE name = ?", username)
+func (s *Storage) NotFoundUser(username string) error {
+	return s.simpleEditUser("UPDATE tracked SET not_found = 1 WHERE name = ?", username)
 }
 
-func (s *Storage) ResetPosition(username string) error {
-	return s.simpleEditUser("UPDATE tracked SET position = '' WHERE name = ?", username)
+func (s *Storage) FoundUser(username string) error {
+	return s.simpleEditUser("UPDATE tracked SET not_found = 0 WHERE name = ?", username)
 }
 
 func (s *Storage) PurgeUser(username string) error {
@@ -256,15 +257,15 @@ func (s *Storage) anyListUsers(q string) []User {
 }
 
 func (s *Storage) ListUsers() []User {
-	return s.anyListUsers("SELECT * FROM users WHERE suspended = 0 ORDER BY name")
+	return s.anyListUsers("SELECT * FROM users WHERE suspended = 0 AND not_found = 0")
 }
 
-func (s *Storage) ListSuspended() []User {
-	return s.anyListUsers("SELECT * FROM users WHERE suspended = 1 ORDER BY name")
+func (s *Storage) ListSuspendedAndNotFound() []User {
+	return s.anyListUsers("SELECT * FROM users WHERE suspended = 1 OR not_found = 1")
 }
 
 func (s *Storage) ListActiveUsers() []User {
-	return s.anyListUsers("SELECT * FROM users WHERE inactive = 0 AND suspended = 0 ORDER BY name")
+	return s.anyListUsers("SELECT * FROM users WHERE inactive = 0 AND suspended = 0 AND not_found = 0")
 }
 
 func (s *Storage) UpdateInactiveStatus(max_age time.Duration) error {
@@ -289,8 +290,14 @@ func (s *Storage) UpdateInactiveStatus(max_age time.Duration) error {
  Comments
 *********/
 
-// Make sure the comments are all from the same user and its struct is up to date
-func (s *Storage) SaveCommentsPage(comments []Comment, user User) error {
+// Make sure the comments are all from the same user and the user struct is up to date
+func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, resetPosition bool) (bool, error) {
+	if user.Suspended {
+		return false, s.SuspendUser(user.Name)
+	} else if user.NotFound {
+		return false, s.NotFoundUser(user.Name)
+	}
+
 	tx := s.db.MustBegin()
 
 	stmt, err := tx.PrepareNamed(`
@@ -301,7 +308,7 @@ func (s *Storage) SaveCommentsPage(comments []Comment, user User) error {
 	`)
 	if err != nil {
 		tx.Rollback()
-		return err
+		return false, err
 	}
 	defer stmt.Close()
 
@@ -309,11 +316,20 @@ func (s *Storage) SaveCommentsPage(comments []Comment, user User) error {
 		stmt.MustExec(comment)
 	}
 
-	// We don't need to check for an error because if the user doesn't exist,
-	// then the constraints would have make the previous statement fail.
-	tx.MustExec("UPDATE tracked SET position = ? WHERE name = ?", user.Position, user.Name)
+	// Frow now on we don't need to check for an error because if the user doesn't exist,
+	// then the constraints would have made the previous statement fail.
 
-	return tx.Commit()
+	if user.New && user.Position == "" { // end of the listing reached
+		tx.MustExec("UPDATE tracked SET new = 0 WHERE name = ?", user.Name)
+	}
+
+	position := user.Position
+	if !user.New && resetPosition { // position resetting doesn't apply to new users
+		position = ""
+	}
+	tx.MustExec("UPDATE tracked SET position = ? WHERE name = ?", position, user.Name)
+
+	return (position == ""), tx.Commit()
 }
 
 func (s *Storage) GetCommentsBelowBetween(score int64, since, until time.Time) []Comment {
@@ -415,9 +431,9 @@ func (s *Storage) SaveSubPostIDs(sub string, listing []Comment) error {
 				}
 			}
 		})
-
 		err = tx.Commit()
 	})
+
 	return err
 }
 

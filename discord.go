@@ -270,10 +270,17 @@ func (bot *DiscordBot) RedditEvents(evts chan Comment) {
 
 func (bot *DiscordBot) SignalSuspensions(suspensions chan User) {
 	for user := range suspensions {
-		msg := fmt.Sprintf("RIP %s %s", user.Name, EmojiPrayingHands)
+
+		state := "suspended"
+		if user.NotFound {
+			state = "deleted"
+		}
+
+		msg := fmt.Sprintf("RIP %s %s (%s)", user.Name, EmojiPrayingHands, state)
 		if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
 			bot.logger.Print("suspensions listener: ", err)
 		}
+
 	}
 }
 

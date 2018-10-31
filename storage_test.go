@@ -129,15 +129,15 @@ func TestCRUDComments(t *testing.T) {
 
 	// Save comments
 	t.Run("save", func(t *testing.T) {
-		if err := s.SaveCommentsPage([]Comment{comments[0], comments[2]}, author1); err != nil {
+		if _, err := s.SaveCommentsUpdateUser([]Comment{comments[0], comments[2]}, author1, false); err != nil {
 			t.Error(err)
 			t.Fail()
 		}
-		if err := s.SaveCommentsPage([]Comment{comments[1], comments[3]}, author2); err != nil {
+		if _, err := s.SaveCommentsUpdateUser([]Comment{comments[1], comments[3]}, author2, false); err != nil {
 			t.Error(err)
 			t.Fail()
 		}
-		if err := s.SaveCommentsPage([]Comment{comments[4]}, author3); err != nil {
+		if _, err := s.SaveCommentsUpdateUser([]Comment{comments[4]}, author3, false); err != nil {
 			t.Error(err)
 			t.Fail()
 		}

@@ -2,12 +2,8 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"sync"
-	"time"
 )
-
-// Simple utility functions and data structures
 
 func autopanic(err error) {
 	if err != nil {
@@ -95,55 +91,4 @@ func (s *SyncSet) Len() int {
 	s.RLock()
 	defer s.RUnlock()
 	return len(s.data)
-}
-
-// Common models
-
-type Comment struct {
-	Id         string  `json:"id" db:"id"`
-	Author     string  `json:"author" db:"author"`
-	Score      int64   `json:"score" db:"score"`
-	Permalink  string  `json:"permalink" db:"permalink"`
-	Sub        string  `json:"subreddit" db:"sub"`
-	RawCreated float64 `json:"created_utc" db:"-"`
-	Created    int64   `json:"-" db:"created"`
-	Body       string  `json:"body" db:"body"`
-}
-
-func (comment Comment) FinishDecoding() Comment {
-	comment.Created = int64(comment.RawCreated)
-	return comment
-}
-
-func (c Comment) CreatedTime() time.Time {
-	return time.Unix(c.Created, 0)
-}
-
-type User struct {
-	Name      string
-	Hidden    bool
-	New       bool
-	Suspended bool
-	Created   int64
-	Added     int64
-	Position  string
-	Inactive  bool
-}
-
-func (u User) CreatedTime() time.Time {
-	return time.Unix(u.Created, 0)
-}
-
-func (u User) AddedTime() time.Time {
-	return time.Unix(u.Added, 0)
-}
-
-func (user *User) Username(username string) bool {
-	return strings.ToLower(user.Name) == strings.ToLower(username)
-}
-
-type UserQuery struct {
-	User   User
-	Exists bool
-	Error  error
 }
