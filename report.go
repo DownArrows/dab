@@ -116,8 +116,8 @@ func (r Report) Head() ReportHead {
 }
 
 func (r Report) Comments() []ReportComment {
-	var comments []ReportComment
 	n := r.Len()
+	comments := make([]ReportComment, 0, n)
 	for i := 0; i < n; i++ {
 		comments = append(comments, r.Comment(i))
 	}
@@ -177,7 +177,7 @@ type UserStats struct {
 type UserStatsMap map[string]UserStats
 
 func (usc UserStatsMap) DeltasToSummaries() StatsSummaries {
-	var stats []StatsSummary
+	stats := make([]StatsSummary, 0, len(usc))
 	for name, data := range usc {
 		stats = append(stats, StatsSummary{
 			Name:    name,
@@ -189,7 +189,7 @@ func (usc UserStatsMap) DeltasToSummaries() StatsSummaries {
 }
 
 func (usc UserStatsMap) AveragesToSummaries() StatsSummaries {
-	var stats []StatsSummary
+	stats := make([]StatsSummary, 0, len(usc))
 	for name, data := range usc {
 		stats = append(stats, StatsSummary{
 			Name:    name,

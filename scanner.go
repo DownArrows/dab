@@ -204,7 +204,7 @@ func (sc *Scanner) getListing(path string, position string) ([]Comment, string, 
 	}
 
 	children := parsed.Data.Children
-	comments := []Comment{}
+	comments := make([]Comment, 0, len(children))
 	for _, child := range children {
 		comments = append(comments, child.Data.FinishDecoding())
 	}

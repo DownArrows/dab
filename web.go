@@ -114,7 +114,7 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var comments []HTMLReportComment
+	comments := make([]HTMLReportComment, 0, report.Len())
 	for _, src := range report.Comments() {
 		var comment HTMLReportComment
 		comment.ReportComment = src
