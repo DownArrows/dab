@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
-	"sync"
 	"time"
 )
 
@@ -49,13 +48,12 @@ type ReportFactoryStorage interface {
 var ErrNoComment = errors.New("no comment found")
 
 type Storage struct {
-	client            *sql.DB
-	db                *sqlx.DB
-	Path              string
-	CleanupInterval   time.Duration
-	knownObjectsCache struct {
-		sync.Mutex
-		Has map[string]bool
+	client          *sql.DB
+	db              *sqlx.DB
+	Path            string
+	CleanupInterval time.Duration
+	cache           struct {
+		KnownObjects *SyncSet
 	}
 }
 
@@ -71,7 +69,7 @@ func NewStorage(conf StorageConf) *Storage {
 	s.db = sqlx.MustConnect("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", s.Path))
 
 	s.Init()
-	s.initKnownObjects()
+	s.initCaches()
 	s.launchPeriodicVacuum()
 
 	return s
@@ -161,16 +159,9 @@ func (s *Storage) EnableWAL() {
  Caching
 ********/
 
-func (s *Storage) initKnownObjects() {
-	s.knownObjectsCache.Lock()
-	defer s.knownObjectsCache.Unlock()
-
-	s.knownObjectsCache.Has = make(map[string]bool)
-
-	objs := s.GetKnownObjects()
-	for _, obj := range objs {
-		s.knownObjectsCache.Has[obj] = true
-	}
+func (s *Storage) initCaches() {
+	s.cache.KnownObjects = NewSyncSet()
+	s.cache.KnownObjects.MultiPut(s.getKnownObjects())
 }
 
 /*****
@@ -399,10 +390,7 @@ func (s *Storage) StatsBetween(since, until time.Time) UserStatsMap {
 
 func (s *Storage) SaveSubPostIDs(listing []Comment, sub string) error {
 	tx := s.db.MustBegin()
-	stmt, err := tx.Preparex(`
-		INSERT INTO seen_posts(id, sub, created) VALUES (?, ?, ?)
-		ON CONFLICT(id) DO NOTHING
-	`)
+	stmt, err := tx.Preparex("INSERT INTO seen_posts(id, sub, created) VALUES (?, ?, ?)")
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -410,7 +398,9 @@ func (s *Storage) SaveSubPostIDs(listing []Comment, sub string) error {
 	defer stmt.Close()
 
 	for _, post := range listing {
-		stmt.MustExec(post.Id, sub, post.Created)
+		if !s.cache.KnownObjects.Has(post.Id) {
+			stmt.MustExec(post.Id, sub, post.Created)
+		}
 	}
 
 	return tx.Commit()
@@ -430,21 +420,15 @@ func (s *Storage) SaveKnownObject(id string) error {
 	if err != nil {
 		return err
 	}
-
-	s.knownObjectsCache.Lock()
-	s.knownObjectsCache.Has[id] = true
-	s.knownObjectsCache.Unlock()
+	s.cache.KnownObjects.Put(id)
 	return nil
 }
 
 func (s *Storage) IsKnownObject(id string) bool {
-	s.knownObjectsCache.Lock()
-	_, ok := s.knownObjectsCache.Has[id]
-	s.knownObjectsCache.Unlock()
-	return ok
+	return s.cache.KnownObjects.Has(id)
 }
 
-func (s *Storage) GetKnownObjects() []string {
+func (s *Storage) getKnownObjects() []string {
 	var ids []string
 	err := s.db.Select(&ids, "SELECT id FROM known_objects")
 	if err == sql.ErrNoRows {

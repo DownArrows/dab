@@ -3,10 +3,11 @@ package main
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
 
-// Simple utility functions
+// Simple utility functions and data structures
 
 func autopanic(err error) {
 	if err != nil {
@@ -50,6 +51,44 @@ func Batches(chunks Chunks) ([][]string, error) {
 	}
 
 	return batches, nil
+}
+
+type SyncSet struct {
+	sync.RWMutex
+	data map[string]bool
+}
+
+func NewSyncSet() *SyncSet {
+	return &SyncSet{
+		data: make(map[string]bool),
+	}
+}
+
+func (s *SyncSet) Has(key string) bool {
+	s.RLock()
+	_, ok := s.data[key]
+	s.RUnlock()
+	return ok
+}
+
+func (s *SyncSet) Put(key string) {
+	s.Lock()
+	s.data[key] = true
+	s.Unlock()
+}
+
+func (s *SyncSet) MultiPut(keys []string) {
+	s.Lock()
+	for _, key := range keys {
+		s.data[key] = true
+	}
+	s.Unlock()
+}
+
+func (s *SyncSet) Len() int {
+	s.RLock()
+	defer s.RUnlock()
+	return len(s.data)
 }
 
 // Common models
