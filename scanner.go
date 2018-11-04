@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 )
 
@@ -65,12 +67,21 @@ type Scanner struct {
 	ticker    *time.Ticker
 }
 
-func NewScanner(auth RedditAuth, userAgent string) (*Scanner, error) {
+func NewScanner(auth RedditAuth, userAgent *template.Template) (*Scanner, error) {
+	var user_agent strings.Builder
+	data := map[string]interface{}{
+		"Version": Version,
+		"OS":      runtime.GOOS,
+	}
+	if err := userAgent.Execute(&user_agent, data); err != nil {
+		return nil, err
+	}
+
 	http_client := &http.Client{}
 	var client = &Scanner{
 		Client:    http_client,
 		ticker:    time.NewTicker(time.Second),
-		UserAgent: userAgent,
+		UserAgent: user_agent.String(),
 	}
 
 	if err := client.connect(auth); err != nil {

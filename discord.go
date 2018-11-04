@@ -358,8 +358,8 @@ func (bot *DiscordBot) GetCommandsDescriptors() []DiscordCommand {
 		Callback: bot.karma,
 		HasArgs:  true,
 	}, {
-		Command:  "ping",
-		Callback: bot.simpleReply("pong"),
+		Command:  "version",
+		Callback: bot.simpleReply(Version),
 		Admin:    true,
 	}, {
 		Command:  "register",

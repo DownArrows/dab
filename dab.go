@@ -5,8 +5,11 @@ import (
 	"io"
 	"log"
 	"strings"
+	"text/template"
 	"time"
 )
+
+const Version = "0.233"
 
 type DownArrowsBot struct {
 	FlagSet    *flag.FlagSet
@@ -172,8 +175,13 @@ func (dab *DownArrowsBot) initStorage() {
 }
 
 func (dab *DownArrowsBot) initReddit() {
+	user_agent, err := template.New("UserAgent").Parse(dab.Conf.Reddit.UserAgent)
+	if err != nil {
+		dab.Logger.Fatal(err)
+	}
+
 	dab.Logger.Print("attempting to log reddit bot in")
-	scanner, err := NewScanner(dab.Conf.Reddit.RedditAuth, dab.Conf.Reddit.UserAgent)
+	scanner, err := NewScanner(dab.Conf.Reddit.RedditAuth, user_agent)
 	if err != nil {
 		dab.Logger.Fatal(err)
 	}
