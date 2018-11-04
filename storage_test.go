@@ -227,22 +227,20 @@ func TestKeyValue(t *testing.T) {
 	})
 
 	t.Run("write sub posts' IDs", func(t *testing.T) {
-		if err := s.SaveSubPostIDs([]Comment{{Id: "a"}, {Id: "b"}}, "sub"); err != nil {
+		if err := s.SaveSubPostIDs("sub", []Comment{{Id: "a"}, {Id: "b"}}); err != nil {
 			t.Error(err)
 		}
 	})
 
-	t.Run("read sub posts' IDs", func(t *testing.T) {
-		ids := s.SeenPostIDs("sub")
-		if !(len(ids) == 2) {
-			t.Errorf("should have got 2 seen posts IDs instead of %v", ids)
+	t.Run("count seen sub posts", func(t *testing.T) {
+		if s.NbKnownPostIDs("sub") != 2 {
+			t.Error("should have got 2 seen posts IDs in 'sub'")
 		}
 	})
 
-	t.Run("read no sub posts' IDs", func(t *testing.T) {
-		ids := s.SeenPostIDs("othersub")
-		if !(len(ids) == 0) {
-			t.Errorf("should have got no seen posts IDs instead of %v", ids)
+	t.Run("count of unknown sub is 0 ", func(t *testing.T) {
+		if s.NbKnownPostIDs("othersub") != 0 {
+			t.Error("should have got 0 seen posts IDs in 'sub'")
 		}
 	})
 

@@ -110,11 +110,8 @@ func (bot *RedditBot) UpdateUsersFromCompendium() error {
 func (bot *RedditBot) StreamSub(sub string, ch chan Comment, sleep time.Duration) {
 	bot.logger.Print("streaming new posts from ", sub)
 
-	seen := make(map[string]bool)
-	for _, id := range bot.storage.SeenPostIDs(sub) {
-		seen[id] = true
-	}
-	first_time := (len(seen) == 0)
+	// This assumes the sub isn't empty
+	first_time := (bot.storage.NbKnownPostIDs(sub) == 0)
 
 	for {
 		posts, _, err := bot.scanner.SubPosts(sub, "")
@@ -122,26 +119,25 @@ func (bot *RedditBot) StreamSub(sub string, ch chan Comment, sleep time.Duration
 			bot.logger.Print("event streamer: ", err)
 		}
 
-		if err := bot.storage.SaveSubPostIDs(posts, sub); err != nil {
+		new_posts := make([]Comment, 0, len(posts))
+		for _, post := range posts {
+			if !bot.storage.IsKnownSubPostID(sub, post.Id) {
+				new_posts = append(new_posts, post)
+			}
+		}
+
+		if err := bot.storage.SaveSubPostIDs(sub, posts); err != nil {
 			bot.logger.Print("event streamer: ", err)
 		}
 
-		for _, post := range posts {
-			if first_time {
-				break
-			}
-			if _, ok := seen[post.Id]; ok {
-				break
-			} else {
-				ch <- post
-			}
+		if first_time {
+			first_time = false
+			break
 		}
 
-		for _, post := range posts {
-			seen[post.Id] = true
+		for _, post := range new_posts {
+			ch <- post
 		}
-
-		first_time = false
 
 		time.Sleep(sleep)
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
+	"sync"
 	"time"
 )
 
@@ -24,8 +25,9 @@ type RedditBotStorage interface {
 	SaveCommentsPage([]Comment, User) error
 	UpdateInactiveStatus(time.Duration) error
 	// Key-value
-	SeenPostIDs(string) []string
-	SaveSubPostIDs([]Comment, string) error
+	IsKnownSubPostID(string, string) bool
+	NbKnownPostIDs(string) int
+	SaveSubPostIDs(string, []Comment) error
 	IsKnownObject(string) bool
 	SaveKnownObject(string) error
 }
@@ -53,7 +55,9 @@ type Storage struct {
 	Path            string
 	CleanupInterval time.Duration
 	cache           struct {
-		KnownObjects *SyncSet
+		KnownObjects   *SyncSet
+		SubPostIDs     map[string]*SyncSet
+		SubPostIDsLock *sync.RWMutex
 	}
 }
 
@@ -162,6 +166,8 @@ func (s *Storage) EnableWAL() {
 func (s *Storage) initCaches() {
 	s.cache.KnownObjects = NewSyncSet()
 	s.cache.KnownObjects.MultiPut(s.getKnownObjects())
+	s.cache.SubPostIDs = make(map[string]*SyncSet)
+	s.cache.SubPostIDsLock = &sync.RWMutex{}
 }
 
 /*****
@@ -388,25 +394,68 @@ func (s *Storage) StatsBetween(since, until time.Time) UserStatsMap {
  Posts
 ******/
 
-func (s *Storage) SaveSubPostIDs(listing []Comment, sub string) error {
-	tx := s.db.MustBegin()
-	stmt, err := tx.Preparex("INSERT INTO seen_posts(id, sub, created) VALUES (?, ?, ?)")
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-	defer stmt.Close()
-
-	for _, post := range listing {
-		if !s.cache.KnownObjects.Has(post.Id) {
-			stmt.MustExec(post.Id, sub, post.Created)
+func (s *Storage) SaveSubPostIDs(sub string, listing []Comment) error {
+	var err error
+	// We are limited to one connection to the database, and readSubPostIDs may use one,
+	// so we have to wrap everything into it to avoid a deadlock.
+	s.readSubPostIDs(sub, func(ids *SyncSet) {
+		tx := s.db.MustBegin()
+		stmt, err := tx.Preparex("INSERT INTO seen_posts(id, sub, created) VALUES (?, ?, ?)")
+		if err != nil {
+			tx.Rollback()
+			return
 		}
-	}
+		defer stmt.Close()
 
-	return tx.Commit()
+		ids.Transaction(func(data map[string]bool) {
+			for _, post := range listing {
+				if _, ok := data[post.Id]; !ok {
+					stmt.MustExec(post.Id, sub, post.Created)
+					data[post.Id] = true
+				}
+			}
+		})
+
+		err = tx.Commit()
+	})
+	return err
 }
 
-func (s *Storage) SeenPostIDs(sub string) []string {
+func (s *Storage) IsKnownSubPostID(sub, id string) bool {
+	var is_known bool
+	s.readSubPostIDs(sub, func(ids *SyncSet) {
+		is_known = ids.Has(id)
+	})
+	return is_known
+}
+
+func (s *Storage) NbKnownPostIDs(sub string) int {
+	var length int
+	s.readSubPostIDs(sub, func(ids *SyncSet) {
+		length = ids.Len()
+	})
+	return length
+}
+
+func (s *Storage) readSubPostIDs(sub string, cb func(*SyncSet)) {
+	lock := s.cache.SubPostIDsLock
+	cache := s.cache.SubPostIDs
+
+	lock.RLock()
+	if _, ok := cache[sub]; !ok {
+		lock.RUnlock()
+		lock.Lock()
+		cache[sub] = NewSyncSet()
+		cache[sub].MultiPut(s.getPostIDsOf(sub))
+		lock.Unlock()
+		lock.RLock()
+	}
+
+	cb(cache[sub])
+	lock.RUnlock()
+}
+
+func (s *Storage) getPostIDsOf(sub string) []string {
 	var ids []string
 	err := s.db.Select(&ids, "SELECT id FROM seen_posts WHERE sub = ?", sub)
 	if err != nil && err != sql.ErrNoRows {

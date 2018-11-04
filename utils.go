@@ -85,6 +85,12 @@ func (s *SyncSet) MultiPut(keys []string) {
 	s.Unlock()
 }
 
+func (s *SyncSet) Transaction(cb func(map[string]bool)) {
+	s.Lock()
+	defer s.Unlock()
+	cb(s.data)
+}
+
 func (s *SyncSet) Len() int {
 	s.RLock()
 	defer s.RUnlock()
