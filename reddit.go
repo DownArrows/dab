@@ -325,14 +325,21 @@ func (bot *RedditBot) scan(users []User) {
 			var err error
 			var comments []Comment
 
-			if comments, user, err = bot.scanner.UserComments(user); err != nil {
+			var limit uint
+			if user.New || user.BatchSize > 95 || user.Position != "" {
+				limit = 100
+			} else {
+				limit = user.BatchSize + 5
+			}
+
+			comments, user, err = bot.scanner.UserComments(user, limit)
+			if err != nil {
 				bot.logger.Printf("error while scanning user %s: %v", user.Name, err)
 			}
 
-			if reset, err := bot.storage.SaveCommentsUpdateUser(comments, user, bot.maxAgeReached(comments)); err != nil {
+			user, err = bot.storage.SaveCommentsUpdateUser(comments, user, bot.Conf.MaxAge.Value)
+			if err != nil {
 				bot.logger.Printf("error while registering comments of user %s: %v", user.Name, err)
-			} else if reset {
-				break
 			}
 
 			if user.Suspended || user.NotFound {
@@ -345,24 +352,13 @@ func (bot *RedditBot) scan(users []User) {
 			if err := bot.AlertIfHighScore(comments); err != nil {
 				bot.logger.Print(err)
 			}
+
+			if user.Position == "" {
+				break
+			}
 		}
 
 	}
-}
-
-func (bot *RedditBot) maxAgeReached(comments []Comment) bool {
-	if len(comments) == 0 {
-		return false
-	}
-
-	last_comment := comments[len(comments)-1]
-
-	oldest := last_comment.CreatedTime()
-	// Use time.Time.Round to remove the monotonic clock measurement, as
-	// we don't need it for the precision we want and one parameter depends
-	// on an external source (the comments' timestamps).
-	now := time.Now().Round(0)
-	return now.Sub(oldest) > bot.Conf.MaxAge.Value
 }
 
 func (bot *RedditBot) getUsersOrWait(full_scan bool) []User {

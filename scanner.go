@@ -91,8 +91,8 @@ func NewScanner(auth RedditAuth, userAgent *template.Template) (*Scanner, error)
 	return client, nil
 }
 
-func (sc *Scanner) UserComments(user User) ([]Comment, User, error) {
-	comments, position, status, err := sc.getListing("/u/"+user.Name+"/comments", user.Position)
+func (sc *Scanner) UserComments(user User, nb uint) ([]Comment, User, error) {
+	comments, position, status, err := sc.getListing("/u/"+user.Name+"/comments", user.Position, nb)
 	if err != nil {
 		return []Comment{}, user, err
 	}
@@ -173,7 +173,7 @@ func (sc *Scanner) WikiPage(sub, page string) (string, error) {
 //}
 
 func (sc *Scanner) SubPosts(sub string, position string) ([]Comment, string, error) {
-	comments, position, _, err := sc.getListing("/r/"+sub+"/new", position)
+	comments, position, _, err := sc.getListing("/r/"+sub+"/new", position, 100)
 	return comments, position, err
 }
 
@@ -207,13 +207,13 @@ func (sc *Scanner) connect(auth RedditAuth) error {
 	return json.Unmarshal(body, &sc.OAuth)
 }
 
-func (sc *Scanner) getListing(path string, position string) ([]Comment, string, int, error) {
-	params := "?sort=new&limit=100"
+func (sc *Scanner) getListing(path, position string, nb uint) ([]Comment, string, int, error) {
+	url := fmt.Sprintf("%s?sort=new&limit=%d", path, nb)
 	if position != "" {
-		params += "&after=" + position
+		url += ("&after=" + position)
 	}
 
-	res := sc.Request("GET", path+params, nil)
+	res := sc.Request("GET", url, nil)
 	if res.Error != nil {
 		return nil, position, res.Status, res.Error
 	}

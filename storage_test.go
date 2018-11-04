@@ -126,18 +126,19 @@ func TestCRUDComments(t *testing.T) {
 
 	start := time.Now().Add(-time.Hour)
 	end := time.Now().Add(time.Hour)
+	max_age := 24 * time.Hour
 
 	// Save comments
 	t.Run("save", func(t *testing.T) {
-		if _, err := s.SaveCommentsUpdateUser([]Comment{comments[0], comments[2]}, author1, false); err != nil {
+		if _, err := s.SaveCommentsUpdateUser([]Comment{comments[0], comments[2]}, author1, max_age); err != nil {
 			t.Error(err)
 			t.Fail()
 		}
-		if _, err := s.SaveCommentsUpdateUser([]Comment{comments[1], comments[3]}, author2, false); err != nil {
+		if _, err := s.SaveCommentsUpdateUser([]Comment{comments[1], comments[3]}, author2, max_age); err != nil {
 			t.Error(err)
 			t.Fail()
 		}
-		if _, err := s.SaveCommentsUpdateUser([]Comment{comments[4]}, author3, false); err != nil {
+		if _, err := s.SaveCommentsUpdateUser([]Comment{comments[4]}, author3, max_age); err != nil {
 			t.Error(err)
 			t.Fail()
 		}

@@ -22,7 +22,7 @@ type RedditBotStorage interface {
 	UnSuspendUser(string) error
 	SuspendUser(string) error
 	// Comments
-	SaveCommentsUpdateUser([]Comment, User, bool) (bool, error)
+	SaveCommentsUpdateUser([]Comment, User, time.Duration) (User, error)
 	UpdateInactiveStatus(time.Duration) error
 	// Key-value
 	IsKnownSubPostID(string, string) bool
@@ -93,6 +93,7 @@ func (s *Storage) Init() {
 			not_found BOOLEAN DEFAULT 0 NOT NULL,
 			suspended BOOLEAN DEFAULT 0 NOT NULL,
 			added INTEGER NOT NULL,
+			batch_size INTEGER DEFAULT 100 NOT NULL,
 			deleted BOOLEAN DEFAULT 0 NOT NULL,
 			hidden BOOLEAN NOT NULL,
 			inactive BOOLEAN DEFAULT 0 NOT NULL,
@@ -129,9 +130,9 @@ func (s *Storage) Init() {
 		) WITHOUT ROWID`)
 	s.db.MustExec(`
 		CREATE VIEW IF NOT EXISTS
-			users(name, created, not_found, suspended, added, hidden, inactive, new, position)
+			users(name, created, not_found, suspended, added, batch_size, hidden, inactive, new, position)
 		AS
-			SELECT name, created, not_found, suspended, added, hidden, inactive, new, position
+			SELECT name, created, not_found, suspended, added, batch_size, hidden, inactive, new, position
 			FROM tracked WHERE deleted = 0`)
 }
 
@@ -257,15 +258,15 @@ func (s *Storage) anyListUsers(q string) []User {
 }
 
 func (s *Storage) ListUsers() []User {
-	return s.anyListUsers("SELECT * FROM users WHERE suspended = 0 AND not_found = 0")
+	return s.anyListUsers("SELECT * FROM users WHERE suspended = 0 AND not_found = 0 ORDER BY name")
 }
 
 func (s *Storage) ListSuspendedAndNotFound() []User {
-	return s.anyListUsers("SELECT * FROM users WHERE suspended = 1 OR not_found = 1")
+	return s.anyListUsers("SELECT * FROM users WHERE suspended = 1 OR not_found = 1 ORDER BY name")
 }
 
 func (s *Storage) ListActiveUsers() []User {
-	return s.anyListUsers("SELECT * FROM users WHERE inactive = 0 AND suspended = 0 AND not_found = 0")
+	return s.anyListUsers("SELECT * FROM users WHERE inactive = 0 AND suspended = 0 AND not_found = 0 ORDER BY name")
 }
 
 func (s *Storage) UpdateInactiveStatus(max_age time.Duration) error {
@@ -291,11 +292,11 @@ func (s *Storage) UpdateInactiveStatus(max_age time.Duration) error {
 *********/
 
 // Make sure the comments are all from the same user and the user struct is up to date
-func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, resetPosition bool) (bool, error) {
+func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, maxAge time.Duration) (User, error) {
 	if user.Suspended {
-		return false, s.SuspendUser(user.Name)
+		return user, s.SuspendUser(user.Name)
 	} else if user.NotFound {
-		return false, s.NotFoundUser(user.Name)
+		return user, s.NotFoundUser(user.Name)
 	}
 
 	tx := s.db.MustBegin()
@@ -308,7 +309,7 @@ func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, resetPos
 	`)
 	if err != nil {
 		tx.Rollback()
-		return false, err
+		return user, err
 	}
 	defer stmt.Close()
 
@@ -319,17 +320,32 @@ func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, resetPos
 	// Frow now on we don't need to check for an error because if the user doesn't exist,
 	// then the constraints would have made the previous statement fail.
 
+	// Use time.Time.Round to remove the monotonic clock measurement, as
+	// we don't need it for the precision we want and one parameter depends
+	// on an external source (the comments' timestamps).
+	now := time.Now().Round(0)
+	user.BatchSize = 0
+	for _, comment := range comments {
+		if now.Sub(comment.CreatedTime()) < maxAge {
+			user.BatchSize++
+		}
+	}
+
 	if user.New && user.Position == "" { // end of the listing reached
 		tx.MustExec("UPDATE tracked SET new = 0 WHERE name = ?", user.Name)
 	}
 
-	position := user.Position
-	if !user.New && resetPosition { // position resetting doesn't apply to new users
-		position = ""
+	if !user.New && user.BatchSize < uint(len(comments)) { // position resetting doesn't apply to new users
+		user.Position = ""
 	}
-	tx.MustExec("UPDATE tracked SET position = ? WHERE name = ?", position, user.Name)
 
-	return (position == ""), tx.Commit()
+	if user.BatchSize == uint(len(comments)) {
+		user.BatchSize = 100
+	}
+
+	tx.MustExec("UPDATE tracked SET position = ?, batch_size = ? WHERE name = ?", user.Position, user.BatchSize, user.Name)
+
+	return user, tx.Commit()
 }
 
 func (s *Storage) GetCommentsBelowBetween(score int64, since, until time.Time) []Comment {

@@ -31,6 +31,7 @@ type User struct {
 	NotFound  bool   `db:"not_found" json:"-"`
 	Suspended bool   `db:"suspended" json:"suspended"`
 	Added     int64  `db:"added" json:"-"`
+	BatchSize uint   `db:"batch_size" json:"-"`
 	Hidden    bool   `db:"hidden" json:"-"`
 	Inactive  bool   `db:"inactive" json:"-"`
 	New       bool   `db:"new" json:"-"`
