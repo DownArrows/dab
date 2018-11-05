@@ -35,6 +35,18 @@ var linkReactions = []string{
 	EmojiOkHand, EmojiOneHundred, EmojiThumbsUp, EmojiWhiteFlower,
 }
 
+func embedField(name, value string, inline bool) *discordgo.MessageEmbedField {
+	return &discordgo.MessageEmbedField{
+		Name:   name,
+		Value:  value,
+		Inline: inline,
+	}
+}
+
+func embedAddField(embed *discordgo.MessageEmbed, name, value string, inline bool) {
+	embed.Fields = append(embed.Fields, embedField(name, value, inline))
+}
+
 type DiscordMessage struct {
 	Args      []string
 	Author    DiscordMember
@@ -170,6 +182,15 @@ func (bot *DiscordBot) isDMChannel(channelID string) (bool, error) {
 func (bot *DiscordBot) ChannelMessageSend(channelID, content string) error {
 	_, err := bot.client.ChannelMessageSend(channelID, content)
 	return err
+}
+
+func (bot *DiscordBot) ChannelEmbedSend(channelID string, embed *discordgo.MessageEmbed) error {
+	_, err := bot.client.ChannelMessageSendEmbed(channelID, embed)
+	return err
+}
+
+func (bot *DiscordBot) MyColor(channelID string) int {
+	return bot.client.State.UserColor(bot.client.State.User.ID, channelID)
 }
 
 func (bot *DiscordBot) onReady(conf DiscordBotConf) {
@@ -417,7 +438,13 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 	names := msg.Args
 	bot.logger.Printf("%s wants to register %v", msg.Author.FQN(), names)
 
-	var statuses []string
+	status := &discordgo.MessageEmbed{
+		Title:       "Registration",
+		Description: fmt.Sprintf("request from <@%s>", msg.Author.ID),
+		Color:       bot.MyColor(msg.ChannelID),
+		Fields:      []*discordgo.MessageEmbedField{},
+	}
+
 	for _, name := range names {
 		if err := bot.client.ChannelTyping(msg.ChannelID); err != nil {
 			return err
@@ -429,22 +456,16 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 		bot.AddUser <- UserQuery{User: User{Name: name, Hidden: hidden}}
 		reply := <-bot.AddUser
 
-		var status string
 		if reply.Error != nil {
-			status = fmt.Sprintf("%s%s: %s", EmojiCrossMark, reply.User.Name, reply.Error)
+			embedAddField(status, reply.User.Name, fmt.Sprintf("%s %s", EmojiCrossMark, reply.Error), false)
 		} else if !reply.Exists {
-			status = fmt.Sprintf("%s%s: not found", EmojiCrossMark, reply.User.Name)
+			embedAddField(status, reply.User.Name, EmojiCrossMark+" not found", false)
 		} else {
-			status = fmt.Sprintf("%s%s", EmojiCheckMark, reply.User.Name)
+			embedAddField(status, reply.User.Name, EmojiCheckMark, false)
 		}
-		statuses = append(statuses, status)
 	}
 
-	response := fmt.Sprintf("<@%s> registration: %s", msg.Author.ID, strings.Join(statuses, ", "))
-	if len(response) > DiscordMessageLengthLimit {
-		response = fmt.Sprintf("<@%s> registrations done, check the bot's logs for more details.", msg.Author.ID)
-	}
-	return bot.ChannelMessageSend(msg.ChannelID, response)
+	return bot.ChannelEmbedSend(msg.ChannelID, status)
 }
 
 func (bot *DiscordBot) editUsers(action_name string, action func(string) error) func(DiscordMessage) error {
@@ -452,21 +473,22 @@ func (bot *DiscordBot) editUsers(action_name string, action func(string) error) 
 		names := msg.Args
 		bot.logger.Printf("%s wants to %s %v", msg.Author.FQN(), action_name, names)
 
-		results := make([]string, len(names))
-		for i, name := range names {
+		status := &discordgo.MessageEmbed{
+			Title:       strings.Title(action_name),
+			Description: fmt.Sprintf("request from <@%s>", msg.Author.ID),
+			Color:       bot.MyColor(msg.ChannelID),
+			Fields:      []*discordgo.MessageEmbedField{},
+		}
+
+		for _, name := range names {
 			if err := action(name); err != nil {
-				results[i] = fmt.Sprintf("%s%s: error %s", EmojiCrossMark, name, err)
+				embedAddField(status, name, fmt.Sprintf("%s %s", EmojiCrossMark, err), false)
 			} else {
-				results[i] = fmt.Sprintf("%s%s", EmojiCheckMark, name)
+				embedAddField(status, name, EmojiCheckMark, false)
 			}
 		}
 
-		result := strings.Join(results, ", ")
-		response := fmt.Sprintf("<@%s> %s: %s", msg.Author.ID, action_name, result)
-		if len(response) > DiscordMessageLengthLimit {
-			response = fmt.Sprintf("<@%s> %s done, check the bot's logs for more details.", action_name, msg.Author.ID)
-		}
-		return bot.ChannelMessageSend(msg.ChannelID, response)
+		return bot.ChannelEmbedSend(msg.ChannelID, status)
 	}
 }
 
@@ -475,28 +497,27 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 
 	query := bot.storage.GetUser(username)
 
-	var status string
-	if query.Exists {
-		user := query.User
-		info := []string{
-			user.Name + " has been created on " + user.CreatedTime().In(bot.Timezone).Format(time.RFC850),
-			"has been added to the database on " + user.AddedTime().In(bot.Timezone).Format(time.RFC850),
-		}
-		if user.Hidden {
-			info = append(info, "is hidden from reports")
-		}
-		if user.Suspended {
-			info = append(info, "has been suspended or deleted")
-		} else if user.Inactive {
-			info = append(info, "seems to be inactive")
-		}
-		status = strings.Join(info[:len(info)-1], ", ") + ", and " + info[len(info)-1]
-	} else {
-		status = username + " not found in the database"
+	if !query.Exists {
+		response := fmt.Sprintf("<@%s> user '%s' not found in the database.", msg.Author.ID, username)
+		return bot.ChannelMessageSend(msg.ChannelID, response)
 	}
 
-	response := fmt.Sprintf("<@%s> user %s.", msg.Author.ID, status)
-	return bot.ChannelMessageSend(msg.ChannelID, response)
+	user := query.User
+	embed := &discordgo.MessageEmbed{
+		Title: "Information about /u/" + user.Name,
+		Color: bot.MyColor(msg.ChannelID),
+		Fields: []*discordgo.MessageEmbedField{
+			embedField("Created", user.CreatedTime().In(bot.Timezone).Format(time.RFC850), true),
+			embedField("Added", user.AddedTime().In(bot.Timezone).Format(time.RFC850), true),
+		},
+	}
+
+	embedAddField(embed, "Hidden from reports", fmt.Sprintf("%t", user.Hidden), true)
+	embedAddField(embed, "Suspended", fmt.Sprintf("%t", user.Suspended), true)
+	embedAddField(embed, "Inactive", fmt.Sprintf("%t", user.Inactive), true)
+
+	return bot.ChannelEmbedSend(msg.ChannelID, embed)
+
 }
 
 func (bot *DiscordBot) karma(msg DiscordMessage) error {
@@ -520,14 +541,22 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 		return err
 	}
 
+	embed := &discordgo.MessageEmbed{
+		Title: "Karma for /u/" + res.User.Name,
+		Color: bot.client.State.UserColor(bot.client.State.User.ID, msg.ChannelID),
+		Fields: []*discordgo.MessageEmbedField{
+			embedField("Total", fmt.Sprintf("%d", total), true),
+		},
+	}
+
 	negative, err := bot.storage.GetNegativeKarma(username)
 	if err == ErrNoComment {
-		reply := fmt.Sprintf("<@%s> karma%s for %s: %d (no negative comment)", msg.Author.ID, EmojiWheelOfDharma, res.User.Name, total)
-		return bot.ChannelMessageSend(msg.ChannelID, reply)
+		embedAddField(embed, "Negative", "no comment with negative score", true)
+		return bot.ChannelEmbedSend(msg.ChannelID, embed)
 	} else if err != nil {
 		return err
 	}
 
-	reply := fmt.Sprintf("<@%s> karma%s for %s: %d / %d", msg.Author.ID, EmojiWheelOfDharma, res.User.Name, total, negative)
-	return bot.ChannelMessageSend(msg.ChannelID, reply)
+	embedAddField(embed, "Negative", fmt.Sprintf("%d", negative), true)
+	return bot.ChannelEmbedSend(msg.ChannelID, embed)
 }
