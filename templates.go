@@ -119,6 +119,10 @@ var HTMLReportPage = autoHTMLTemplate("HTMLReportPage", `
 			display: table-cell;
 		}
 
+		.comment > blockquote {
+			overflow-wrap: break-word;
+		}
+
 		.comment > blockquote blockquote {
 			background: var(--bg);
 			border-left: solid var(--spacing) var(--main-color);
