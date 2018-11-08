@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const Version = "0.236"
+const Version = "0.237"
 
 type DownArrowsBot struct {
 	FlagSet    *flag.FlagSet

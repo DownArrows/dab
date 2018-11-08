@@ -38,7 +38,7 @@ type DiscordBotStorage interface {
 	HideUser(string) error
 	UnHideUser(string) error
 	GetUser(string) UserQuery
-	GetTotalKarma(string) (int64, error)
+	GetPositiveKarma(string) (int64, error)
 	GetNegativeKarma(string) (int64, error)
 }
 
@@ -371,8 +371,8 @@ func (s *Storage) GetCommentsBelowBetween(score int64, since, until time.Time) [
  Statistics
 ***********/
 
-func (s *Storage) GetTotalKarma(username string) (int64, error) {
-	return s.getKarma("SELECT SUM(score) FROM comments WHERE author = ? COLLATE NOCASE", username)
+func (s *Storage) GetPositiveKarma(username string) (int64, error) {
+	return s.getKarma("SELECT SUM(score) FROM comments WHERE score > 0 AND author = ? COLLATE NOCASE", username)
 }
 
 func (s *Storage) GetNegativeKarma(username string) (int64, error) {

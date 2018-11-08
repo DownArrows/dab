@@ -533,30 +533,34 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 		return bot.ChannelMessageSend(msg.ChannelID, reply)
 	}
 
-	total, err := bot.storage.GetTotalKarma(username)
+	embed := &discordgo.MessageEmbed{
+		Title:  "Karma for /u/" + res.User.Name,
+		Color:  bot.client.State.UserColor(bot.client.State.User.ID, msg.ChannelID),
+		Fields: []*discordgo.MessageEmbedField{},
+	}
+
+	var positive int64
+	var negative int64
+	var err error
+
+	positive, err = bot.storage.GetPositiveKarma(username)
 	if err == ErrNoComment {
-		reply := fmt.Sprintf("<@%s> no comment found from %s", msg.Author.ID, res.User.Name)
-		return bot.ChannelMessageSend(msg.ChannelID, reply)
+		embedAddField(embed, "Positive", "no comment with a positive score", true)
 	} else if err != nil {
 		return err
+	} else {
+		embedAddField(embed, "Positive", fmt.Sprintf("%d", positive), true)
 	}
 
-	embed := &discordgo.MessageEmbed{
-		Title: "Karma for /u/" + res.User.Name,
-		Color: bot.client.State.UserColor(bot.client.State.User.ID, msg.ChannelID),
-		Fields: []*discordgo.MessageEmbedField{
-			embedField("Total", fmt.Sprintf("%d", total), true),
-		},
-	}
-
-	negative, err := bot.storage.GetNegativeKarma(username)
+	negative, err = bot.storage.GetNegativeKarma(username)
 	if err == ErrNoComment {
 		embedAddField(embed, "Negative", "no comment with negative score", true)
-		return bot.ChannelEmbedSend(msg.ChannelID, embed)
 	} else if err != nil {
 		return err
+	} else {
+		embedAddField(embed, "Negative", fmt.Sprintf("%d", negative), true)
 	}
 
-	embedAddField(embed, "Negative", fmt.Sprintf("%d", negative), true)
+	embedAddField(embed, "Total", fmt.Sprintf("%d", positive+negative), true)
 	return bot.ChannelEmbedSend(msg.ChannelID, embed)
 }
