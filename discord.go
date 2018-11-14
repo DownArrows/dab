@@ -451,7 +451,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 		}
 
 		hidden := strings.HasPrefix(name, bot.HidePrefix)
-		name = strings.TrimPrefix(name, bot.HidePrefix)
+		name = TrimUsername(strings.TrimPrefix(name, bot.HidePrefix))
 
 		bot.AddUser <- UserQuery{User: User{Name: name, Hidden: hidden}}
 		reply := <-bot.AddUser
@@ -481,6 +481,7 @@ func (bot *DiscordBot) editUsers(action_name string, action func(string) error) 
 		}
 
 		for _, name := range names {
+			name = TrimUsername(name)
 			if err := action(name); err != nil {
 				embedAddField(status, name, fmt.Sprintf("%s %s", EmojiCrossMark, err), false)
 			} else {
@@ -493,7 +494,7 @@ func (bot *DiscordBot) editUsers(action_name string, action func(string) error) 
 }
 
 func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
-	username := msg.Content
+	username := TrimUsername(msg.Content)
 
 	query := bot.storage.GetUser(username)
 
@@ -521,7 +522,7 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 }
 
 func (bot *DiscordBot) karma(msg DiscordMessage) error {
-	username := msg.Content
+	username := TrimUsername(msg.Content)
 
 	res := bot.storage.GetUser(username)
 	if res.Error != nil {
@@ -563,4 +564,8 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 	embedAddField(embed, "Total", fmt.Sprintf("%d", positive+negative), true)
 	return bot.ChannelEmbedSend(msg.ChannelID, embed)
+}
+
+func TrimUsername(username string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(username, "u/"), "/u/")
 }
