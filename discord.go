@@ -297,7 +297,7 @@ func (bot *DiscordBot) SignalSuspensions(suspensions chan User) {
 			state = "deleted"
 		}
 
-		msg := fmt.Sprintf("RIP %s %s (%s)", user.Name, EmojiPrayingHands, state)
+		msg := fmt.Sprintf("RIP /u/%s %s (%s)", user.Name, EmojiPrayingHands, state)
 		if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
 			bot.logger.Print("suspensions listener: ", err)
 		}
@@ -307,7 +307,7 @@ func (bot *DiscordBot) SignalSuspensions(suspensions chan User) {
 
 func (bot *DiscordBot) SignalUnsuspensions(ch chan User) {
 	for user := range ch {
-		msg := fmt.Sprintf("%s %s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
+		msg := fmt.Sprintf("%s /u/%s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
 		if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
 			bot.logger.Print("unsuspensions listener: ", err)
 		}
@@ -317,7 +317,7 @@ func (bot *DiscordBot) SignalUnsuspensions(ch chan User) {
 func (bot *DiscordBot) SignalHighScores(ch chan Comment) {
 	for comment := range ch {
 		link := "https://www.reddit.com" + comment.Permalink
-		tmpl := "a comment by %s has reached %d: %s"
+		tmpl := "a comment by /u/%s has reached %d: %s"
 		msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
 		if err := bot.ChannelMessageSend(bot.ChannelsID.HighScores, msg); err != nil {
 			bot.logger.Print("high-scores listener: ", err)
