@@ -49,14 +49,18 @@ type WebServer struct {
 	Server          *http.Server
 	Reports         ReportFactory
 	markdownOptions blackfriday.Option
+	backupAuth      string
+	backupStorage   BackupStorage
 }
 
-func NewWebServer(listen string, reports ReportFactory) *WebServer {
+func NewWebServer(conf WebConf, reports ReportFactory, bs BackupStorage) *WebServer {
 	md_exts := blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis
 
 	wsrv := &WebServer{
 		Reports:         reports,
 		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(md_exts)),
+		backupAuth:      conf.BackupAuth,
+		backupStorage:   bs,
 	}
 
 	mux := http.NewServeMux()
@@ -65,8 +69,9 @@ func NewWebServer(listen string, reports ReportFactory) *WebServer {
 	mux.HandleFunc("/reports/current", wsrv.ReportCurrent)
 	mux.HandleFunc("/reports/lastweek", wsrv.ReportLatest)
 	mux.HandleFunc("/reports/source/", wsrv.ReportSource)
+	mux.HandleFunc("/backup", wsrv.Backup)
 
-	wsrv.Server = &http.Server{Addr: listen, Handler: mux}
+	wsrv.Server = &http.Server{Addr: conf.Listen, Handler: mux}
 
 	return wsrv
 }
@@ -143,6 +148,25 @@ func (wsrv *WebServer) ReportCurrent(w http.ResponseWriter, r *http.Request) {
 func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
 	week, year := wsrv.Reports.LastWeekCoordinates()
 	redirectToReport(week, year, w, r)
+}
+
+func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+	path := r.Form.Get("path")
+	auth := r.Form.Get("auth")
+	if path == "" || auth == "" {
+		http.Error(w, "You must provide a 'path' and an 'auth' parameter", http.StatusBadRequest)
+		return
+	}
+	if auth != wsrv.backupAuth {
+		http.Error(w, "Invalid authentication token", http.StatusForbidden)
+		return
+	}
+	if err := wsrv.backupStorage.Backup(path); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func redirectToReport(week uint8, year int, w http.ResponseWriter, r *http.Request) {

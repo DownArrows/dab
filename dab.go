@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const Version = "0.239"
+const Version = "0.240"
 
 type DownArrowsBot struct {
 	FlagSet    *flag.FlagSet
@@ -285,7 +285,7 @@ func (dab *DownArrowsBot) checkWebConf() {
 
 func (dab *DownArrowsBot) launchWeb() {
 	dab.Logger.Print("lauching the web server")
-	dab.Components.Web = NewWebServer(dab.Conf.Web.Listen, dab.Components.Report)
+	dab.Components.Web = NewWebServer(dab.Conf.Web, dab.Components.Report, dab.Components.Storage)
 	go func() {
 		err := dab.Components.Web.Run()
 		if err != nil {

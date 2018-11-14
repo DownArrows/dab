@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 	"sync"
 	"time"
 )
@@ -47,10 +47,27 @@ type ReportFactoryStorage interface {
 	StatsBetween(time.Time, time.Time) UserStatsMap
 }
 
+type BackupStorage interface {
+	Backup(string) error
+}
+
 var ErrNoComment = errors.New("no comment found")
 
+const DatabaseDriverName = "sqlite3_dab"
+
+var connections = make(chan *sqlite3.SQLiteConn, 1)
+
+func init() {
+	sql.Register(DatabaseDriverName, &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			connections <- conn
+			return nil
+		},
+	})
+}
+
 type Storage struct {
-	client          *sql.DB
+	conn            *sqlite3.SQLiteConn
 	db              *sqlx.DB
 	Path            string
 	CleanupInterval time.Duration
@@ -70,7 +87,12 @@ func NewStorage(conf StorageConf) *Storage {
 		panic("database cleanup interval can't be under a minute if superior to 0s")
 	}
 
-	s.db = sqlx.MustConnect("sqlite3", fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", s.Path))
+	db, err := sql.Open(DatabaseDriverName, fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", s.Path))
+	autopanic(err)
+	s.db = sqlx.NewDb(db, "sqlite3")
+
+	autopanic(db.Ping()) // trigger connection hook
+	s.conn = <-connections
 
 	s.Init()
 	s.initCaches()
@@ -136,19 +158,6 @@ func (s *Storage) Init() {
 			FROM tracked WHERE deleted = 0`)
 }
 
-func (s *Storage) launchPeriodicVacuum() {
-	if s.CleanupInterval == 0*time.Second {
-		return
-	}
-
-	go func() {
-		for {
-			time.Sleep(s.CleanupInterval)
-			s.db.MustExec("VACUUM")
-		}
-	}()
-}
-
 func (s *Storage) Close() {
 	autopanic(s.db.Close())
 }
@@ -170,6 +179,52 @@ func (s *Storage) initCaches() {
 	s.cache.KnownObjects.MultiPut(s.getKnownObjects())
 	s.cache.SubPostIDs = make(map[string]*SyncSet)
 	s.cache.SubPostIDsLock = &sync.RWMutex{}
+}
+
+/***********
+ Maintenance
+************/
+
+func (s *Storage) launchPeriodicVacuum() {
+	if s.CleanupInterval == 0*time.Second {
+		return
+	}
+
+	go func() {
+		for {
+			time.Sleep(s.CleanupInterval)
+			s.db.MustExec("VACUUM")
+		}
+	}()
+}
+
+func (s *Storage) Backup(dest string) error {
+	db, err := sql.Open(DatabaseDriverName, "file:"+dest)
+	if err != nil {
+		return err
+	}
+
+	// trigger the connection hook
+	if err := db.Ping(); err != nil {
+		return err
+	}
+	dest_conn := <-connections
+
+	defer dest_conn.Close()
+
+	backup, err := dest_conn.Backup("main", s.conn, "main") // yes, in *that* order!
+	if err != nil {
+		return err
+	}
+	defer backup.Close()
+
+	for done := false; !done; {
+		done, err = backup.Step(-1) // -1 means to save all remaining pages
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 /*****

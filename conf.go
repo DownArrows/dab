@@ -76,6 +76,11 @@ type DiscordBotConf struct {
 	Timezone   Timezone `json:"-"`
 }
 
+type WebConf struct {
+	Listen     string `json:"listen"`
+	BackupAuth string `json:"backup_auth"`
+}
+
 type Configuration struct {
 	Timezone   Timezone `json:"timezone"`
 	HidePrefix string   `json:"hide_prefix"`
@@ -98,9 +103,7 @@ type Configuration struct {
 		HighScoreThreshold int64 `json:"highscore_threshold"`
 	}
 
-	Web struct {
-		Listen string `json:"listen"`
-	}
+	Web WebConf
 }
 
 func NewConfiguration(path string) (Configuration, error) {
