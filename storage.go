@@ -108,20 +108,20 @@ func (s *Storage) Init() {
 		s.EnableWAL()
 	}
 
-	s.db.MustExec(`
+	s.db.MustExec(fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS tracked (
 			name TEXT PRIMARY KEY,
 			created INTEGER NOT NULL,
 			not_found BOOLEAN DEFAULT 0 NOT NULL,
 			suspended BOOLEAN DEFAULT 0 NOT NULL,
 			added INTEGER NOT NULL,
-			batch_size INTEGER DEFAULT 100 NOT NULL,
+			batch_size INTEGER DEFAULT %d NOT NULL,
 			deleted BOOLEAN DEFAULT 0 NOT NULL,
 			hidden BOOLEAN NOT NULL,
 			inactive BOOLEAN DEFAULT 0 NOT NULL,
 			new BOOLEAN DEFAULT 1 NOT NULL,
 			position TEXT DEFAULT "" NOT NULL
-		) WITHOUT ROWID`)
+		) WITHOUT ROWID`, MaxRedditListingLength))
 	s.db.MustExec(`
 			CREATE INDEX IF NOT EXISTS tracked_idx
 			ON tracked (deleted, inactive, suspended, not_found, hidden)`)
@@ -395,7 +395,7 @@ func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, maxAge t
 	}
 
 	if user.BatchSize == uint(len(comments)) {
-		user.BatchSize = 100
+		user.BatchSize = MaxRedditListingLength
 	}
 
 	tx.MustExec("UPDATE tracked SET position = ?, batch_size = ? WHERE name = ?", user.Position, user.BatchSize, user.Name)

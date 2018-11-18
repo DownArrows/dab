@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+const MaxRedditListingLength = 100
+
+const nbCommentsLeeway = 5
+
 type RedditBot struct {
 	Conf           RedditBotConf
 	Suspended      chan User
@@ -326,10 +330,10 @@ func (bot *RedditBot) scan(users []User) {
 			var comments []Comment
 
 			var limit uint
-			if user.New || user.BatchSize > 95 || user.Position != "" {
-				limit = 100
+			if user.New || user.Position != "" || user.BatchSize+nbCommentsLeeway > MaxRedditListingLength {
+				limit = MaxRedditListingLength
 			} else {
-				limit = user.BatchSize + 5
+				limit = user.BatchSize + nbCommentsLeeway
 			}
 
 			comments, user, err = bot.scanner.UserComments(user, limit)

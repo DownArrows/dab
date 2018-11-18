@@ -173,7 +173,7 @@ func (sc *Scanner) WikiPage(sub, page string) (string, error) {
 //}
 
 func (sc *Scanner) SubPosts(sub string, position string) ([]Comment, string, error) {
-	comments, position, _, err := sc.getListing("/r/"+sub+"/new", position, 100)
+	comments, position, _, err := sc.getListing("/r/"+sub+"/new", position, MaxRedditListingLength)
 	return comments, position, err
 }
 
