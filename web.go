@@ -179,7 +179,7 @@ func subPath(prefix string, r *http.Request) []string {
 }
 
 func ignoreTrailing(path []string) []string {
-	if path[len(path)-1] == "" {
+	if len(path) >= 2 && path[len(path)-1] == "" {
 		path = path[:len(path)-2]
 	}
 	return path
