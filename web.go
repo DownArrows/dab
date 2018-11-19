@@ -59,7 +59,6 @@ func NewWebServer(conf WebConf, reports ReportFactory, bs BackupStorage) *WebSer
 	wsrv := &WebServer{
 		Reports:         reports,
 		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(md_exts)),
-		backupAuth:      conf.BackupAuth,
 		backupStorage:   bs,
 	}
 
@@ -151,22 +150,11 @@ func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	}
-	path := r.Form.Get("path")
-	auth := r.Form.Get("auth")
-	if path == "" || auth == "" {
-		http.Error(w, "You must provide a 'path' and an 'auth' parameter", http.StatusBadRequest)
-		return
-	}
-	if auth != wsrv.backupAuth {
-		http.Error(w, "Invalid authentication token", http.StatusForbidden)
-		return
-	}
-	if err := wsrv.backupStorage.Backup(path); err != nil {
+	if err := wsrv.backupStorage.Backup(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	http.ServeFile(w, r, wsrv.backupStorage.BackupPath())
 }
 
 func redirectToReport(week uint8, year int, w http.ResponseWriter, r *http.Request) {

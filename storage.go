@@ -48,7 +48,8 @@ type ReportFactoryStorage interface {
 }
 
 type BackupStorage interface {
-	Backup(string) error
+	Backup() error
+	BackupPath() string
 }
 
 var ErrNoComment = errors.New("no comment found")
@@ -71,6 +72,8 @@ type Storage struct {
 	db              *sqlx.DB
 	Path            string
 	CleanupInterval time.Duration
+	backupPath      string
+	backupMaxAge    time.Duration
 	cache           struct {
 		KnownObjects   *SyncSet
 		SubPostIDs     map[string]*SyncSet
@@ -82,6 +85,8 @@ func NewStorage(conf StorageConf) *Storage {
 	s := &Storage{
 		Path:            conf.Path,
 		CleanupInterval: conf.CleanupInterval.Value,
+		backupPath:      conf.BackupPath,
+		backupMaxAge:    conf.BackupMaxAge.Value,
 	}
 	if s.CleanupInterval < 1*time.Minute && s.CleanupInterval != 0*time.Second {
 		panic("database cleanup interval can't be under a minute if superior to 0s")
@@ -198,8 +203,14 @@ func (s *Storage) launchPeriodicVacuum() {
 	}()
 }
 
-func (s *Storage) Backup(dest string) error {
-	db, err := sql.Open(DatabaseDriverName, "file:"+dest)
+func (s *Storage) Backup() error {
+	if older, err := fileOlderThan(s.backupPath, s.backupMaxAge); err != nil {
+		return err
+	} else if !older {
+		return nil
+	}
+
+	db, err := sql.Open(DatabaseDriverName, "file:"+s.backupPath)
 	if err != nil {
 		return err
 	}
@@ -225,6 +236,10 @@ func (s *Storage) Backup(dest string) error {
 		}
 	}
 	return nil
+}
+
+func (s *Storage) BackupPath() string {
+	return s.backupPath
 }
 
 /*****

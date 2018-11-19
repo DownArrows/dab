@@ -2,13 +2,34 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"sync"
+	"time"
 )
 
 func autopanic(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func fileOlderThan(path string, max_age time.Duration) (bool, error) {
+	dest, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, err
+	}
+	defer dest.Close()
+
+	stat, err := dest.Stat()
+	if err != nil {
+		return false, err
+	}
+
+	time_diff := time.Now().Sub(stat.ModTime())
+	return (time_diff < max_age), nil
 }
 
 type Chunks interface {

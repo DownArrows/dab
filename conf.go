@@ -11,7 +11,9 @@ const Defaults string = `{
 
 	"database": {
 		"path": "./dab.db",
-		"cleanup_interval": "6h"
+		"cleanup_interval": "6h",
+		"backup_path": "./dab.db.backup",
+		"backpu_max_age": "24h"
 	},
 
 	"hide_prefix": "hide/",
@@ -40,6 +42,8 @@ const Defaults string = `{
 type StorageConf struct {
 	Path            string   `json:"path"`
 	CleanupInterval Duration `json:"cleanup_interval"`
+	BackupPath      string   `json:"backup_path"`
+	BackupMaxAge    Duration `json:"backup_max_age"`
 }
 
 type RedditAuth struct {
@@ -77,8 +81,7 @@ type DiscordBotConf struct {
 }
 
 type WebConf struct {
-	Listen     string `json:"listen"`
-	BackupAuth string `json:"backup_auth"`
+	Listen string `json:"listen"`
 }
 
 type Configuration struct {
