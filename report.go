@@ -9,28 +9,28 @@ import (
 )
 
 type ReportFactory struct {
+	cutoff    int64
+	leeway    time.Duration
+	maxLength uint64
+	nbTop     uint
 	storage   ReportFactoryStorage
-	Leeway    time.Duration
-	Timezone  *time.Location
-	Cutoff    int64
-	MaxLength uint64
-	NbTop     uint
+	timezone  *time.Location
 }
 
 func NewReportFactory(storage ReportFactoryStorage, conf ReportConf) ReportFactory {
 	return ReportFactory{
 		storage:   storage,
-		Leeway:    conf.Leeway.Value,
-		Timezone:  conf.Timezone.Value,
-		Cutoff:    conf.Cutoff,
-		MaxLength: conf.MaxLength,
-		NbTop:     conf.NbTop,
+		leeway:    conf.Leeway.Value,
+		timezone:  conf.Timezone.Value,
+		cutoff:    conf.Cutoff,
+		maxLength: conf.MaxLength,
+		nbTop:     conf.NbTop,
 	}
 }
 
 func (rf ReportFactory) ReportWeek(week_num uint8, year int) Report {
 	start, end := rf.WeekYearToDates(week_num, year)
-	report := rf.Report(start.Add(-rf.Leeway), end.Add(-rf.Leeway))
+	report := rf.Report(start.Add(-rf.leeway), end.Add(-rf.leeway))
 	report.Week = week_num
 	report.Year = year
 	return report
@@ -38,12 +38,12 @@ func (rf ReportFactory) ReportWeek(week_num uint8, year int) Report {
 
 func (rf ReportFactory) Report(start, end time.Time) Report {
 	return Report{
-		RawComments:       rf.storage.GetCommentsBelowBetween(rf.Cutoff, start, end),
+		RawComments:       rf.storage.GetCommentsBelowBetween(rf.cutoff, start, end),
 		Stats:             rf.storage.StatsBetween(start, end),
 		Start:             start,
 		End:               end,
-		MaxStatsSummaries: rf.NbTop,
-		Timezone:          rf.Timezone,
+		MaxStatsSummaries: rf.nbTop,
+		Timezone:          rf.timezone,
 	}
 }
 
@@ -74,13 +74,13 @@ func (rf ReportFactory) WeekNumToStartDate(week_num uint8, year int) time.Time {
 }
 
 func (rf ReportFactory) StartOfFirstWeek(year int) time.Time {
-	in_first_week := time.Date(year, 1, 4, 0, 0, 0, 0, rf.Timezone)
+	in_first_week := time.Date(year, 1, 4, 0, 0, 0, 0, rf.timezone)
 	day_position := (in_first_week.Weekday() + 6) % 7
 	return in_first_week.AddDate(0, 0, -int(day_position))
 }
 
 func (rf ReportFactory) Now() time.Time {
-	return time.Now().In(rf.Timezone)
+	return time.Now().In(rf.timezone)
 }
 
 // Report data structures

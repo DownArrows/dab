@@ -11,29 +11,29 @@ import (
 	"strings"
 )
 
-type Response struct {
+type webResponse struct {
 	Actual http.ResponseWriter
 	Gzip   *gzip.Writer
 }
 
-func NewResponse(w http.ResponseWriter, r *http.Request) Response {
+func newWebResponse(w http.ResponseWriter, r *http.Request) webResponse {
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		w.Header().Set("Content-Encoding", "gzip")
 		gw, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
 		autopanic(err)
-		return Response{Actual: w, Gzip: gw}
+		return webResponse{Actual: w, Gzip: gw}
 	}
-	return Response{Actual: w}
+	return webResponse{Actual: w}
 }
 
-func (r Response) Write(data []byte) (int, error) {
+func (r webResponse) Write(data []byte) (int, error) {
 	if r.Gzip == nil {
 		return r.Actual.Write(data)
 	}
 	return r.Gzip.Write(data)
 }
 
-func (r Response) Close() error {
+func (r webResponse) Close() error {
 	if r.Gzip == nil {
 		return nil
 	}
@@ -105,7 +105,7 @@ func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	output := NewResponse(w, r)
+	output := newWebResponse(w, r)
 	defer output.Close()
 	autopanic(WriteMarkdownReport(report, output))
 }
@@ -138,7 +138,7 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html")
-	output := NewResponse(w, r)
+	output := newWebResponse(w, r)
 	defer output.Close()
 	autopanic(HTMLReportPage.Execute(output, data))
 }

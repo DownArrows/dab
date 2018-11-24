@@ -35,7 +35,7 @@ const accessTokenURL = "https://www.reddit.com/api/v1/access_token"
 
 const requestBaseURL = "https://oauth.reddit.com"
 
-type OAuthResponse struct {
+type oAuthResponse struct {
 	Token   string `json:"access_token"`
 	Refresh string `json:"refresh_token"`
 	Type    string `json:"token_type"`
@@ -76,11 +76,11 @@ type redditResponse struct {
 
 type RedditAPI struct {
 	sync.Mutex
-	Client    *http.Client
-	UserAgent string
-	OAuth     OAuthResponse
-	Auth      RedditAuth
+	auth      RedditAuth
+	client    *http.Client
+	oAuth     oAuthResponse
 	ticker    *time.Ticker
+	userAgent string
 }
 
 func NewRedditAPI(ctx context.Context, auth RedditAuth, userAgent *template.Template) (*RedditAPI, error) {
@@ -93,33 +93,33 @@ func NewRedditAPI(ctx context.Context, auth RedditAuth, userAgent *template.Temp
 		return nil, err
 	}
 
-	http_client := &http.Client{}
-	client := &RedditAPI{
-		Auth:      auth,
-		Client:    http_client,
-		UserAgent: user_agent.String(),
+	client := &http.Client{}
+	ra := &RedditAPI{
+		auth:      auth,
+		client:    client,
 		ticker:    time.NewTicker(time.Second),
+		userAgent: user_agent.String(),
 	}
 
-	if err := client.Connect(ctx); err != nil {
+	if err := ra.connect(ctx); err != nil {
 		return nil, err
 	}
 
-	return client, nil
+	return ra, nil
 }
 
-func (ra *RedditAPI) Connect(ctx context.Context) error {
+func (ra *RedditAPI) connect(ctx context.Context) error {
 	auth_conf := url.Values{
 		"grant_type": {"password"},
-		"username":   {ra.Auth.Username},
-		"password":   {ra.Auth.Password},
+		"username":   {ra.auth.Username},
+		"password":   {ra.auth.Password},
 	}
 	auth_form := strings.NewReader(auth_conf.Encode())
 
 	req, _ := http.NewRequest("POST", accessTokenURL, auth_form)
 
-	req.Header.Set("User-Agent", ra.UserAgent)
-	req.SetBasicAuth(ra.Auth.Id, ra.Auth.Secret)
+	req.Header.Set("User-Agent", ra.userAgent)
+	req.SetBasicAuth(ra.auth.Id, ra.auth.Secret)
 	req.WithContext(ctx)
 
 	res, err := ra.do(req)
@@ -134,7 +134,7 @@ func (ra *RedditAPI) Connect(ctx context.Context) error {
 
 	ra.Lock()
 	defer ra.Unlock()
-	return json.Unmarshal(body, &ra.OAuth)
+	return json.Unmarshal(body, &ra.oAuth)
 }
 
 func (ra *RedditAPI) UserComments(ctx context.Context, user User, nb uint) ([]Comment, User, error) {
@@ -169,7 +169,7 @@ func (ra *RedditAPI) AboutUser(ctx context.Context, username string) UserQuery {
 		return query
 	}
 
-	res := ra.Request(ctx, "GET", "/u/"+username+"/about", nil)
+	res := ra.request(ctx, "GET", "/u/"+username+"/about", nil)
 	if res.Error != nil {
 		query.Error = res.Error
 		return query
@@ -198,7 +198,7 @@ func (ra *RedditAPI) AboutUser(ctx context.Context, username string) UserQuery {
 
 func (ra *RedditAPI) WikiPage(ctx context.Context, sub, page string) (string, error) {
 	path := "/r/" + sub + "/wiki/" + page
-	res := ra.Request(ctx, "GET", path, nil)
+	res := ra.request(ctx, "GET", path, nil)
 	if res.Error != nil {
 		return "", res.Error
 	}
@@ -225,7 +225,7 @@ func (ra *RedditAPI) getListing(ctx context.Context, path, position string, nb u
 		url += ("&after=" + position)
 	}
 
-	res := ra.Request(ctx, "GET", url, nil)
+	res := ra.request(ctx, "GET", url, nil)
 	if res.Error != nil {
 		return nil, position, res.Status, res.Error
 	}
@@ -254,7 +254,7 @@ func (ra *RedditAPI) getListing(ctx context.Context, path, position string, nb u
 	return comments, new_position, res.Status, nil
 }
 
-func (ra *RedditAPI) Request(ctx context.Context, verb, path string, data io.Reader) redditResponse {
+func (ra *RedditAPI) request(ctx context.Context, verb, path string, data io.Reader) redditResponse {
 	make_req := func() (*http.Request, error) {
 		return http.NewRequest(verb, requestBaseURL+path, data)
 	}
@@ -275,7 +275,7 @@ func (ra *RedditAPI) rawRequest(ctx context.Context, makeReq func() (*http.Reque
 	}
 
 	ra.prepareRequest(ctx, req)
-	raw_res, err := ra.Client.Do(req)
+	raw_res, err := ra.client.Do(req)
 	if err != nil {
 		return redditResponse{Error: err}
 	}
@@ -291,7 +291,7 @@ func (ra *RedditAPI) rawRequest(ctx context.Context, makeReq func() (*http.Reque
 	}
 
 	if res.Status == 401 {
-		if err := ra.Connect(ctx); err != nil {
+		if err := ra.connect(ctx); err != nil {
 			res.Error = err
 			return res
 		}
@@ -302,11 +302,11 @@ func (ra *RedditAPI) rawRequest(ctx context.Context, makeReq func() (*http.Reque
 }
 
 func (ra *RedditAPI) prepareRequest(ctx context.Context, req *http.Request) *http.Request {
-	req.Header.Set("User-Agent", ra.UserAgent)
-	req.Header.Set("Authorization", "bearer "+ra.OAuth.Token)
+	req.Header.Set("User-Agent", ra.userAgent)
+	req.Header.Set("Authorization", "bearer "+ra.oAuth.Token)
 	return req.WithContext(ctx)
 }
 
 func (ra *RedditAPI) do(req *http.Request) (*http.Response, error) {
-	return ra.Client.Do(req)
+	return ra.client.Do(req)
 }

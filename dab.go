@@ -14,19 +14,19 @@ import (
 const Version = "0.243"
 
 type DownArrowsBot struct {
-	FlagSet    *flag.FlagSet
+	flagSet    *flag.FlagSet
 	Logger     *log.Logger
-	LoggerOpts int
-	LogOut     io.Writer
-	StdOut     io.Writer
+	loggerOpts int
+	logOut     io.Writer
+	stdOut     io.Writer
 
 	cancel       context.CancelFunc
 	waitShutdown *sync.WaitGroup
 
-	Conf   Configuration
+	conf   Configuration
 	Daemon bool
 
-	RuntimeConf struct {
+	runtimeConf struct {
 		Compendium bool
 		Discord    bool
 		InitDB     bool
@@ -38,7 +38,7 @@ type DownArrowsBot struct {
 		Web        bool
 	}
 
-	Components struct {
+	components struct {
 		Enabled       []string
 		Discord       *DiscordBot
 		RedditScanner *RedditScanner
@@ -52,11 +52,11 @@ type DownArrowsBot struct {
 
 func NewDownArrowsBot(log_out io.Writer, logger_opts int, output io.Writer) *DownArrowsBot {
 	return &DownArrowsBot{
-		FlagSet:      flag.NewFlagSet("DownArrowsBot", flag.ExitOnError),
+		flagSet:      flag.NewFlagSet("DownArrowsBot", flag.ExitOnError),
 		Logger:       log.New(log_out, "", logger_opts),
-		LoggerOpts:   logger_opts,
-		LogOut:       log_out,
-		StdOut:       output,
+		loggerOpts:   logger_opts,
+		logOut:       log_out,
+		stdOut:       output,
 		waitShutdown: &sync.WaitGroup{},
 	}
 }
@@ -68,57 +68,57 @@ func (dab *DownArrowsBot) Launch(ctx context.Context, args []string) {
 
 	dab.initStorage()
 
-	if dab.RuntimeConf.InitDB {
+	if dab.runtimeConf.InitDB {
 		return
 	}
 
 	dab.initReport()
-	if dab.RuntimeConf.Report {
+	if dab.runtimeConf.Report {
 		dab.report()
 		return
 	}
 
 	dab.checkRedditConf()
-	if dab.RuntimeConf.Reddit {
+	if dab.runtimeConf.Reddit {
 		dab.initReddit(ctx)
 	}
 
-	if dab.RuntimeConf.UserAdd {
-		if !dab.RuntimeConf.Reddit {
+	if dab.runtimeConf.UserAdd {
+		if !dab.runtimeConf.Reddit {
 			dab.Logger.Fatal("reddit bot must be running to register users")
 		}
 		dab.userAdd(ctx)
 		return
 	}
 
-	if dab.RuntimeConf.Reddit {
+	if dab.runtimeConf.Reddit {
 		dab.launchReddit(ctx)
 	}
 
 	dab.checkDiscordConf()
-	if dab.RuntimeConf.Discord {
+	if dab.runtimeConf.Discord {
 		dab.launchDiscord()
 	}
 
-	if dab.RuntimeConf.Reddit && dab.RuntimeConf.Discord {
+	if dab.runtimeConf.Reddit && dab.runtimeConf.Discord {
 		dab.connectRedditAndDiscord(ctx)
 	}
 
 	dab.checkWebConf()
-	if dab.RuntimeConf.Web {
+	if dab.runtimeConf.Web {
 		dab.launchWeb()
 	}
 
-	dab.Logger.Print("launched the following components: ", strings.Join(dab.Components.Enabled, ", "))
+	dab.Logger.Print("launched the following components: ", strings.Join(dab.components.Enabled, ", "))
 
-	dab.RuntimeConf.Launched = true
+	dab.runtimeConf.Launched = true
 }
 
 func (dab *DownArrowsBot) Close() {
 	dab.cancel()
 	dab.waitShutdown.Wait()
 
-	c := dab.Components
+	c := dab.components
 
 	// the reddit bot and its components already close themselves with the context's cancellation
 
@@ -146,95 +146,95 @@ func (dab *DownArrowsBot) withShutdown(cb func()) {
 }
 
 func (dab *DownArrowsBot) init(args []string) {
-	path := dab.FlagSet.String("config", "./dab.conf.json", "Path to the configuration file.")
-	dab.FlagSet.BoolVar(&dab.RuntimeConf.Compendium, "compendium", false, "Start the reddit bot with an update from DVT's compendium.")
-	dab.FlagSet.BoolVar(&dab.RuntimeConf.InitDB, "initdb", false, "Initialize the database and exit.")
-	dab.FlagSet.BoolVar(&dab.RuntimeConf.Report, "report", false, "Print the report for the last week and exit.")
-	dab.FlagSet.BoolVar(&dab.RuntimeConf.UserAdd, "useradd", false, "Add one or multiple usernames to be tracked and exit.")
-	dab.FlagSet.Parse(args)
+	path := dab.flagSet.String("config", "./dab.conf.json", "Path to the configuration file.")
+	dab.flagSet.BoolVar(&dab.runtimeConf.Compendium, "compendium", false, "Start the reddit bot with an update from DVT's compendium.")
+	dab.flagSet.BoolVar(&dab.runtimeConf.InitDB, "initdb", false, "Initialize the database and exit.")
+	dab.flagSet.BoolVar(&dab.runtimeConf.Report, "report", false, "Print the report for the last week and exit.")
+	dab.flagSet.BoolVar(&dab.runtimeConf.UserAdd, "useradd", false, "Add one or multiple usernames to be tracked and exit.")
+	dab.flagSet.Parse(args)
 
-	if !dab.RuntimeConf.UserAdd && dab.FlagSet.NArg() > 0 {
+	if !dab.runtimeConf.UserAdd && dab.flagSet.NArg() > 0 {
 		dab.Logger.Fatal("No argument besides usernames when adding users is accepted")
 	}
 
 	var err error
-	dab.Conf, err = NewConfiguration(*path)
+	dab.conf, err = NewConfiguration(*path)
 	if err != nil {
 		dab.Logger.Fatal(err)
 	}
 }
 
 func (dab *DownArrowsBot) checkRedditConf() {
-	if dab.Conf.Reddit.Username == "" || dab.Conf.Reddit.Secret == "" || dab.Conf.Reddit.Id == "" ||
-		dab.Conf.Reddit.Password == "" || dab.Conf.Reddit.UserAgent == "" {
+	if dab.conf.Reddit.Username == "" || dab.conf.Reddit.Secret == "" || dab.conf.Reddit.Id == "" ||
+		dab.conf.Reddit.Password == "" || dab.conf.Reddit.UserAgent == "" {
 		fields := "id, secret, username, password, user_agent"
 		msg := "Disabling reddit bot; at least one of the required fields of 'reddit' in the configuration file is empty"
 		dab.Logger.Print(msg, ": ", fields)
 	} else {
-		dab.RuntimeConf.Reddit = true
-		dab.Components.Enabled = append(dab.Components.Enabled, "reddit")
+		dab.runtimeConf.Reddit = true
+		dab.components.Enabled = append(dab.components.Enabled, "reddit")
 	}
 }
 
 func (dab *DownArrowsBot) checkDiscordConf() {
-	if dab.Conf.Discord.DiscordBotConf.HidePrefix == "" {
-		dab.Conf.Discord.DiscordBotConf.HidePrefix = dab.Conf.HidePrefix
+	if dab.conf.Discord.DiscordBotConf.HidePrefix == "" {
+		dab.conf.Discord.DiscordBotConf.HidePrefix = dab.conf.HidePrefix
 	}
 
-	dab.RuntimeConf.Discord = dab.Conf.Discord.Token != ""
-	if dab.RuntimeConf.Discord {
-		dab.Components.Enabled = append(dab.Components.Enabled, "discord")
+	dab.runtimeConf.Discord = dab.conf.Discord.Token != ""
+	if dab.runtimeConf.Discord {
+		dab.components.Enabled = append(dab.components.Enabled, "discord")
 	} else {
 		dab.Logger.Print("disabling discord bot; empty 'token' field in 'discord' section of the configuration file")
 	}
 }
 
 func (dab *DownArrowsBot) initStorage() {
-	dab.Logger.Print("using database ", dab.Conf.Database.Path)
-	dab.Components.Storage = NewStorage(dab.Conf.Database)
-	dab.Components.Enabled = append(dab.Components.Enabled, "storage")
+	dab.Logger.Print("using database ", dab.conf.Database.Path)
+	dab.components.Storage = NewStorage(dab.conf.Database)
+	dab.components.Enabled = append(dab.components.Enabled, "storage")
 }
 
 func (dab *DownArrowsBot) initReddit(ctx context.Context) {
-	user_agent, err := template.New("UserAgent").Parse(dab.Conf.Reddit.UserAgent)
+	user_agent, err := template.New("UserAgent").Parse(dab.conf.Reddit.UserAgent)
 	if err != nil {
 		dab.Logger.Fatal(err)
 	}
 
 	dab.Logger.Print("attempting to log into reddit")
-	ra, err := NewRedditAPI(ctx, dab.Conf.Reddit.RedditAuth, user_agent)
+	ra, err := NewRedditAPI(ctx, dab.conf.Reddit.RedditAuth, user_agent)
 	if err != nil {
 		dab.Logger.Fatal(err)
 	}
 	dab.Logger.Print("successfully logged into reddit")
 
-	reddit_logger := log.New(dab.LogOut, "", dab.LoggerOpts)
+	reddit_logger := log.New(dab.logOut, "", dab.loggerOpts)
 
-	dab.Components.RedditScanner = NewRedditScanner(reddit_logger, dab.Components.Storage, ra, dab.Conf.Reddit.RedditScannerConf)
-	dab.Components.RedditUsers = NewRedditUsers(reddit_logger, dab.Components.Storage, ra)
-	dab.Components.RedditSubs = NewRedditSubs(reddit_logger, dab.Components.Storage, ra)
+	dab.components.RedditScanner = NewRedditScanner(reddit_logger, dab.components.Storage, ra, dab.conf.Reddit.RedditScannerConf)
+	dab.components.RedditUsers = NewRedditUsers(reddit_logger, dab.components.Storage, ra)
+	dab.components.RedditSubs = NewRedditSubs(reddit_logger, dab.components.Storage, ra)
 }
 
 func (dab *DownArrowsBot) initReport() {
-	dab.Components.Report = NewReportFactory(dab.Components.Storage, dab.Conf.Report)
+	dab.components.Report = NewReportFactory(dab.components.Storage, dab.conf.Report)
 }
 
 func (dab *DownArrowsBot) report() {
 	dab.Logger.Print("printing report for last week")
-	year, week := dab.Components.Report.LastWeekCoordinates()
-	report := dab.Components.Report.ReportWeek(year, week)
+	year, week := dab.components.Report.LastWeekCoordinates()
+	report := dab.components.Report.ReportWeek(year, week)
 	if report.Len() == 0 {
 		dab.Logger.Fatal("empty report")
 	}
-	autopanic(WriteMarkdownReport(report, dab.StdOut))
+	autopanic(WriteMarkdownReport(report, dab.stdOut))
 }
 
 func (dab *DownArrowsBot) userAdd(ctx context.Context) {
-	usernames := dab.FlagSet.Args()
+	usernames := dab.flagSet.Args()
 	for _, username := range usernames {
-		hidden := strings.HasPrefix(username, dab.Conf.HidePrefix)
-		username = strings.TrimPrefix(username, dab.Conf.HidePrefix)
-		if res := dab.Components.RedditUsers.AddUser(ctx, username, hidden, true); res.Error != nil && !res.Exists {
+		hidden := strings.HasPrefix(username, dab.conf.HidePrefix)
+		username = strings.TrimPrefix(username, dab.conf.HidePrefix)
+		if res := dab.components.RedditUsers.AddUser(ctx, username, hidden, true); res.Error != nil && !res.Exists {
 			dab.Logger.Fatal(res.Error)
 		}
 	}
@@ -242,23 +242,23 @@ func (dab *DownArrowsBot) userAdd(ctx context.Context) {
 
 func (dab *DownArrowsBot) launchReddit(ctx context.Context) {
 
-	if dab.RuntimeConf.Compendium {
+	if dab.runtimeConf.Compendium {
 		dab.withShutdown(func() {
-			if err := dab.Components.RedditUsers.UpdateUsersFromCompendium(ctx); err != nil {
+			if err := dab.components.RedditUsers.UpdateUsersFromCompendium(ctx); err != nil {
 				dab.Logger.Print(err)
 			}
 		})
 	}
 
 	go dab.withShutdown(func() {
-		err := dab.Components.RedditScanner.Run(ctx)
+		err := dab.components.RedditScanner.Run(ctx)
 		if err != nil && !isContextError(err) {
 			dab.Logger.Print(err)
 		}
 	})
 
 	go dab.withShutdown(func() {
-		dab.Components.RedditUsers.AutoCompendiumUpdate(ctx, dab.Conf.Reddit.CompendiumUpdateInterval.Value)
+		dab.components.RedditUsers.AutoCompendiumUpdate(ctx, dab.conf.Reddit.CompendiumUpdateInterval.Value)
 	})
 
 	dab.Daemon = true
@@ -268,17 +268,17 @@ func (dab *DownArrowsBot) launchDiscord() {
 	var err error
 
 	dab.Logger.Print("attempting to connect discord bot")
-	bot_logger := log.New(dab.LogOut, "", dab.LoggerOpts)
+	bot_logger := log.New(dab.logOut, "", dab.loggerOpts)
 
-	if dab.Conf.Discord.Timezone.Value == nil {
-		dab.Conf.Discord.Timezone.Value = dab.RuntimeConf.Timezone
+	if dab.conf.Discord.Timezone.Value == nil {
+		dab.conf.Discord.Timezone.Value = dab.runtimeConf.Timezone
 	}
 
-	dab.Components.Discord, err = NewDiscordBot(dab.Components.Storage, bot_logger, dab.Conf.Discord.DiscordBotConf)
+	dab.components.Discord, err = NewDiscordBot(dab.components.Storage, bot_logger, dab.conf.Discord.DiscordBotConf)
 	if err != nil {
 		dab.Logger.Fatal(err)
 	}
-	if err := dab.Components.Discord.Run(); err != nil {
+	if err := dab.components.Discord.Run(); err != nil {
 		dab.Logger.Fatal(err)
 	}
 
@@ -289,37 +289,37 @@ func (dab *DownArrowsBot) launchDiscord() {
 func (dab *DownArrowsBot) connectRedditAndDiscord(ctx context.Context) {
 	dab.Logger.Print("connecting the discord bot and the reddit bot together")
 	go dab.withShutdown(func() {
-		dab.Components.RedditUsers.AddUserServer(ctx, dab.Components.Discord.AddUser)
+		dab.components.RedditUsers.AddUserServer(ctx, dab.components.Discord.AddUser)
 	})
 
-	if dab.Conf.Reddit.DVTInterval.Value > 0*time.Second {
+	if dab.conf.Reddit.DVTInterval.Value > 0*time.Second {
 		reddit_evts := make(chan Comment)
-		go dab.withShutdown(func() { dab.Components.Discord.RedditEvents(reddit_evts) })
+		go dab.withShutdown(func() { dab.components.Discord.RedditEvents(reddit_evts) })
 		go dab.withShutdown(func() {
-			dab.Components.RedditSubs.StreamSub(ctx, "downvote_trolls", reddit_evts, dab.Conf.Reddit.DVTInterval.Value)
+			dab.components.RedditSubs.StreamSub(ctx, "downvote_trolls", reddit_evts, dab.conf.Reddit.DVTInterval.Value)
 		})
 	}
 
-	suspensions := dab.Components.RedditScanner.Suspensions() // suspensions are actually watched by the scanning of comments, not here
-	dab.Components.Discord.SignalSuspensions(suspensions)
+	suspensions := dab.components.RedditScanner.Suspensions() // suspensions are actually watched by the scanning of comments, not here
+	dab.components.Discord.SignalSuspensions(suspensions)
 
 	unsuspensions := make(chan User)
 	go dab.withShutdown(func() {
-		dab.Components.RedditUsers.CheckUnsuspendedAndNotFound(ctx, dab.Conf.Reddit.UnsuspensionInterval.Value, unsuspensions)
+		dab.components.RedditUsers.CheckUnsuspendedAndNotFound(ctx, dab.conf.Reddit.UnsuspensionInterval.Value, unsuspensions)
 	})
-	go dab.Components.Discord.SignalUnsuspensions(unsuspensions)
+	go dab.components.Discord.SignalUnsuspensions(unsuspensions)
 
-	if dab.Conf.Discord.HighScores != "" {
-		highscores := dab.Components.RedditScanner.HighScores() // this also happens during the scanning of comments
-		go dab.Components.Discord.SignalHighScores(highscores)
+	if dab.conf.Discord.HighScores != "" {
+		highscores := dab.components.RedditScanner.HighScores() // this also happens during the scanning of comments
+		go dab.components.Discord.SignalHighScores(highscores)
 	}
 	dab.Logger.Print("discord bot and reddit bot connected")
 }
 
 func (dab *DownArrowsBot) checkWebConf() {
-	if dab.Conf.Web.Listen != "" {
-		dab.RuntimeConf.Web = true
-		dab.Components.Enabled = append(dab.Components.Enabled, "web server")
+	if dab.conf.Web.Listen != "" {
+		dab.runtimeConf.Web = true
+		dab.components.Enabled = append(dab.components.Enabled, "web server")
 	} else {
 		dab.Logger.Print("disabling web server; empty 'listen' field in 'web' section of the configuration file")
 	}
@@ -327,9 +327,9 @@ func (dab *DownArrowsBot) checkWebConf() {
 
 func (dab *DownArrowsBot) launchWeb() {
 	dab.Logger.Print("lauching the web server")
-	dab.Components.Web = NewWebServer(dab.Conf.Web, dab.Components.Report, dab.Components.Storage)
+	dab.components.Web = NewWebServer(dab.conf.Web, dab.components.Report, dab.components.Storage)
 	go func() {
-		err := dab.Components.Web.Run()
+		err := dab.components.Web.Run()
 		if err != nil {
 			dab.Logger.Print(err)
 		}

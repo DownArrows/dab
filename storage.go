@@ -77,12 +77,12 @@ func init() {
 }
 
 type Storage struct {
+	backupMaxAge    time.Duration
+	backupPath      string
+	cleanupInterval time.Duration
 	conn            *sqlite3.SQLiteConn
 	db              *sqlx.DB
-	Path            string
-	CleanupInterval time.Duration
-	backupPath      string
-	backupMaxAge    time.Duration
+	path            string
 	cache           struct {
 		KnownObjects   *SyncSet
 		SubPostIDs     map[string]*SyncSet
@@ -92,33 +92,33 @@ type Storage struct {
 
 func NewStorage(conf StorageConf) *Storage {
 	s := &Storage{
-		Path:            conf.Path,
-		CleanupInterval: conf.CleanupInterval.Value,
+		path:            conf.Path,
+		cleanupInterval: conf.CleanupInterval.Value,
 		backupPath:      conf.BackupPath,
 		backupMaxAge:    conf.BackupMaxAge.Value,
 	}
-	if s.CleanupInterval < 1*time.Minute && s.CleanupInterval != 0*time.Second {
+	if s.cleanupInterval < 1*time.Minute && s.cleanupInterval != 0*time.Second {
 		panic("database cleanup interval can't be under a minute if superior to 0s")
 	}
 
-	db, err := sql.Open(DatabaseDriverName, fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", s.Path))
+	db, err := sql.Open(DatabaseDriverName, fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", s.path))
 	autopanic(err)
 	s.db = sqlx.NewDb(db, "sqlite3")
 
 	autopanic(db.Ping()) // trigger connection hook
 	s.conn = <-connections
 
-	s.Init()
+	s.init()
 	s.initCaches()
 	s.launchPeriodicVacuum()
 
 	return s
 }
 
-func (s *Storage) Init() {
+func (s *Storage) init() {
 	s.db.SetMaxOpenConns(1)
 
-	if s.Path != ":memory:" {
+	if s.path != ":memory:" {
 		s.EnableWAL()
 	}
 
@@ -200,13 +200,13 @@ func (s *Storage) initCaches() {
 ************/
 
 func (s *Storage) launchPeriodicVacuum() {
-	if s.CleanupInterval == 0*time.Second {
+	if s.cleanupInterval == 0*time.Second {
 		return
 	}
 
 	go func() {
 		for {
-			time.Sleep(s.CleanupInterval)
+			time.Sleep(s.cleanupInterval)
 			s.db.MustExec("VACUUM")
 		}
 	}()
