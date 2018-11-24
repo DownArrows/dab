@@ -18,6 +18,19 @@ import (
 
 const MaxRedditListingLength = 100
 
+type RedditScannerAPI interface {
+	UserComments(context.Context, User, uint) ([]Comment, User, error)
+}
+
+type RedditUsersAPI interface {
+	AboutUser(context.Context, string) UserQuery
+	WikiPage(context.Context, string, string) (string, error)
+}
+
+type RedditSubsAPI interface {
+	SubPosts(context.Context, string, string) ([]Comment, string, error)
+}
+
 const accessTokenURL = "https://www.reddit.com/api/v1/access_token"
 
 const requestBaseURL = "https://oauth.reddit.com"

@@ -54,11 +54,12 @@ type RedditAuth struct {
 	Secret   string `json:"secret"`
 }
 
-type RedditBotConf struct {
+type RedditScannerConf struct {
 	MaxAge              Duration `json:"max_age"`
 	MaxBatches          uint     `json:"max_batches"`
 	InactivityThreshold Duration `json:"inactivity_threshold"`
 	FullScanInterval    Duration `json:"full_scan_interval"`
+	HighScoreThreshold  int64    `json:"-"`
 }
 
 type ReportConf struct {
@@ -93,7 +94,7 @@ type Configuration struct {
 
 	Reddit struct {
 		RedditAuth
-		RedditBotConf
+		RedditScannerConf
 		UserAgent                string   `json:"user_agent"`
 		UnsuspensionInterval     Duration `json:"unsuspension_interval"`
 		CompendiumUpdateInterval Duration `json:"compendium_update_interval"`
@@ -129,6 +130,10 @@ func NewConfiguration(path string) (Configuration, error) {
 	if conf.HidePrefix == "" {
 		panic("Prefix for 'hidden' users can't be an empty string")
 	}
+
+	conf.Report.Timezone = conf.Timezone
+	conf.Discord.Timezone = conf.Timezone
+	conf.Reddit.RedditScannerConf.HighScoreThreshold = conf.Discord.HighScoreThreshold
 
 	return conf, nil
 }

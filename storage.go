@@ -10,26 +10,30 @@ import (
 	"time"
 )
 
-type RedditBotStorage interface {
-	// Users
-	AddUser(string, bool, int64) error
-	FoundUser(string) error
-	GetUser(string) UserQuery
+type RedditScannerStorage interface {
+	KnownObjects
 	ListActiveUsers() []User
 	ListSuspendedAndNotFound() []User
 	ListUsers() []User
-	NotFoundUser(string) error
-	UnSuspendUser(string) error
-	SuspendUser(string) error
-	// Comments
 	SaveCommentsUpdateUser([]Comment, User, time.Duration) (User, error)
 	UpdateInactiveStatus(time.Duration) error
-	// Key-value
+}
+
+type RedditUsersStorage interface {
+	KnownObjects
+	AddUser(string, bool, int64) error
+	FoundUser(string) error
+	GetUser(string) UserQuery
+	ListSuspendedAndNotFound() []User
+	NotFoundUser(string) error
+	SuspendUser(string) error
+	UnSuspendUser(string) error
+}
+
+type RedditSubsStorage interface {
 	IsKnownSubPostID(string, string) bool
 	NbKnownPostIDs(string) int
 	SaveSubPostIDs(string, []Comment) error
-	IsKnownObject(string) bool
-	SaveKnownObject(string) error
 }
 
 type DiscordBotStorage interface {
@@ -50,6 +54,11 @@ type ReportFactoryStorage interface {
 type BackupStorage interface {
 	Backup() error
 	BackupPath() string
+}
+
+type KnownObjects interface {
+	IsKnownObject(string) bool
+	SaveKnownObject(string) error
 }
 
 var ErrNoComment = errors.New("no comment found")
