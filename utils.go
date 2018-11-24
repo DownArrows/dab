@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sync"
@@ -11,6 +12,10 @@ func autopanic(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func isContextError(err error) bool {
+	return err == context.Canceled || err == context.DeadlineExceeded
 }
 
 func fileOlderThan(path string, max_age time.Duration) (bool, error) {

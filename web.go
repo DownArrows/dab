@@ -76,7 +76,11 @@ func NewWebServer(conf WebConf, reports ReportFactory, bs BackupStorage) *WebSer
 }
 
 func (wsrv *WebServer) Run() error {
-	return wsrv.Server.ListenAndServe()
+	err := wsrv.Server.ListenAndServe()
+	if err == http.ErrServerClosed {
+		return nil
+	}
+	return err
 }
 
 func (wsrv *WebServer) Close() error {

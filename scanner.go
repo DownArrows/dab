@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -67,7 +68,7 @@ type Scanner struct {
 	ticker    *time.Ticker
 }
 
-func NewScanner(auth RedditAuth, userAgent *template.Template) (*Scanner, error) {
+func NewScanner(ctx context.Context, auth RedditAuth, userAgent *template.Template) (*Scanner, error) {
 	var user_agent strings.Builder
 	data := map[string]interface{}{
 		"Version": Version,
@@ -78,21 +79,51 @@ func NewScanner(auth RedditAuth, userAgent *template.Template) (*Scanner, error)
 	}
 
 	http_client := &http.Client{}
-	var client = &Scanner{
+	client := &Scanner{
+		Auth:      auth,
 		Client:    http_client,
-		ticker:    time.NewTicker(time.Second),
 		UserAgent: user_agent.String(),
+		ticker:    time.NewTicker(time.Second),
 	}
 
-	if err := client.connect(auth); err != nil {
+	if err := client.Connect(ctx); err != nil {
 		return nil, err
 	}
 
 	return client, nil
 }
 
-func (sc *Scanner) UserComments(user User, nb uint) ([]Comment, User, error) {
-	comments, position, status, err := sc.getListing("/u/"+user.Name+"/comments", user.Position, nb)
+func (sc *Scanner) Connect(ctx context.Context) error {
+	auth_conf := url.Values{
+		"grant_type": {"password"},
+		"username":   {sc.Auth.Username},
+		"password":   {sc.Auth.Password},
+	}
+	auth_form := strings.NewReader(auth_conf.Encode())
+
+	req, _ := http.NewRequest("POST", accessTokenURL, auth_form)
+
+	req.Header.Set("User-Agent", sc.UserAgent)
+	req.SetBasicAuth(sc.Auth.Id, sc.Auth.Secret)
+	req.WithContext(ctx)
+
+	res, err := sc.do(req)
+	if err != nil {
+		return err
+	}
+
+	body, read_err := ioutil.ReadAll(res.Body)
+	if read_err != nil {
+		return read_err
+	}
+
+	sc.Lock()
+	defer sc.Unlock()
+	return json.Unmarshal(body, &sc.OAuth)
+}
+
+func (sc *Scanner) UserComments(ctx context.Context, user User, nb uint) ([]Comment, User, error) {
+	comments, position, status, err := sc.getListing(ctx, "/u/"+user.Name+"/comments", user.Position, nb)
 	if err != nil {
 		return []Comment{}, user, err
 	}
@@ -101,7 +132,7 @@ func (sc *Scanner) UserComments(user User, nb uint) ([]Comment, User, error) {
 	// Fetching the comments of a user that's been suspended can return 403,
 	// so the status doesn't really give enough information.
 	if status == 403 || status == 404 {
-		about := sc.AboutUser(user.Name)
+		about := sc.AboutUser(ctx, user.Name)
 		if about.Error != nil {
 			return []Comment{}, user, about.Error
 		}
@@ -112,7 +143,7 @@ func (sc *Scanner) UserComments(user User, nb uint) ([]Comment, User, error) {
 	return comments, user, nil
 }
 
-func (sc *Scanner) AboutUser(username string) UserQuery {
+func (sc *Scanner) AboutUser(ctx context.Context, username string) UserQuery {
 	query := UserQuery{User: User{Name: username}}
 	sane, err := regexp.MatchString(`^[[:word:]-]+$`, username)
 	if err != nil {
@@ -123,7 +154,7 @@ func (sc *Scanner) AboutUser(username string) UserQuery {
 		return query
 	}
 
-	res := sc.Request("GET", "/u/"+username+"/about", nil)
+	res := sc.Request(ctx, "GET", "/u/"+username+"/about", nil)
 	if res.Error != nil {
 		query.Error = res.Error
 		return query
@@ -150,9 +181,9 @@ func (sc *Scanner) AboutUser(username string) UserQuery {
 	return query
 }
 
-func (sc *Scanner) WikiPage(sub, page string) (string, error) {
+func (sc *Scanner) WikiPage(ctx context.Context, sub, page string) (string, error) {
 	path := "/r/" + sub + "/wiki/" + page
-	res := sc.Request("GET", path, nil)
+	res := sc.Request(ctx, "GET", path, nil)
 	if res.Error != nil {
 		return "", res.Error
 	}
@@ -172,48 +203,18 @@ func (sc *Scanner) WikiPage(sub, page string) (string, error) {
 //
 //}
 
-func (sc *Scanner) SubPosts(sub string, position string) ([]Comment, string, error) {
-	comments, position, _, err := sc.getListing("/r/"+sub+"/new", position, MaxRedditListingLength)
+func (sc *Scanner) SubPosts(ctx context.Context, sub string, position string) ([]Comment, string, error) {
+	comments, position, _, err := sc.getListing(ctx, "/r/"+sub+"/new", position, MaxRedditListingLength)
 	return comments, position, err
 }
 
-func (sc *Scanner) connect(auth RedditAuth) error {
-	sc.Lock()
-	defer sc.Unlock()
-
-	sc.Auth = auth
-
-	var auth_conf = url.Values{
-		"grant_type": {"password"},
-		"username":   {sc.Auth.Username},
-		"password":   {sc.Auth.Password}}
-	auth_form := strings.NewReader(auth_conf.Encode())
-
-	req, _ := http.NewRequest("POST", accessTokenURL, auth_form)
-
-	req.Header.Set("User-Agent", sc.UserAgent)
-	req.SetBasicAuth(sc.Auth.Id, sc.Auth.Secret)
-
-	res, err := sc.do(req)
-	if err != nil {
-		return err
-	}
-
-	body, read_err := ioutil.ReadAll(res.Body)
-	if read_err != nil {
-		return read_err
-	}
-
-	return json.Unmarshal(body, &sc.OAuth)
-}
-
-func (sc *Scanner) getListing(path, position string, nb uint) ([]Comment, string, int, error) {
+func (sc *Scanner) getListing(ctx context.Context, path, position string, nb uint) ([]Comment, string, int, error) {
 	url := fmt.Sprintf("%s?sort=new&limit=%d", path, nb)
 	if position != "" {
 		url += ("&after=" + position)
 	}
 
-	res := sc.Request("GET", url, nil)
+	res := sc.Request(ctx, "GET", url, nil)
 	if res.Error != nil {
 		return nil, position, res.Status, res.Error
 	}
@@ -242,23 +243,27 @@ func (sc *Scanner) getListing(path, position string, nb uint) ([]Comment, string
 	return comments, new_position, res.Status, nil
 }
 
-func (sc *Scanner) Request(verb, path string, data io.Reader) redditResponse {
+func (sc *Scanner) Request(ctx context.Context, verb, path string, data io.Reader) redditResponse {
 	make_req := func() (*http.Request, error) {
 		return http.NewRequest(verb, requestBaseURL+path, data)
 	}
-	return sc.rawRequest(make_req)
+	return sc.rawRequest(ctx, make_req)
 }
 
-func (sc *Scanner) rawRequest(makeReq func() (*http.Request, error)) redditResponse {
-
-	<-sc.ticker.C
+func (sc *Scanner) rawRequest(ctx context.Context, makeReq func() (*http.Request, error)) redditResponse {
+	select {
+	case <-sc.ticker.C:
+		break
+	case <-ctx.Done():
+		return redditResponse{Error: ctx.Err()}
+	}
 
 	req, err := makeReq()
 	if err != nil {
 		return redditResponse{Error: err}
 	}
 
-	sc.prepareRequest(req)
+	sc.prepareRequest(ctx, req)
 	raw_res, err := sc.Client.Do(req)
 	if err != nil {
 		return redditResponse{Error: err}
@@ -275,20 +280,20 @@ func (sc *Scanner) rawRequest(makeReq func() (*http.Request, error)) redditRespo
 	}
 
 	if res.Status == 401 {
-		if err := sc.connect(sc.Auth); err != nil {
+		if err := sc.Connect(ctx); err != nil {
 			res.Error = err
 			return res
 		}
-		return sc.rawRequest(makeReq)
+		return sc.rawRequest(ctx, makeReq)
 	}
 
 	return res
 }
 
-func (sc *Scanner) prepareRequest(req *http.Request) *http.Request {
+func (sc *Scanner) prepareRequest(ctx context.Context, req *http.Request) *http.Request {
 	req.Header.Set("User-Agent", sc.UserAgent)
 	req.Header.Set("Authorization", "bearer "+sc.OAuth.Token)
-	return req
+	return req.WithContext(ctx)
 }
 
 func (sc *Scanner) do(req *http.Request) (*http.Response, error) {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -23,7 +24,7 @@ func main() {
 				done <- errorShutdown
 			}
 		}()
-		dab.Launch(os.Args[1:])
+		dab.Launch(context.Background(), os.Args[1:])
 
 		if dab.Daemon {
 			done <- noShutdown

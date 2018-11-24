@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -30,21 +31,53 @@ func NewRedditBot(scanner *Scanner, storage RedditBotStorage, logger *log.Logger
 	}
 }
 
-func (bot *RedditBot) AutoCompendiumUpdate(interval time.Duration) {
+func (bot *RedditBot) Run(ctx context.Context) error {
+	var last_full_scan time.Time
+	for ctx.Err() == nil {
+		now := time.Now().Round(0)
+		full_scan := now.Sub(last_full_scan) >= bot.Conf.FullScanInterval.Value
+		users := bot.getUsersOrWait(ctx, full_scan)
+		if len(users) == 0 {
+			return ctx.Err()
+		}
+
+		if err := bot.scan(ctx, users); err != nil {
+			return err
+		}
+
+		if full_scan {
+			last_full_scan = now
+			if err := bot.storage.UpdateInactiveStatus(bot.Conf.InactivityThreshold.Value); err != nil {
+				return err
+			}
+		}
+	}
+	return ctx.Err()
+}
+
+func (bot *RedditBot) AutoCompendiumUpdate(ctx context.Context, interval time.Duration) {
 	if interval == 0*time.Second {
 		bot.logger.Print("interval for auto-update from DVT's compendium is 0s, disabling")
 		return
 	}
 	for {
-		time.Sleep(interval)
-		if err := bot.UpdateUsersFromCompendium(); err != nil {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(interval):
+			break
+		}
+		if err := bot.UpdateUsersFromCompendium(ctx); err != nil {
+			if isContextError(err) {
+				return
+			}
 			bot.logger.Print(err)
 		}
 	}
 }
 
-func (bot *RedditBot) UpdateUsersFromCompendium() error {
-	page, err := bot.scanner.WikiPage("downvote_trolls", "compendium")
+func (bot *RedditBot) UpdateUsersFromCompendium(ctx context.Context) error {
+	page, err := bot.scanner.WikiPage(ctx, "downvote_trolls", "compendium")
 	if err != nil {
 		return err
 	}
@@ -86,8 +119,11 @@ func (bot *RedditBot) UpdateUsersFromCompendium() error {
 			continue
 		}
 
-		result := bot.AddUser(username, false, false)
+		result := bot.AddUser(ctx, username, false, false)
 		if result.Error != nil {
+			if isContextError(result.Error) {
+				return result.Error
+			}
 			if !result.Exists {
 				msg := "update from compendium: error when adding the new user "
 				bot.logger.Print(msg, result.User.Name, result.Error)
@@ -111,15 +147,18 @@ func (bot *RedditBot) UpdateUsersFromCompendium() error {
 	return nil
 }
 
-func (bot *RedditBot) StreamSub(sub string, ch chan Comment, sleep time.Duration) {
+func (bot *RedditBot) StreamSub(ctx context.Context, sub string, ch chan Comment, sleep time.Duration) {
 	bot.logger.Print("streaming new posts from ", sub)
 
 	// This assumes the sub isn't empty
 	first_time := (bot.storage.NbKnownPostIDs(sub) == 0)
 
-	for {
-		posts, _, err := bot.scanner.SubPosts(sub, "")
+	for ctx.Err() == nil {
+		posts, _, err := bot.scanner.SubPosts(ctx, sub, "")
 		if err != nil {
+			if isContextError(err) {
+				return
+			}
 			bot.logger.Print("event streamer: ", err)
 		}
 
@@ -143,16 +182,21 @@ func (bot *RedditBot) StreamSub(sub string, ch chan Comment, sleep time.Duration
 			ch <- post
 		}
 
-		time.Sleep(sleep)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(sleep):
+			break
+		}
 	}
 }
 
-func (bot *RedditBot) AddUserServer(queries chan UserQuery) {
+func (bot *RedditBot) AddUserServer(ctx context.Context, queries chan UserQuery) {
 	bot.logger.Print("init addition of new users")
 	for query := range queries {
 		bot.logger.Print("received query to add a new user: ", query)
 
-		query = bot.AddUser(query.User.Name, query.User.Hidden, false)
+		query = bot.AddUser(ctx, query.User.Name, query.User.Hidden, false)
 		if query.Error != nil {
 			msg := "error when adding the new user "
 			bot.logger.Print(msg, query.User.Name, query.Error)
@@ -170,7 +214,7 @@ func (bot *RedditBot) StartHighScoresFeed(threshold int64) chan Comment {
 	return bot.highScoresFeed
 }
 
-func (bot *RedditBot) AddUser(username string, hidden bool, force_suspended bool) UserQuery {
+func (bot *RedditBot) AddUser(ctx context.Context, username string, hidden bool, force_suspended bool) UserQuery {
 	bot.logger.Print("trying to add user ", username)
 	query := UserQuery{User: User{Name: username}}
 
@@ -184,7 +228,7 @@ func (bot *RedditBot) AddUser(username string, hidden bool, force_suspended bool
 		return query
 	}
 
-	query = bot.scanner.AboutUser(username)
+	query = bot.scanner.AboutUser(ctx, username)
 	if query.Error != nil {
 		return query
 	}
@@ -218,111 +262,83 @@ func (bot *RedditBot) Suspensions() chan User {
 	return bot.Suspended
 }
 
-func (bot *RedditBot) CheckUnsuspendedAndNotFound(delay time.Duration) chan User {
-	ch := make(chan User)
+func (bot *RedditBot) CheckUnsuspendedAndNotFound(ctx context.Context, delay time.Duration, ch chan User) {
+	for ctx.Err() == nil {
 
-	go func() {
-
-		for {
-
-			time.Sleep(delay)
-
-			for _, user := range bot.storage.ListSuspendedAndNotFound() {
-
-				res := bot.scanner.AboutUser(user.Name)
-				if res.Error != nil {
-					bot.logger.Print(res.Error)
-					continue
-				}
-
-				/* Actions depending in change of status (from is "user", to is "res"):
-
-				 from \ to | Alive  | Suspended | Deleted
-				-----------|------------------------------
-				 Alive     | NA     | NA        | NA
-				------------------------------------------
-				 Suspended | signal | ignore    | update
-				------------------------------------------
-				 Deleted   | signal | update    | ignore
-
-				ignore: don't signal, don't update
-				signal: update the database and signal the change
-				update: update the database, don't signal the change
-				NA: not applicable (we only have suspended or deleted users to begin with)
-
-				*/
-
-				if user.NotFound && res.Exists { // undeletion
-					if err := bot.storage.FoundUser(user.Name); err != nil {
-						bot.logger.Print(err)
-						continue
-					}
-					if res.User.Suspended {
-						if err := bot.storage.SuspendUser(user.Name); err != nil {
-							bot.logger.Print(err)
-						}
-						continue // don't signal accounts that went from deleted to suspended
-					}
-				} else if user.Suspended && !res.Exists { // deletion of a suspended account
-					if err := bot.storage.NotFoundUser(user.Name); err != nil {
-						bot.logger.Print(err)
-						continue
-					}
-					continue // don't signal it, we only need to keep track of it
-				} else if user.Suspended && !res.User.Suspended { // unsuspension
-					if err := bot.storage.UnSuspendUser(user.Name); err != nil {
-						bot.logger.Print(err)
-						continue
-					}
-				} else { // no change
-					continue
-				}
-
-				user.NotFound = res.Exists
-				user.Suspended = res.User.Suspended
-				ch <- res.User
-
-			}
-
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(delay):
+			break
 		}
 
-	}()
-
-	return ch
-}
-
-func (bot *RedditBot) Run() {
-	// Band-aid until a proper closing sequence is written.
-	defer func() {
-		if r := recover(); r != nil {
-			if err, ok := r.(error); ok {
-				bot.logger.Print(err)
+		for _, user := range bot.storage.ListSuspendedAndNotFound() {
+			if ctx.Err() != nil {
+				return
 			}
-		}
-	}()
 
-	var last_full_scan time.Time
-
-	for {
-
-		now := time.Now().Round(0)
-		full_scan := now.Sub(last_full_scan) >= bot.Conf.FullScanInterval.Value
-		users := bot.getUsersOrWait(full_scan)
-
-		bot.scan(users)
-
-		if full_scan {
-			last_full_scan = now
-			if err := bot.storage.UpdateInactiveStatus(bot.Conf.InactivityThreshold.Value); err != nil {
-				bot.logger.Fatal(err)
+			res := bot.scanner.AboutUser(ctx, user.Name)
+			if res.Error != nil {
+				if isContextError(res.Error) {
+					return
+				}
+				bot.logger.Print(res.Error)
+				continue
 			}
+
+			/* Actions depending in change of status (from is "user", to is "res"):
+
+			 from \ to | Alive  | Suspended | Deleted
+			-----------|------------------------------
+			 Alive     | NA     | NA        | NA
+			------------------------------------------
+			 Suspended | signal | ignore    | update
+			------------------------------------------
+			 Deleted   | signal | update    | ignore
+
+			ignore: don't signal, don't update
+			signal: update the database and signal the change
+			update: update the database, don't signal the change
+			NA: not applicable (we only have suspended or deleted users to begin with)
+
+			*/
+
+			if user.NotFound && res.Exists { // undeletion
+				if err := bot.storage.FoundUser(user.Name); err != nil {
+					bot.logger.Print(err)
+					continue
+				}
+				if res.User.Suspended {
+					if err := bot.storage.SuspendUser(user.Name); err != nil {
+						bot.logger.Print(err)
+					}
+					continue // don't signal accounts that went from deleted to suspended
+				}
+			} else if user.Suspended && !res.Exists { // deletion of a suspended account
+				if err := bot.storage.NotFoundUser(user.Name); err != nil {
+					bot.logger.Print(err)
+					continue
+				}
+				continue // don't signal it, we only need to keep track of it
+			} else if user.Suspended && !res.User.Suspended { // unsuspension
+				if err := bot.storage.UnSuspendUser(user.Name); err != nil {
+					bot.logger.Print(err)
+					continue
+				}
+			} else { // no change
+				continue
+			}
+
+			user.NotFound = res.Exists
+			user.Suspended = res.User.Suspended
+			ch <- res.User
+
 		}
 
 	}
-
 }
 
-func (bot *RedditBot) scan(users []User) {
+func (bot *RedditBot) scan(ctx context.Context, users []User) error {
 	for _, user := range users {
 
 		for i := uint(0); i < bot.Conf.MaxBatches; i++ {
@@ -336,8 +352,11 @@ func (bot *RedditBot) scan(users []User) {
 				limit = user.BatchSize + nbCommentsLeeway
 			}
 
-			comments, user, err = bot.scanner.UserComments(user, limit)
+			comments, user, err = bot.scanner.UserComments(ctx, user, limit)
 			if err != nil {
+				if isContextError(err) {
+					return err
+				}
 				bot.logger.Printf("error while scanning user %s: %v", user.Name, err)
 			}
 
@@ -363,9 +382,10 @@ func (bot *RedditBot) scan(users []User) {
 		}
 
 	}
+	return nil
 }
 
-func (bot *RedditBot) getUsersOrWait(full_scan bool) []User {
+func (bot *RedditBot) getUsersOrWait(ctx context.Context, full_scan bool) []User {
 	var users []User
 
 	for {
@@ -382,7 +402,12 @@ func (bot *RedditBot) getUsersOrWait(full_scan bool) []User {
 		// We could be using a channel to signal when a new user is added,
 		// but this isn't worth complicating AddUser for a feature that
 		// is used in production only once, when the database is empty.
-		time.Sleep(time.Second)
+		select {
+		case <-ctx.Done():
+			return users
+		case <-time.After(time.Second):
+			break
+		}
 	}
 	return users
 }
