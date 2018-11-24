@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-const MaxRedditListingLength = 100
-
 const nbCommentsLeeway = 5
 
 type RedditBot struct {

@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+const MaxRedditListingLength = 100
+
 const accessTokenURL = "https://www.reddit.com/api/v1/access_token"
 
 const requestBaseURL = "https://oauth.reddit.com"
