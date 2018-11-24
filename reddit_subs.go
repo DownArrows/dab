@@ -20,18 +20,18 @@ func NewRedditSubs(logger *log.Logger, storage RedditSubsStorage, api RedditSubs
 	}
 }
 
-func (rs *RedditSubs) StreamSub(ctx context.Context, sub string, ch chan Comment, sleep time.Duration) {
+func (rs *RedditSubs) StreamSub(ctx context.Context, sub string, ch chan Comment, sleep time.Duration) error {
 	rs.logger.Print("streaming new posts from ", sub)
 
 	// This assumes the sub isn't empty
 	first_time := (rs.storage.NbKnownPostIDs(sub) == 0)
 
 	for ctx.Err() == nil {
+
 		posts, _, err := rs.api.SubPosts(ctx, sub, "")
-		if err != nil {
-			if isContextError(err) {
-				return
-			}
+		if isCancellation(err) {
+			return err
+		} else if err != nil {
 			rs.logger.Print("event streamer: ", err)
 		}
 
@@ -55,11 +55,10 @@ func (rs *RedditSubs) StreamSub(ctx context.Context, sub string, ch chan Comment
 			ch <- post
 		}
 
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(sleep):
+		if !sleepCtx(ctx, sleep) {
 			break
 		}
+
 	}
+	return ctx.Err()
 }

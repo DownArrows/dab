@@ -119,7 +119,7 @@ func (s *Storage) init() {
 	s.db.SetMaxOpenConns(1)
 
 	if s.path != ":memory:" {
-		s.EnableWAL()
+		s.enableWAL()
 	}
 
 	s.db.MustExec(fmt.Sprintf(`
@@ -172,16 +172,16 @@ func (s *Storage) init() {
 			FROM tracked WHERE deleted = 0`)
 }
 
-func (s *Storage) Close() {
-	autopanic(s.db.Close())
-}
-
-func (s *Storage) EnableWAL() {
+func (s *Storage) enableWAL() {
 	var journal_mode string
 	autopanic(s.db.Get(&journal_mode, "PRAGMA journal_mode=WAL"))
 	if journal_mode != "wal" {
 		autopanic(fmt.Errorf("failed to set journal mode to Write-Ahead Log (WAL)"))
 	}
+}
+
+func (s *Storage) Close() error {
+	return s.db.Close()
 }
 
 /*******

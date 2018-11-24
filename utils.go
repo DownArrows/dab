@@ -4,18 +4,127 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
+
+func isCancellation(err error) bool {
+	return err == context.Canceled || err == context.DeadlineExceeded
+}
+
+func sleepCtx(ctx context.Context, duration time.Duration) bool {
+	select {
+	case <-time.After(duration):
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+type TaskGroup struct {
+	cancel  context.CancelFunc
+	context context.Context
+	errors  ErrorGroup
+	parent  context.Context
+	wait    *sync.WaitGroup
+}
+
+func NewTaskGroup(parent context.Context) *TaskGroup {
+	ctx, cancel := context.WithCancel(parent)
+	return &TaskGroup{
+		cancel:  cancel,
+		context: ctx,
+		errors:  NewErrorGroup(),
+		parent:  parent,
+		wait:    &sync.WaitGroup{},
+	}
+}
+
+func (tg *TaskGroup) Spawn(cb func(context.Context) error) {
+	tg.wait.Add(1)
+	go func() {
+		if err := cb(tg.context); err != nil && !isCancellation(err) {
+			tg.errors.Add(err)
+			tg.Cancel()
+		}
+		tg.wait.Done()
+	}()
+}
+
+func (tg *TaskGroup) Cancel() {
+	tg.cancel()
+}
+
+func (tg *TaskGroup) Wait() ErrorGroup {
+	defer tg.Cancel()
+	go func() {
+		tg.wait.Wait()
+		tg.Cancel()
+	}()
+	select {
+	case <-tg.context.Done():
+		break
+	case <-tg.parent.Done():
+		break
+	}
+	return tg.errors
+}
+
+type ErrorGroup struct {
+	mutex  *sync.RWMutex
+	errors []error
+}
+
+func NewErrorGroup() ErrorGroup {
+	return ErrorGroup{
+		mutex:  &sync.RWMutex{},
+		errors: []error{},
+	}
+}
+
+func (eg ErrorGroup) Add(err error) {
+	eg.mutex.Lock()
+	defer eg.mutex.Unlock()
+	eg.errors = append(eg.errors, err)
+}
+
+func (eg ErrorGroup) Errors() []error {
+	eg.mutex.RLock()
+	defer eg.mutex.RUnlock()
+	return eg.errors[:]
+}
+
+func (eg ErrorGroup) Len() int {
+	return len(eg.Errors())
+}
+
+func (eg ErrorGroup) Error() string {
+	errors := eg.Errors()
+	if len(errors) == 0 {
+		return ""
+	}
+	msgs := make([]string, 1, len(errors))
+
+	msgs[0] = fmt.Sprintf("%d errors:", len(errors))
+	for i, err := range errors {
+		msgs = append(msgs, fmt.Sprintf("\t%d. %v", i, err))
+	}
+
+	return strings.Join(msgs, "\n")
+}
+
+func (eg ErrorGroup) ToError() error {
+	if eg.Len() == 0 {
+		return nil
+	}
+	return eg
+}
 
 func autopanic(err error) {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func isContextError(err error) bool {
-	return err == context.Canceled || err == context.DeadlineExceeded
 }
 
 func fileOlderThan(path string, max_age time.Duration) (bool, error) {

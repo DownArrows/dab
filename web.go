@@ -2,6 +2,7 @@ package main
 
 import (
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"gopkg.in/russross/blackfriday.v2"
@@ -51,6 +52,7 @@ type WebServer struct {
 	markdownOptions blackfriday.Option
 	backupAuth      string
 	backupStorage   BackupStorage
+	done            chan error
 }
 
 func NewWebServer(conf WebConf, reports ReportFactory, bs BackupStorage) *WebServer {
@@ -60,6 +62,7 @@ func NewWebServer(conf WebConf, reports ReportFactory, bs BackupStorage) *WebSer
 		Reports:         reports,
 		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(md_exts)),
 		backupStorage:   bs,
+		done:            make(chan error),
 	}
 
 	mux := http.NewServeMux()
@@ -75,16 +78,28 @@ func NewWebServer(conf WebConf, reports ReportFactory, bs BackupStorage) *WebSer
 	return wsrv
 }
 
-func (wsrv *WebServer) Run() error {
-	err := wsrv.Server.ListenAndServe()
-	if err == http.ErrServerClosed {
-		return nil
-	}
-	return err
+func (wsrv *WebServer) fatal(err error) {
+	wsrv.done <- err
 }
 
-func (wsrv *WebServer) Close() error {
-	return wsrv.Server.Close()
+func (wsrv *WebServer) Run(ctx context.Context) error {
+	go func() {
+		err := wsrv.Server.ListenAndServe()
+		if err == http.ErrServerClosed {
+			wsrv.done <- nil
+		} else {
+			wsrv.done <- err
+		}
+	}()
+
+	defer wsrv.Server.Close()
+
+	select {
+	case err := <-wsrv.done:
+		return err
+	case <-ctx.Done():
+		return nil
+	}
 }
 
 func (wsrv *WebServer) ReportIndex(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +122,9 @@ func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	output := newWebResponse(w, r)
 	defer output.Close()
-	autopanic(WriteMarkdownReport(report, output))
+	if err := WriteMarkdownReport(report, output); err != nil {
+		wsrv.fatal(err)
+	}
 }
 
 func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +157,9 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	output := newWebResponse(w, r)
 	defer output.Close()
-	autopanic(HTMLReportPage.Execute(output, data))
+	if err := HTMLReportPage.Execute(output, data); err != nil {
+		wsrv.fatal(err)
+	}
 }
 
 func (wsrv *WebServer) ReportCurrent(w http.ResponseWriter, r *http.Request) {

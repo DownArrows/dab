@@ -62,6 +62,11 @@ type RedditScannerConf struct {
 	HighScoreThreshold  int64    `json:"-"`
 }
 
+type RedditUsersConf struct {
+	UnsuspensionInterval     Duration `json:"unsuspension_interval"`
+	CompendiumUpdateInterval Duration `json:"compendium_update_interval"`
+}
+
 type ReportConf struct {
 	Leeway    Duration `json:"leeway"`
 	Timezone  Timezone `json:"-"`
@@ -95,10 +100,9 @@ type Configuration struct {
 	Reddit struct {
 		RedditAuth
 		RedditScannerConf
-		UserAgent                string   `json:"user_agent"`
-		UnsuspensionInterval     Duration `json:"unsuspension_interval"`
-		CompendiumUpdateInterval Duration `json:"compendium_update_interval"`
-		DVTInterval              Duration `json:"dvt_interval"`
+		RedditUsersConf
+		DVTInterval Duration `json:"dvt_interval"`
+		UserAgent   string   `json:"user_agent"`
 	}
 
 	Report ReportConf
@@ -134,6 +138,9 @@ func NewConfiguration(path string) (Configuration, error) {
 	conf.Report.Timezone = conf.Timezone
 	conf.Discord.Timezone = conf.Timezone
 	conf.Reddit.RedditScannerConf.HighScoreThreshold = conf.Discord.HighScoreThreshold
+	if conf.Discord.DiscordBotConf.HidePrefix == "" {
+		conf.Discord.DiscordBotConf.HidePrefix = conf.HidePrefix
+	}
 
 	return conf, nil
 }

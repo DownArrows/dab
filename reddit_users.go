@@ -12,21 +12,32 @@ type RedditUsers struct {
 	api     RedditUsersAPI
 	logger  *log.Logger
 	storage RedditUsersStorage
+
+	compendiumUpdateInterval time.Duration
+	unsuspensionInterval     time.Duration
+
+	Unsuspensions chan User
 }
 
 func NewRedditUsers(
 	logger *log.Logger,
 	storage RedditUsersStorage,
 	api RedditUsersAPI,
+	conf RedditUsersConf,
 ) *RedditUsers {
 	return &RedditUsers{
 		api:     api,
 		logger:  logger,
 		storage: storage,
+
+		compendiumUpdateInterval: conf.CompendiumUpdateInterval.Value,
+		unsuspensionInterval:     conf.UnsuspensionInterval.Value,
+
+		Unsuspensions: make(chan User),
 	}
 }
 
-func (ru *RedditUsers) AddUserServer(ctx context.Context, queries chan UserQuery) {
+func (ru *RedditUsers) AddUserServer(ctx context.Context, queries chan UserQuery) error {
 	ru.logger.Print("init addition of new users")
 	for query := range queries {
 		ru.logger.Print("received query to add a new user: ", query)
@@ -39,6 +50,7 @@ func (ru *RedditUsers) AddUserServer(ctx context.Context, queries chan UserQuery
 
 		queries <- query
 	}
+	return nil
 }
 
 func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool, force_suspended bool) UserQuery {
@@ -82,25 +94,16 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 	return query
 }
 
-func (ru *RedditUsers) AutoCompendiumUpdate(ctx context.Context, interval time.Duration) {
-	if interval == 0*time.Second {
-		ru.logger.Print("interval for auto-update from DVT's compendium is 0s, disabling")
-		return
-	}
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(interval):
+func (ru *RedditUsers) AutoUpdateUsersFromCompendium(ctx context.Context) error {
+	for ctx.Err() == nil {
+		if err := ru.UpdateUsersFromCompendium(ctx); err != nil {
+			return err
+		}
+		if !sleepCtx(ctx, ru.compendiumUpdateInterval) {
 			break
 		}
-		if err := ru.UpdateUsersFromCompendium(ctx); err != nil {
-			if isContextError(err) {
-				return
-			}
-			ru.logger.Print(err)
-		}
 	}
+	return ctx.Err()
 }
 
 func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
@@ -147,10 +150,9 @@ func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
 		}
 
 		result := ru.AddUser(ctx, username, false, false)
-		if result.Error != nil {
-			if isContextError(result.Error) {
-				return result.Error
-			}
+		if isCancellation(result.Error) {
+			return result.Error
+		} else if result.Error != nil {
 			if !result.Exists {
 				msg := "update from compendium: error when adding the new user "
 				ru.logger.Print(msg, result.User.Name, result.Error)
@@ -174,26 +176,20 @@ func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
 	return nil
 }
 
-func (ru *RedditUsers) CheckUnsuspendedAndNotFound(ctx context.Context, delay time.Duration, ch chan User) {
+func (ru *RedditUsers) CheckUnsuspendedAndNotFound(ctx context.Context) error {
 	for ctx.Err() == nil {
 
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(delay):
+		if !sleepCtx(ctx, ru.unsuspensionInterval) {
 			break
 		}
 
 		for _, user := range ru.storage.ListSuspendedAndNotFound() {
-			if ctx.Err() != nil {
-				return
-			}
 
 			res := ru.api.AboutUser(ctx, user.Name)
+			if isCancellation(res.Error) {
+				return res.Error
+			}
 			if res.Error != nil {
-				if isContextError(res.Error) {
-					return
-				}
 				ru.logger.Print(res.Error)
 				continue
 			}
@@ -243,9 +239,10 @@ func (ru *RedditUsers) CheckUnsuspendedAndNotFound(ctx context.Context, delay ti
 
 			user.NotFound = res.Exists
 			user.Suspended = res.User.Suspended
-			ch <- res.User
+			ru.Unsuspensions <- res.User
 
 		}
 
 	}
+	return ctx.Err()
 }

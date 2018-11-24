@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"log"
@@ -115,6 +116,7 @@ type DiscordBotChannelsID struct {
 
 type DiscordBot struct {
 	client     *discordgo.Session
+	done       chan error
 	logger     *log.Logger
 	redditLink *regexp.Regexp
 	storage    DiscordBotStorage
@@ -136,6 +138,7 @@ func NewDiscordBot(storage DiscordBotStorage, logger *log.Logger, conf DiscordBo
 
 	bot := &DiscordBot{
 		client:     session,
+		done:       make(chan error),
 		logger:     logger,
 		redditLink: regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
 		storage:    storage,
@@ -160,15 +163,26 @@ func NewDiscordBot(storage DiscordBotStorage, logger *log.Logger, conf DiscordBo
 	return bot, nil
 }
 
-func (bot *DiscordBot) Run() error {
-	if err := bot.client.Open(); err != nil {
+func (bot *DiscordBot) Run(ctx context.Context) error {
+	go func() {
+		if err := bot.client.Open(); err != nil {
+			bot.done <- err
+		}
+	}()
+
+	defer bot.client.Close()
+
+	select {
+	case err := <-bot.done:
 		return err
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	return nil
 }
 
-func (bot *DiscordBot) Close() error {
-	return bot.client.Close()
+func (bot *DiscordBot) fatal(err error) {
+	bot.logger.Printf("fatal: %v", err)
+	bot.done <- err
 }
 
 func (bot *DiscordBot) isDMChannel(channelID string) (bool, error) {
@@ -195,28 +209,33 @@ func (bot *DiscordBot) MyColor(channelID string) int {
 
 func (bot *DiscordBot) onReady(conf DiscordBotConf) {
 	if err := bot.client.UpdateStatus(0, "Downvote Counter"); err != nil {
-		bot.logger.Fatal("couldn't set status on discord")
+		bot.fatal(fmt.Errorf("couldn't set status on discord: %v", err))
+		return
 	}
 
 	if _, err := bot.client.Channel(conf.General); err != nil {
-		bot.logger.Fatal(err)
+		bot.fatal(err)
+		return
 	}
 	bot.ChannelsID.General = conf.General
 
 	if _, err := bot.client.Channel(conf.Log); err != nil {
-		bot.logger.Fatal(err)
+		bot.fatal(err)
+		return
 	}
 	bot.ChannelsID.Log = conf.Log
 
 	if conf.HighScores != "" {
 		if _, err := bot.client.Channel(conf.HighScores); err != nil {
-			bot.logger.Fatal(err)
+			bot.fatal(err)
+			return
 		}
 		bot.ChannelsID.HighScores = conf.HighScores
 	}
 
 	if _, err := bot.client.User(conf.Admin); err != nil {
-		bot.logger.Fatal(err)
+		bot.fatal(err)
+		return
 	}
 	bot.AdminID = conf.Admin
 
@@ -234,7 +253,7 @@ func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
 		},
 	}
 	if err := bot.Welcome.Execute(&msg, data); err != nil {
-		bot.logger.Fatal(err)
+		bot.fatal(err)
 	}
 	if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg.String()); err != nil {
 		bot.logger.Print(err)
@@ -277,52 +296,78 @@ func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
 	}
 }
 
-func (bot *DiscordBot) RedditEvents(evts chan Comment) {
-	for comment := range evts {
-		bot.logger.Print("new event from reddit: ", comment)
-		if comment.Author == "DownvoteTrollingBot" || comment.Author == "DownvoteTrollingBot2" {
-			msg := "@everyone https://www.reddit.com" + comment.Permalink
-			if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
-				bot.logger.Print("reddit events listener: ", err)
+func (bot *DiscordBot) RedditEvents(ctx context.Context, evts chan Comment) error {
+	for ctx.Err() == nil {
+		select {
+		case comment := <-evts:
+			bot.logger.Print("new event from reddit: ", comment)
+			if comment.Author == "DownvoteTrollingBot" || comment.Author == "DownvoteTrollingBot2" {
+				msg := "@everyone https://www.reddit.com" + comment.Permalink
+				if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
+					bot.logger.Print("reddit events listener: ", err)
+				}
 			}
+			break
+		case <-ctx.Done():
+			break
 		}
 	}
+	return ctx.Err()
 }
 
-func (bot *DiscordBot) SignalSuspensions(suspensions chan User) {
-	for user := range suspensions {
+func (bot *DiscordBot) SignalSuspensions(ctx context.Context, suspensions chan User) error {
+	for ctx.Err() == nil {
+		select {
+		case user := <-suspensions:
+			state := "suspended"
+			if user.NotFound {
+				state = "deleted"
+			}
 
-		state := "suspended"
-		if user.NotFound {
-			state = "deleted"
+			msg := fmt.Sprintf("RIP /u/%s %s (%s)", user.Name, EmojiPrayingHands, state)
+			if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
+				bot.logger.Print("suspensions listener: ", err)
+			}
+			break
+		case <-ctx.Done():
+			break
 		}
-
-		msg := fmt.Sprintf("RIP /u/%s %s (%s)", user.Name, EmojiPrayingHands, state)
-		if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
-			bot.logger.Print("suspensions listener: ", err)
-		}
-
 	}
+	return ctx.Err()
 }
 
-func (bot *DiscordBot) SignalUnsuspensions(ch chan User) {
-	for user := range ch {
-		msg := fmt.Sprintf("%s /u/%s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
-		if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
-			bot.logger.Print("unsuspensions listener: ", err)
+func (bot *DiscordBot) SignalUnsuspensions(ctx context.Context, ch chan User) error {
+	for ctx.Err() == nil {
+		select {
+		case user := <-ch:
+			msg := fmt.Sprintf("%s /u/%s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
+			if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
+				bot.logger.Print("unsuspensions listener: ", err)
+			}
+			break
+		case <-ctx.Done():
+			break
 		}
 	}
+	return ctx.Err()
 }
 
-func (bot *DiscordBot) SignalHighScores(ch chan Comment) {
-	for comment := range ch {
-		link := "https://www.reddit.com" + comment.Permalink
-		tmpl := "a comment by /u/%s has reached %d: %s"
-		msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
-		if err := bot.ChannelMessageSend(bot.ChannelsID.HighScores, msg); err != nil {
-			bot.logger.Print("high-scores listener: ", err)
+func (bot *DiscordBot) SignalHighScores(ctx context.Context, ch chan Comment) error {
+	for ctx.Err() == nil {
+		select {
+		case comment := <-ch:
+			link := "https://www.reddit.com" + comment.Permalink
+			tmpl := "a comment by /u/%s has reached %d: %s"
+			msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
+			if err := bot.ChannelMessageSend(bot.ChannelsID.HighScores, msg); err != nil {
+				bot.logger.Print("high-scores listener: ", err)
+			}
+			break
+		case <-ctx.Done():
+			break
 		}
 	}
+	return ctx.Err()
 }
 
 func (bot *DiscordBot) MatchCommand(msg DiscordMessage) (DiscordCommand, DiscordMessage) {
@@ -456,7 +501,9 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 		bot.AddUser <- UserQuery{User: User{Name: name, Hidden: hidden}}
 		reply := <-bot.AddUser
 
-		if reply.Error != nil {
+		if isCancellation(reply.Error) {
+			continue
+		} else if reply.Error != nil {
 			embedAddField(status, reply.User.Name, fmt.Sprintf("%s %s", EmojiCrossMark, reply.Error), false)
 		} else if !reply.Exists {
 			embedAddField(status, reply.User.Name, EmojiCrossMark+" not found", false)

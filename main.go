@@ -8,48 +8,30 @@ import (
 	"syscall"
 )
 
-const (
-	normalShutdown = iota
-	errorShutdown
-	noShutdown
-)
-
 func main() {
 	dab := NewDownArrowsBot(os.Stderr, log.Lshortfile, os.Stdout)
-	done := make(chan int)
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				dab.Logger.Print(r)
-				done <- errorShutdown
-			}
-		}()
-		dab.Launch(context.Background(), os.Args[1:])
 
-		if dab.Daemon {
-			done <- noShutdown
-		} else {
-			done <- normalShutdown
-		}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error)
+	go func() {
+		done <- dab.Run(ctx, os.Args[1:])
+		cancel()
 	}()
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 
-	status := noShutdown
-	for status == noShutdown {
-		select {
-		case <-sig:
-			status = normalShutdown
-			break
-		case status = <-done:
-			break
-		}
+	var err error
+	select {
+	case <-sig:
+		cancel()
+		err = <-done
+		break
+	case err = <-done:
+		break
 	}
 
-	dab.Close()
-
-	if status == errorShutdown {
+	if err != nil {
 		os.Exit(1)
 	}
 }

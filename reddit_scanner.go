@@ -98,10 +98,9 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 			}
 
 			comments, user, err = rs.api.UserComments(ctx, user, limit)
-			if err != nil {
-				if isContextError(err) {
-					return err
-				}
+			if isCancellation(err) {
+				return err
+			} else if err != nil {
 				rs.logger.Printf("error while scanning user %s: %v", user.Name, err)
 			}
 
