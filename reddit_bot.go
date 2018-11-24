@@ -17,14 +17,14 @@ type RedditBot struct {
 	Suspended      chan User
 	highScoresFeed chan Comment
 	highScore      int64
-	scanner        *Scanner
+	api            *RedditAPI
 	storage        RedditBotStorage
 	logger         *log.Logger
 }
 
-func NewRedditBot(scanner *Scanner, storage RedditBotStorage, logger *log.Logger, conf RedditBotConf) *RedditBot {
+func NewRedditBot(api *RedditAPI, storage RedditBotStorage, logger *log.Logger, conf RedditBotConf) *RedditBot {
 	return &RedditBot{
-		scanner: scanner,
+		api:     api,
 		storage: storage,
 		logger:  logger,
 		Conf:    conf,
@@ -77,7 +77,7 @@ func (bot *RedditBot) AutoCompendiumUpdate(ctx context.Context, interval time.Du
 }
 
 func (bot *RedditBot) UpdateUsersFromCompendium(ctx context.Context) error {
-	page, err := bot.scanner.WikiPage(ctx, "downvote_trolls", "compendium")
+	page, err := bot.api.WikiPage(ctx, "downvote_trolls", "compendium")
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func (bot *RedditBot) StreamSub(ctx context.Context, sub string, ch chan Comment
 	first_time := (bot.storage.NbKnownPostIDs(sub) == 0)
 
 	for ctx.Err() == nil {
-		posts, _, err := bot.scanner.SubPosts(ctx, sub, "")
+		posts, _, err := bot.api.SubPosts(ctx, sub, "")
 		if err != nil {
 			if isContextError(err) {
 				return
@@ -228,7 +228,7 @@ func (bot *RedditBot) AddUser(ctx context.Context, username string, hidden bool,
 		return query
 	}
 
-	query = bot.scanner.AboutUser(ctx, username)
+	query = bot.api.AboutUser(ctx, username)
 	if query.Error != nil {
 		return query
 	}
@@ -277,7 +277,7 @@ func (bot *RedditBot) CheckUnsuspendedAndNotFound(ctx context.Context, delay tim
 				return
 			}
 
-			res := bot.scanner.AboutUser(ctx, user.Name)
+			res := bot.api.AboutUser(ctx, user.Name)
 			if res.Error != nil {
 				if isContextError(res.Error) {
 					return
@@ -352,7 +352,7 @@ func (bot *RedditBot) scan(ctx context.Context, users []User) error {
 				limit = user.BatchSize + nbCommentsLeeway
 			}
 
-			comments, user, err = bot.scanner.UserComments(ctx, user, limit)
+			comments, user, err = bot.api.UserComments(ctx, user, limit)
 			if err != nil {
 				if isContextError(err) {
 					return err

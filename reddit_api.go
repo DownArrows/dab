@@ -59,7 +59,7 @@ type redditResponse struct {
 	Error  error
 }
 
-type Scanner struct {
+type RedditAPI struct {
 	sync.Mutex
 	Client    *http.Client
 	UserAgent string
@@ -68,7 +68,7 @@ type Scanner struct {
 	ticker    *time.Ticker
 }
 
-func NewScanner(ctx context.Context, auth RedditAuth, userAgent *template.Template) (*Scanner, error) {
+func NewRedditAPI(ctx context.Context, auth RedditAuth, userAgent *template.Template) (*RedditAPI, error) {
 	var user_agent strings.Builder
 	data := map[string]interface{}{
 		"Version": Version,
@@ -79,7 +79,7 @@ func NewScanner(ctx context.Context, auth RedditAuth, userAgent *template.Templa
 	}
 
 	http_client := &http.Client{}
-	client := &Scanner{
+	client := &RedditAPI{
 		Auth:      auth,
 		Client:    http_client,
 		UserAgent: user_agent.String(),
@@ -93,21 +93,21 @@ func NewScanner(ctx context.Context, auth RedditAuth, userAgent *template.Templa
 	return client, nil
 }
 
-func (sc *Scanner) Connect(ctx context.Context) error {
+func (ra *RedditAPI) Connect(ctx context.Context) error {
 	auth_conf := url.Values{
 		"grant_type": {"password"},
-		"username":   {sc.Auth.Username},
-		"password":   {sc.Auth.Password},
+		"username":   {ra.Auth.Username},
+		"password":   {ra.Auth.Password},
 	}
 	auth_form := strings.NewReader(auth_conf.Encode())
 
 	req, _ := http.NewRequest("POST", accessTokenURL, auth_form)
 
-	req.Header.Set("User-Agent", sc.UserAgent)
-	req.SetBasicAuth(sc.Auth.Id, sc.Auth.Secret)
+	req.Header.Set("User-Agent", ra.UserAgent)
+	req.SetBasicAuth(ra.Auth.Id, ra.Auth.Secret)
 	req.WithContext(ctx)
 
-	res, err := sc.do(req)
+	res, err := ra.do(req)
 	if err != nil {
 		return err
 	}
@@ -117,13 +117,13 @@ func (sc *Scanner) Connect(ctx context.Context) error {
 		return read_err
 	}
 
-	sc.Lock()
-	defer sc.Unlock()
-	return json.Unmarshal(body, &sc.OAuth)
+	ra.Lock()
+	defer ra.Unlock()
+	return json.Unmarshal(body, &ra.OAuth)
 }
 
-func (sc *Scanner) UserComments(ctx context.Context, user User, nb uint) ([]Comment, User, error) {
-	comments, position, status, err := sc.getListing(ctx, "/u/"+user.Name+"/comments", user.Position, nb)
+func (ra *RedditAPI) UserComments(ctx context.Context, user User, nb uint) ([]Comment, User, error) {
+	comments, position, status, err := ra.getListing(ctx, "/u/"+user.Name+"/comments", user.Position, nb)
 	if err != nil {
 		return []Comment{}, user, err
 	}
@@ -132,7 +132,7 @@ func (sc *Scanner) UserComments(ctx context.Context, user User, nb uint) ([]Comm
 	// Fetching the comments of a user that's been suspended can return 403,
 	// so the status doesn't really give enough information.
 	if status == 403 || status == 404 {
-		about := sc.AboutUser(ctx, user.Name)
+		about := ra.AboutUser(ctx, user.Name)
 		if about.Error != nil {
 			return []Comment{}, user, about.Error
 		}
@@ -143,7 +143,7 @@ func (sc *Scanner) UserComments(ctx context.Context, user User, nb uint) ([]Comm
 	return comments, user, nil
 }
 
-func (sc *Scanner) AboutUser(ctx context.Context, username string) UserQuery {
+func (ra *RedditAPI) AboutUser(ctx context.Context, username string) UserQuery {
 	query := UserQuery{User: User{Name: username}}
 	sane, err := regexp.MatchString(`^[[:word:]-]+$`, username)
 	if err != nil {
@@ -154,7 +154,7 @@ func (sc *Scanner) AboutUser(ctx context.Context, username string) UserQuery {
 		return query
 	}
 
-	res := sc.Request(ctx, "GET", "/u/"+username+"/about", nil)
+	res := ra.Request(ctx, "GET", "/u/"+username+"/about", nil)
 	if res.Error != nil {
 		query.Error = res.Error
 		return query
@@ -181,9 +181,9 @@ func (sc *Scanner) AboutUser(ctx context.Context, username string) UserQuery {
 	return query
 }
 
-func (sc *Scanner) WikiPage(ctx context.Context, sub, page string) (string, error) {
+func (ra *RedditAPI) WikiPage(ctx context.Context, sub, page string) (string, error) {
 	path := "/r/" + sub + "/wiki/" + page
-	res := sc.Request(ctx, "GET", path, nil)
+	res := ra.Request(ctx, "GET", path, nil)
 	if res.Error != nil {
 		return "", res.Error
 	}
@@ -199,22 +199,18 @@ func (sc *Scanner) WikiPage(ctx context.Context, sub, page string) (string, erro
 	return parsed.Data.Content, nil
 }
 
-//func (sc *Scanner) EditWikiPage(sub, page, summary, content string) error {
-//
-//}
-
-func (sc *Scanner) SubPosts(ctx context.Context, sub string, position string) ([]Comment, string, error) {
-	comments, position, _, err := sc.getListing(ctx, "/r/"+sub+"/new", position, MaxRedditListingLength)
+func (ra *RedditAPI) SubPosts(ctx context.Context, sub string, position string) ([]Comment, string, error) {
+	comments, position, _, err := ra.getListing(ctx, "/r/"+sub+"/new", position, MaxRedditListingLength)
 	return comments, position, err
 }
 
-func (sc *Scanner) getListing(ctx context.Context, path, position string, nb uint) ([]Comment, string, int, error) {
+func (ra *RedditAPI) getListing(ctx context.Context, path, position string, nb uint) ([]Comment, string, int, error) {
 	url := fmt.Sprintf("%s?sort=new&limit=%d", path, nb)
 	if position != "" {
 		url += ("&after=" + position)
 	}
 
-	res := sc.Request(ctx, "GET", url, nil)
+	res := ra.Request(ctx, "GET", url, nil)
 	if res.Error != nil {
 		return nil, position, res.Status, res.Error
 	}
@@ -243,16 +239,16 @@ func (sc *Scanner) getListing(ctx context.Context, path, position string, nb uin
 	return comments, new_position, res.Status, nil
 }
 
-func (sc *Scanner) Request(ctx context.Context, verb, path string, data io.Reader) redditResponse {
+func (ra *RedditAPI) Request(ctx context.Context, verb, path string, data io.Reader) redditResponse {
 	make_req := func() (*http.Request, error) {
 		return http.NewRequest(verb, requestBaseURL+path, data)
 	}
-	return sc.rawRequest(ctx, make_req)
+	return ra.rawRequest(ctx, make_req)
 }
 
-func (sc *Scanner) rawRequest(ctx context.Context, makeReq func() (*http.Request, error)) redditResponse {
+func (ra *RedditAPI) rawRequest(ctx context.Context, makeReq func() (*http.Request, error)) redditResponse {
 	select {
-	case <-sc.ticker.C:
+	case <-ra.ticker.C:
 		break
 	case <-ctx.Done():
 		return redditResponse{Error: ctx.Err()}
@@ -263,8 +259,8 @@ func (sc *Scanner) rawRequest(ctx context.Context, makeReq func() (*http.Request
 		return redditResponse{Error: err}
 	}
 
-	sc.prepareRequest(ctx, req)
-	raw_res, err := sc.Client.Do(req)
+	ra.prepareRequest(ctx, req)
+	raw_res, err := ra.Client.Do(req)
 	if err != nil {
 		return redditResponse{Error: err}
 	}
@@ -280,22 +276,22 @@ func (sc *Scanner) rawRequest(ctx context.Context, makeReq func() (*http.Request
 	}
 
 	if res.Status == 401 {
-		if err := sc.Connect(ctx); err != nil {
+		if err := ra.Connect(ctx); err != nil {
 			res.Error = err
 			return res
 		}
-		return sc.rawRequest(ctx, makeReq)
+		return ra.rawRequest(ctx, makeReq)
 	}
 
 	return res
 }
 
-func (sc *Scanner) prepareRequest(ctx context.Context, req *http.Request) *http.Request {
-	req.Header.Set("User-Agent", sc.UserAgent)
-	req.Header.Set("Authorization", "bearer "+sc.OAuth.Token)
+func (ra *RedditAPI) prepareRequest(ctx context.Context, req *http.Request) *http.Request {
+	req.Header.Set("User-Agent", ra.UserAgent)
+	req.Header.Set("Authorization", "bearer "+ra.OAuth.Token)
 	return req.WithContext(ctx)
 }
 
-func (sc *Scanner) do(req *http.Request) (*http.Response, error) {
-	return sc.Client.Do(req)
+func (ra *RedditAPI) do(req *http.Request) (*http.Response, error) {
+	return ra.Client.Do(req)
 }

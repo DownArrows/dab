@@ -203,13 +203,13 @@ func (dab *DownArrowsBot) initReddit(ctx context.Context) {
 	}
 
 	dab.Logger.Print("attempting to log reddit bot in")
-	scanner, err := NewScanner(ctx, dab.Conf.Reddit.RedditAuth, user_agent)
+	ra, err := NewRedditAPI(ctx, dab.Conf.Reddit.RedditAuth, user_agent)
 	if err != nil {
 		dab.Logger.Fatal(err)
 	}
 	dab.Logger.Print("reddit bot successfully logged in")
 	bot_logger := log.New(dab.LogOut, "", dab.LoggerOpts)
-	dab.Components.Reddit = NewRedditBot(scanner, dab.Components.Storage, bot_logger, dab.Conf.Reddit.RedditBotConf)
+	dab.Components.Reddit = NewRedditBot(ra, dab.Components.Storage, bot_logger, dab.Conf.Reddit.RedditBotConf)
 }
 
 func (dab *DownArrowsBot) initReport() {
