@@ -14,22 +14,16 @@ func autopanic(err error) {
 }
 
 func fileOlderThan(path string, max_age time.Duration) (bool, error) {
-	dest, err := os.Open(path)
+	stat, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return true, nil
 		}
 		return false, err
 	}
-	defer dest.Close()
-
-	stat, err := dest.Stat()
-	if err != nil {
-		return false, err
-	}
 
 	time_diff := time.Now().Sub(stat.ModTime())
-	return (time_diff < max_age), nil
+	return (time_diff > max_age), nil
 }
 
 type Chunks interface {

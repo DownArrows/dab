@@ -13,7 +13,7 @@ const Defaults string = `{
 		"path": "./dab.db",
 		"cleanup_interval": "6h",
 		"backup_path": "./dab.db.backup",
-		"backpu_max_age": "24h"
+		"backup_max_age": "24h"
 	},
 
 	"hide_prefix": "hide/",
