@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"time"
@@ -111,15 +112,17 @@ type Configuration struct {
 
 func NewConfiguration(path string) (Configuration, error) {
 	var conf Configuration
-
-	autopanic(json.Unmarshal([]byte(Defaults), &conf))
+	buffer := bytes.NewBuffer([]byte(Defaults))
+	decoder := json.NewDecoder(buffer)
+	decoder.DisallowUnknownFields()
+	autopanic(decoder.Decode(&conf))
 
 	raw_conf, err := ioutil.ReadFile(path)
 	if err != nil {
 		return conf, err
 	}
-
-	if err := json.Unmarshal(raw_conf, &conf); err != nil {
+	buffer.Write(raw_conf)
+	if err := decoder.Decode(&conf); err != nil {
 		return conf, err
 	}
 
