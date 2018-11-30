@@ -73,7 +73,6 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return err
 	} else {
 		dab.storage = storage
-		dab.enable("storage")
 		defer dab.storage.Close()
 	}
 
