@@ -177,6 +177,7 @@ func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("Content-Type", "application/x-sqlite3")
 	http.ServeFile(w, r, wsrv.backupStorage.BackupPath())
 }
 
