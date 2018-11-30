@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"time"
 )
@@ -117,7 +118,9 @@ func NewConfiguration(path string) (Configuration, error) {
 	buffer := bytes.NewBuffer([]byte(Defaults))
 	decoder := json.NewDecoder(buffer)
 	decoder.DisallowUnknownFields()
-	autopanic(decoder.Decode(&conf))
+	if err := decoder.Decode(&conf); err != nil {
+		return conf, err
+	}
 
 	raw_conf, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -129,7 +132,7 @@ func NewConfiguration(path string) (Configuration, error) {
 	}
 
 	if conf.HidePrefix == "" {
-		panic("Prefix for 'hidden' users can't be an empty string")
+		return conf, errors.New("Prefix for 'hidden' users can't be an empty string")
 	}
 
 	conf.Report.Timezone = conf.Timezone
