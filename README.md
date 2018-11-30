@@ -81,9 +81,9 @@ For Go templates' syntax, see <http://golang.localhost/pkg/text/template/>.
 
 #### Database
 
- - **backup\_max\_age** `duration` (24h): if the backup is older than that when a backup is requested, the backup will be refreshed
+ - **backup\_max\_age** `duration` (24h): if the backup is older than that when a backup is requested, the backup will be refreshed; must be at least one hour
  - **backup\_path** `string` (./dab.db.backup): path to the backup of the database
- - **cleanup\_interval** `duration` (*none*): interval between clean-ups of the database (reduces its size); leave out to disable
+ - **cleanup\_interval** `duration` (*none*): interval between clean-ups of the database (reduces its size); leave out to disable, else must be at least one hour
  - **path** `string` (./dab.db): path to the database file
 
 #### Discord
@@ -102,23 +102,23 @@ For Go templates' syntax, see <http://golang.localhost/pkg/text/template/>.
 
 #### Reddit
 
- - **compendium\_update\_interval** `duration` (*none*): interval between each scan of the compendium; leave out to disable
- - **dvt\_interval** `string` (*none*): interval between each check of the downvote sub's new reports; leave out to disable
+ - **compendium\_update\_interval** `duration` (*none*): interval between each scan of the compendium; leave out to disable, else must be at least a minute
+ - **dvt\_interval** `string` (*none*): interval between each check of the downvote sub's new reports; leave out to disable, else must be at least one hour
  - **full\_scan\_interval** `duration` (6h): interval between each scan of all users, inactive or not
  - **id** `string` (*none*): Reddit application ID for the bot (required for users' scanning)
- - **inactivity\_threshold** `duration` (2200h): if a user hasn't commented since that long ago, consider them "inactive" and scan them less often
- - **max\_age** `duration` (24h): don't get more batches of an user's comments if the oldest comment found is older than that
+ - **inactivity\_threshold** `duration` (2200h): if a user hasn't commented since that long ago, consider them "inactive" and scan them less often; must be at least one day
+ - **max\_age** `duration` (24h): don't get more batches of an user's comments if the oldest comment found is older than that; must be at least one day
  - **max\_batches** `int` (5): maximum number of batches of comments to get from Reddit for a single user before moving to the next one
  - **password** `string` (*none*): Reddit password for the bot's account (required for users' scanning)
  - **secret** `string` (*none*): Reddit application secret for the bot (required for users' scanning)
- - **unsuspension\_interval** `duration` (15m): interval between each batch of checks for suspended or deleted users; put at `0s` to disable
+ - **unsuspension\_interval** `duration` (15m): interval between each batch of checks for suspended or deleted users; put at `0s` to disable, else must be at least one minute
  - **user\_agent** `string` (*none*): Go template for the user agent of the bot on reddit; `OS` and `Version` are provided (required for users' scanning)
  - **username** `string` (*none*): Reddit username for the bot's account (required for users' scanning)
 
 #### Report
 
  - **cutoff** `int` (-50): ignore comments whose score is higher than this
- - **leeway** `duration` (12h): shift back the time window for comments' inclusion in the report to include those that were made late
+ - **leeway** `duration` (12h): shift back the time window for comments' inclusion in the report to include those that were made late; cannot be negative
  - **nb\_top** `int` (5): maximum number of users to include in the list of statistics for the report
 
 #### Web
@@ -135,7 +135,7 @@ Note how the last value of a dictionary must not be followed by a comma:
 
 		"database": {
 			"path": "/var/lib/dab/db.sqlite3",
-			"backup_path": "/var/lib/dab/db.sqlite3",
+			"backup_path": "/var/lib/dab/db.sqlite3.backup",
 			"cleanup_interval": "6h"
 		},
 
