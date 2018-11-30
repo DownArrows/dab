@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const Version = "0.244"
+const Version = "0.245"
 
 type DownArrowsBot struct {
 	conf Configuration
@@ -64,14 +64,18 @@ func (dab *DownArrowsBot) enable(name string) {
 }
 
 func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
-	defer dab.logger.Print("DownArrowsBot stopped")
-
 	if err := dab.init(args); err != nil {
 		return err
 	}
 
-	dab.initStorage() // /!\ panics if there's any error /!\
-	defer dab.components.Storage.Close()
+	dab.logger.Print("using database ", dab.conf.Database.Path)
+	if storage, err := NewStorage(dab.conf.Database); err != nil {
+		return err
+	} else {
+		dab.components.Storage = storage
+		dab.enable("storage")
+		defer dab.components.Storage.Close()
+	}
 
 	if dab.runtimeConf.InitDB {
 		return nil
@@ -123,6 +127,8 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return readers.Wait().ToError()
 	})
 
+	top_level.Spawn(dab.components.Storage.PeriodicVacuum)
+
 	if dab.runtimeConf.Reddit {
 		writers.Spawn(dab.components.RedditScanner.Run)
 		writers.Spawn(dab.components.RedditUsers.AutoUpdateUsersFromCompendium)
@@ -145,11 +151,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	dab.runtimeConf.Launched = true
 	dab.logger.Print("launched the following components: ", strings.Join(dab.components.Enabled, ", "))
 
-	err := top_level.Wait().ToError()
-	if err != nil {
-		dab.logger.Printf("error during shutdown: %v", err)
-	}
-	return err
+	return top_level.Wait().ToError()
 }
 
 func (dab *DownArrowsBot) init(args []string) error {
@@ -200,9 +202,6 @@ func (dab *DownArrowsBot) checkWebConf() {
 }
 
 func (dab *DownArrowsBot) initStorage() {
-	dab.logger.Print("using database ", dab.conf.Database.Path)
-	dab.components.Storage = NewStorage(dab.conf.Database)
-	dab.enable("storage")
 }
 
 func (dab *DownArrowsBot) connectReddit(ctx context.Context) error {

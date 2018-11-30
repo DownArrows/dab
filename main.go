@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -32,6 +33,10 @@ func main() {
 	}
 
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "Fatal error: %v\n", err)
 		os.Exit(1)
+	} else {
+		fmt.Fprint(os.Stderr, "quit\n")
+		os.Exit(0)
 	}
 }

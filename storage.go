@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -76,6 +77,51 @@ func init() {
 	})
 }
 
+var initQueries = []string{
+	fmt.Sprintf(`
+		CREATE TABLE IF NOT EXISTS tracked (
+			name TEXT PRIMARY KEY,
+			created INTEGER NOT NULL,
+			not_found BOOLEAN DEFAULT 0 NOT NULL,
+			suspended BOOLEAN DEFAULT 0 NOT NULL,
+			added INTEGER NOT NULL,
+			batch_size INTEGER DEFAULT %d NOT NULL,
+			deleted BOOLEAN DEFAULT 0 NOT NULL,
+			hidden BOOLEAN NOT NULL,
+			inactive BOOLEAN DEFAULT 0 NOT NULL,
+			new BOOLEAN DEFAULT 1 NOT NULL,
+			position TEXT DEFAULT "" NOT NULL
+		) WITHOUT ROWID`, MaxRedditListingLength),
+	`CREATE INDEX IF NOT EXISTS tracked_idx
+			ON tracked (deleted, inactive, suspended, not_found, hidden)`,
+	`CREATE TABLE IF NOT EXISTS comments (
+			id TEXT PRIMARY KEY,
+			author TEXT NOT NULL,
+			score INTEGER NOT NULL,
+			permalink TEXT NOT NULL,
+			sub TEXT NOT NULL,
+			created INTEGER NOT NULL,
+			body TEXT NOT NULL,
+			FOREIGN KEY (author) REFERENCES tracked(name)
+		) WITHOUT ROWID`,
+	`CREATE INDEX IF NOT EXISTS comments_stats_idx
+			ON comments (created)`,
+	`CREATE TABLE IF NOT EXISTS seen_posts (
+			id TEXT PRIMARY KEY,
+			sub TEXT NOT NULL,
+			created INTEGER NOT NULL
+		) WITHOUT ROWID`,
+	`CREATE TABLE IF NOT EXISTS known_objects (
+			id TEXT PRIMARY KEY,
+			date INTEGER NOT NULL
+		) WITHOUT ROWID`,
+	`CREATE VIEW IF NOT EXISTS
+			users(name, created, not_found, suspended, added, batch_size, hidden, inactive, new, position)
+		AS
+			SELECT name, created, not_found, suspended, added, batch_size, hidden, inactive, new, position
+			FROM tracked WHERE deleted = 0`,
+}
+
 type Storage struct {
 	backupMaxAge    time.Duration
 	backupPath      string
@@ -90,126 +136,90 @@ type Storage struct {
 	}
 }
 
-func NewStorage(conf StorageConf) *Storage {
+func NewStorage(conf StorageConf) (*Storage, error) {
 	s := &Storage{
-		path:            conf.Path,
-		cleanupInterval: conf.CleanupInterval.Value,
-		backupPath:      conf.BackupPath,
 		backupMaxAge:    conf.BackupMaxAge.Value,
+		backupPath:      conf.BackupPath,
+		cleanupInterval: conf.CleanupInterval.Value,
+		path:            conf.Path,
 	}
 	if s.cleanupInterval < 1*time.Minute && s.cleanupInterval != 0*time.Second {
-		panic("database cleanup interval can't be under a minute if superior to 0s")
+		return nil, errors.New("database cleanup interval can't be under a minute if superior to 0s")
 	}
 
 	db, err := sql.Open(DatabaseDriverName, fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", s.path))
-	autopanic(err)
+	if err != nil {
+		s.Close()
+		return nil, err
+	}
 	s.db = sqlx.NewDb(db, "sqlite3")
 
-	autopanic(db.Ping()) // trigger connection hook
+	// trigger connection hook
+	if err := db.Ping(); err != nil {
+		s.Close()
+		return nil, err
+	}
 	s.conn = <-connections
 
-	s.init()
-	s.initCaches()
-	s.launchPeriodicVacuum()
-
-	return s
-}
-
-func (s *Storage) init() {
 	s.db.SetMaxOpenConns(1)
 
 	if s.path != ":memory:" {
-		s.enableWAL()
+		if err := s.enableWAL(); err != nil {
+			s.Close()
+			return nil, err
+		}
 	}
 
-	s.db.MustExec(fmt.Sprintf(`
-		CREATE TABLE IF NOT EXISTS tracked (
-			name TEXT PRIMARY KEY,
-			created INTEGER NOT NULL,
-			not_found BOOLEAN DEFAULT 0 NOT NULL,
-			suspended BOOLEAN DEFAULT 0 NOT NULL,
-			added INTEGER NOT NULL,
-			batch_size INTEGER DEFAULT %d NOT NULL,
-			deleted BOOLEAN DEFAULT 0 NOT NULL,
-			hidden BOOLEAN NOT NULL,
-			inactive BOOLEAN DEFAULT 0 NOT NULL,
-			new BOOLEAN DEFAULT 1 NOT NULL,
-			position TEXT DEFAULT "" NOT NULL
-		) WITHOUT ROWID`, MaxRedditListingLength))
-	s.db.MustExec(`
-			CREATE INDEX IF NOT EXISTS tracked_idx
-			ON tracked (deleted, inactive, suspended, not_found, hidden)`)
-	s.db.MustExec(`
-		CREATE TABLE IF NOT EXISTS comments (
-			id TEXT PRIMARY KEY,
-			author TEXT NOT NULL,
-			score INTEGER NOT NULL,
-			permalink TEXT NOT NULL,
-			sub TEXT NOT NULL,
-			created INTEGER NOT NULL,
-			body TEXT NOT NULL,
-			FOREIGN KEY (author) REFERENCES tracked(name)
-		) WITHOUT ROWID`)
-	s.db.MustExec(`
-			CREATE INDEX IF NOT EXISTS comments_stats_idx
-			ON comments (created)`)
-	s.db.MustExec(`
-		CREATE TABLE IF NOT EXISTS seen_posts (
-			id TEXT PRIMARY KEY,
-			sub TEXT NOT NULL,
-			created INTEGER NOT NULL
-		) WITHOUT ROWID`)
-	s.db.MustExec(`
-		CREATE TABLE IF NOT EXISTS known_objects (
-			id TEXT PRIMARY KEY,
-			date INTEGER NOT NULL
-		) WITHOUT ROWID`)
-	s.db.MustExec(`
-		CREATE VIEW IF NOT EXISTS
-			users(name, created, not_found, suspended, added, batch_size, hidden, inactive, new, position)
-		AS
-			SELECT name, created, not_found, suspended, added, batch_size, hidden, inactive, new, position
-			FROM tracked WHERE deleted = 0`)
+	for _, query := range initQueries {
+		if _, err := s.db.Exec(query); err != nil {
+			s.Close()
+			return nil, err
+		}
+	}
+
+	s.cache.KnownObjects = NewSyncSet()
+	known_objects, err := s.getKnownObjects()
+	if err != nil {
+		s.Close()
+		return nil, err
+	}
+	s.cache.KnownObjects.MultiPut(known_objects)
+	s.cache.SubPostIDs = make(map[string]*SyncSet)
+	s.cache.SubPostIDsLock = &sync.RWMutex{}
+
+	return s, nil
 }
 
-func (s *Storage) enableWAL() {
+func (s *Storage) enableWAL() error {
 	var journal_mode string
-	autopanic(s.db.Get(&journal_mode, "PRAGMA journal_mode=WAL"))
-	if journal_mode != "wal" {
-		autopanic(fmt.Errorf("failed to set journal mode to Write-Ahead Log (WAL)"))
+	if err := s.db.Get(&journal_mode, "PRAGMA journal_mode=WAL"); err != nil {
+		return err
 	}
+	if journal_mode != "wal" {
+		return errors.New("failed to set journal mode to Write-Ahead Log (WAL)")
+	}
+	return nil
 }
 
 func (s *Storage) Close() error {
 	return s.db.Close()
 }
 
-/*******
- Caching
-********/
-
-func (s *Storage) initCaches() {
-	s.cache.KnownObjects = NewSyncSet()
-	s.cache.KnownObjects.MultiPut(s.getKnownObjects())
-	s.cache.SubPostIDs = make(map[string]*SyncSet)
-	s.cache.SubPostIDsLock = &sync.RWMutex{}
-}
-
 /***********
  Maintenance
 ************/
 
-func (s *Storage) launchPeriodicVacuum() {
+func (s *Storage) PeriodicVacuum(ctx context.Context) error {
 	if s.cleanupInterval == 0*time.Second {
-		return
+		return nil
 	}
 
-	go func() {
-		for {
-			time.Sleep(s.cleanupInterval)
-			s.db.MustExec("VACUUM")
+	for sleepCtx(ctx, s.cleanupInterval) {
+		if _, err := s.db.ExecContext(ctx, "VACUUM"); err != nil {
+			return err
 		}
-	}()
+	}
+	return ctx.Err()
 }
 
 func (s *Storage) Backup() error {
@@ -219,18 +229,17 @@ func (s *Storage) Backup() error {
 		return nil
 	}
 
-	db, err := sql.Open(DatabaseDriverName, "file:"+s.backupPath)
+	dest_db, err := sql.Open(DatabaseDriverName, "file:"+s.backupPath)
 	if err != nil {
 		return err
 	}
+	defer dest_db.Close()
 
 	// trigger the connection hook
-	if err := db.Ping(); err != nil {
+	if err := dest_db.Ping(); err != nil {
 		return err
 	}
 	dest_conn := <-connections
-
-	defer dest_conn.Close()
 
 	backup, err := dest_conn.Backup("main", s.conn, "main") // yes, in *that* order!
 	if err != nil {
@@ -588,12 +597,11 @@ func (s *Storage) IsKnownObject(id string) bool {
 	return s.cache.KnownObjects.Has(id)
 }
 
-func (s *Storage) getKnownObjects() []string {
+func (s *Storage) getKnownObjects() ([]string, error) {
 	var ids []string
 	err := s.db.Select(&ids, "SELECT id FROM known_objects")
 	if err == sql.ErrNoRows {
-		return []string{}
+		err = nil
 	}
-	autopanic(err)
-	return ids
+	return ids, err
 }
