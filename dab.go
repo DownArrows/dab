@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const Version = "0.246"
+const Version = "0.247"
 
 type DownArrowsBot struct {
 	conf Configuration

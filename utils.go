@@ -26,7 +26,6 @@ type TaskGroup struct {
 	cancel  context.CancelFunc
 	context context.Context
 	errors  ErrorGroup
-	parent  context.Context
 	wait    *sync.WaitGroup
 }
 
@@ -36,7 +35,6 @@ func NewTaskGroup(parent context.Context) *TaskGroup {
 		cancel:  cancel,
 		context: ctx,
 		errors:  NewErrorGroup(),
-		parent:  parent,
 		wait:    &sync.WaitGroup{},
 	}
 }
@@ -58,16 +56,7 @@ func (tg *TaskGroup) Cancel() {
 
 func (tg *TaskGroup) Wait() ErrorGroup {
 	defer tg.Cancel()
-	go func() {
-		tg.wait.Wait()
-		tg.Cancel()
-	}()
-	select {
-	case <-tg.context.Done():
-		break
-	case <-tg.parent.Done():
-		break
-	}
+	tg.wait.Wait()
 	return tg.errors
 }
 
