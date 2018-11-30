@@ -30,6 +30,7 @@ type User struct {
 	Created   int64  `db:"created" json:"created"`
 	NotFound  bool   `db:"not_found" json:"-"`
 	Suspended bool   `db:"suspended" json:"suspended"`
+
 	Added     int64  `db:"added" json:"-"`
 	BatchSize uint   `db:"batch_size" json:"-"`
 	Hidden    bool   `db:"hidden" json:"-"`

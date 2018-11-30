@@ -380,6 +380,9 @@ func (s *Storage) UpdateInactiveStatus(max_age time.Duration) error {
 *********/
 
 // Make sure the comments are all from the same user and the user struct is up to date
+// This method may seem to have a lot of logic for something in the storage layer,
+// but most of it used to be in the scanner for reddit and outside of a transaction;
+// putting the data-consistency related logic here simplifies greatly the overall code.
 func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, maxAge time.Duration) (User, error) {
 	if user.Suspended {
 		return user, s.SuspendUser(user.Name)

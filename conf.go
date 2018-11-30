@@ -9,79 +9,78 @@ import (
 
 const Defaults string = `{
 	"timezone": "UTC",
-
-	"database": {
-		"path": "./dab.db",
-		"cleanup_interval": "6h",
-		"backup_path": "./dab.db.backup",
-		"backup_max_age": "24h"
-	},
-
 	"hide_prefix": "hide/",
 
-	"reddit": {
-		"max_batches": 5,
-		"max_age": "24h",
-		"unsuspension_interval": "15m",
-		"inactivity_threshold": "2200h",
-		"full_scan_interval": "6h"
-	},
-
-	"report": {
-		"leeway": "12h",
-		"cutoff": -50,
-		"nb_top": 5
+	"database": {
+		"backup_max_age": "24h",
+		"backup_path": "./dab.db.backup",
+		"cleanup_interval": "6h",
+		"path": "./dab.db"
 	},
 
 	"discord": {
 		"highscore_threshold": -1000,
 		"prefix": "!"
+	},
+
+	"reddit": {
+		"full_scan_interval": "6h",
+		"inactivity_threshold": "2200h",
+		"max_age": "24h",
+		"max_batches": 5,
+		"unsuspension_interval": "15m"
+	},
+
+	"report": {
+		"cutoff": -50,
+		"leeway": "12h",
+		"nb_top": 5
 	}
 }`
 
 type StorageConf struct {
-	Path            string   `json:"path"`
-	CleanupInterval Duration `json:"cleanup_interval"`
-	BackupPath      string   `json:"backup_path"`
 	BackupMaxAge    Duration `json:"backup_max_age"`
+	BackupPath      string   `json:"backup_path"`
+	CleanupInterval Duration `json:"cleanup_interval"`
+	Path            string   `json:"path"`
 }
 
 type RedditAuth struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
 	Id       string `json:"id"`
+	Password string `json:"password"`
 	Secret   string `json:"secret"`
+	Username string `json:"username"`
 }
 
 type RedditScannerConf struct {
-	MaxAge              Duration `json:"max_age"`
-	MaxBatches          uint     `json:"max_batches"`
-	InactivityThreshold Duration `json:"inactivity_threshold"`
 	FullScanInterval    Duration `json:"full_scan_interval"`
 	HighScoreThreshold  int64    `json:"-"`
+	InactivityThreshold Duration `json:"inactivity_threshold"`
+	MaxAge              Duration `json:"max_age"`
+	MaxBatches          uint     `json:"max_batches"`
 }
 
 type RedditUsersConf struct {
-	UnsuspensionInterval     Duration `json:"unsuspension_interval"`
 	CompendiumUpdateInterval Duration `json:"compendium_update_interval"`
+	UnsuspensionInterval     Duration `json:"unsuspension_interval"`
 }
 
 type ReportConf struct {
-	Leeway   Duration `json:"leeway"`
-	Timezone Timezone `json:"-"`
 	Cutoff   int64    `json:"cutoff"`
+	Leeway   Duration `json:"leeway"`
 	NbTop    uint     `json:"nb_top"`
+	Timezone Timezone `json:"-"`
 }
 
 type DiscordBotConf struct {
-	Token      string   `json:"token"`
-	General    string   `json:"general"`
-	Log        string   `json:"log"`
-	HighScores string   `json:"highscores"`
 	Admin      string   `json:"admin"`
-	Prefix     string   `json:"prefix"`
-	Welcome    string   `json:"welcome"`
+	General    string   `json:"general"`
 	HidePrefix string   `json:"hide_prefix"`
+	HighScores string   `json:"highscores"`
+	Log        string   `json:"log"`
+	Prefix     string   `json:"prefix"`
+	Token      string   `json:"token"`
+	Welcome    string   `json:"welcome"`
 	Timezone   Timezone `json:"-"`
 }
 

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const Version = "0.251"
+const Version = "1.0.0"
 
 type DownArrowsBot struct {
 	conf Configuration
@@ -33,6 +33,8 @@ type DownArrowsBot struct {
 		Web      bool
 	}
 
+	storage *Storage
+
 	components struct {
 		sync.Mutex
 		Enabled       []string
@@ -41,7 +43,6 @@ type DownArrowsBot struct {
 		RedditUsers   *RedditUsers
 		RedditSubs    *RedditSubs
 		Report        ReportFactory
-		Storage       *Storage
 		Web           *WebServer
 	}
 }
@@ -71,16 +72,16 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	if storage, err := NewStorage(dab.conf.Database); err != nil {
 		return err
 	} else {
-		dab.components.Storage = storage
+		dab.storage = storage
 		dab.enable("storage")
-		defer dab.components.Storage.Close()
+		defer dab.storage.Close()
 	}
 
 	if dab.runtimeConf.InitDB {
 		return nil
 	}
 
-	dab.components.Report = NewReportFactory(dab.components.Storage, dab.conf.Report)
+	dab.components.Report = NewReportFactory(dab.storage, dab.conf.Report)
 	if dab.runtimeConf.Report {
 		return dab.report()
 	}
@@ -126,7 +127,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return readers.Wait().ToError()
 	})
 
-	top_level.Spawn(dab.components.Storage.PeriodicVacuum)
+	top_level.Spawn(dab.storage.PeriodicVacuum)
 
 	if dab.runtimeConf.Reddit {
 		writers.Spawn(dab.components.RedditScanner.Run)
@@ -143,7 +144,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 	dab.checkWebConf()
 	if dab.runtimeConf.Web {
-		dab.components.Web = NewWebServer(dab.conf.Web, dab.components.Report, dab.components.Storage)
+		dab.components.Web = NewWebServer(dab.conf.Web, dab.components.Report, dab.storage)
 		top_level.Spawn(dab.components.Web.Run)
 	}
 
@@ -215,16 +216,16 @@ func (dab *DownArrowsBot) connectReddit(ctx context.Context) error {
 	}
 	dab.logger.Print("successfully logged into reddit")
 
-	dab.components.RedditScanner = NewRedditScanner(dab.logger, dab.components.Storage, ra, dab.conf.Reddit.RedditScannerConf)
-	dab.components.RedditUsers = NewRedditUsers(dab.logger, dab.components.Storage, ra, dab.conf.Reddit.RedditUsersConf)
-	dab.components.RedditSubs = NewRedditSubs(dab.logger, dab.components.Storage, ra)
+	dab.components.RedditScanner = NewRedditScanner(dab.logger, dab.storage, ra, dab.conf.Reddit.RedditScannerConf)
+	dab.components.RedditUsers = NewRedditUsers(dab.logger, dab.storage, ra, dab.conf.Reddit.RedditUsersConf)
+	dab.components.RedditSubs = NewRedditSubs(dab.logger, dab.storage, ra)
 
 	return nil
 }
 
 func (dab *DownArrowsBot) connectDiscord(ctx context.Context) error {
 	dab.logger.Print("attempting to log into discord")
-	bot, err := NewDiscordBot(dab.components.Storage, dab.logger, dab.conf.Discord.DiscordBotConf)
+	bot, err := NewDiscordBot(dab.storage, dab.logger, dab.conf.Discord.DiscordBotConf)
 	if err != nil {
 		return err
 	}
