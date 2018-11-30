@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const Version = "0.250"
+const Version = "0.251"
 
 type DownArrowsBot struct {
 	conf Configuration
@@ -24,14 +24,13 @@ type DownArrowsBot struct {
 	stdOut     io.Writer
 
 	runtimeConf struct {
-		Compendium bool
-		Discord    bool
-		InitDB     bool
-		Launched   bool
-		Reddit     bool
-		Report     bool
-		UserAdd    bool
-		Web        bool
+		Discord  bool
+		InitDB   bool
+		Launched bool
+		Reddit   bool
+		Report   bool
+		UserAdd  bool
+		Web      bool
 	}
 
 	components struct {
@@ -156,7 +155,6 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 func (dab *DownArrowsBot) init(args []string) error {
 	path := dab.flagSet.String("config", "./dab.conf.json", "Path to the configuration file.")
-	dab.flagSet.BoolVar(&dab.runtimeConf.Compendium, "compendium", false, "Start the reddit bot with an update from DVT's compendium.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.InitDB, "initdb", false, "Initialize the database and exit.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.Report, "report", false, "Print the report for the last week and exit.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.UserAdd, "useradd", false, "Add one or multiple usernames to be tracked and exit.")

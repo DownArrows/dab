@@ -101,12 +101,9 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 }
 
 func (ru *RedditUsers) AutoUpdateUsersFromCompendium(ctx context.Context) error {
-	for ctx.Err() == nil {
+	for sleepCtx(ctx, ru.compendiumUpdateInterval) {
 		if err := ru.UpdateUsersFromCompendium(ctx); err != nil {
 			return err
-		}
-		if !sleepCtx(ctx, ru.compendiumUpdateInterval) {
-			break
 		}
 	}
 	return ctx.Err()
