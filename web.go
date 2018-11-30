@@ -84,22 +84,20 @@ func (wsrv *WebServer) fatal(err error) {
 
 func (wsrv *WebServer) Run(ctx context.Context) error {
 	go func() {
-		err := wsrv.Server.ListenAndServe()
-		if err == http.ErrServerClosed {
-			wsrv.done <- nil
-		} else {
-			wsrv.done <- err
-		}
+		wsrv.done <- wsrv.Server.ListenAndServe()
 	}()
 
-	defer wsrv.Server.Close()
-
+	var err error
 	select {
-	case err := <-wsrv.done:
-		return err
 	case <-ctx.Done():
+		wsrv.Server.Close()
+	case err = <-wsrv.done:
+		break
+	}
+	if err == http.ErrServerClosed {
 		return nil
 	}
+	return err
 }
 
 func (wsrv *WebServer) ReportIndex(w http.ResponseWriter, r *http.Request) {

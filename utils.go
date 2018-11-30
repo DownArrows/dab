@@ -25,7 +25,7 @@ func sleepCtx(ctx context.Context, duration time.Duration) bool {
 type TaskGroup struct {
 	cancel  context.CancelFunc
 	context context.Context
-	errors  ErrorGroup
+	errors  *ErrorGroup
 	wait    *sync.WaitGroup
 }
 
@@ -54,7 +54,7 @@ func (tg *TaskGroup) Cancel() {
 	tg.cancel()
 }
 
-func (tg *TaskGroup) Wait() ErrorGroup {
+func (tg *TaskGroup) Wait() *ErrorGroup {
 	defer tg.Cancel()
 	tg.wait.Wait()
 	return tg.errors
@@ -65,45 +65,49 @@ type ErrorGroup struct {
 	errors []error
 }
 
-func NewErrorGroup() ErrorGroup {
-	return ErrorGroup{
+func NewErrorGroup() *ErrorGroup {
+	return &ErrorGroup{
 		mutex:  &sync.RWMutex{},
 		errors: []error{},
 	}
 }
 
-func (eg ErrorGroup) Add(err error) {
+func (eg *ErrorGroup) Add(err error) {
 	eg.mutex.Lock()
 	defer eg.mutex.Unlock()
 	eg.errors = append(eg.errors, err)
 }
 
-func (eg ErrorGroup) Errors() []error {
+func (eg *ErrorGroup) Errors() []error {
 	eg.mutex.RLock()
 	defer eg.mutex.RUnlock()
-	return eg.errors[:]
+	errors := make([]error, len(eg.errors))
+	copy(errors, eg.errors)
+	return errors
 }
 
-func (eg ErrorGroup) Len() int {
-	return len(eg.Errors())
+func (eg *ErrorGroup) Len() int {
+	eg.mutex.RLock()
+	defer eg.mutex.RUnlock()
+	return len(eg.errors)
 }
 
-func (eg ErrorGroup) Error() string {
+func (eg *ErrorGroup) Error() string {
 	errors := eg.Errors()
 	if len(errors) == 0 {
 		return ""
 	}
 	msgs := make([]string, 1, len(errors))
 
-	msgs[0] = fmt.Sprintf("%d errors:", len(errors))
+	msgs[0] = fmt.Sprintf("%d error(s):", len(errors))
 	for i, err := range errors {
-		msgs = append(msgs, fmt.Sprintf("\t%d. %v", i, err))
+		msgs = append(msgs, fmt.Sprintf("\t%d. %v", i+1, err))
 	}
 
 	return strings.Join(msgs, "\n")
 }
 
-func (eg ErrorGroup) ToError() error {
+func (eg *ErrorGroup) ToError() error {
 	if eg.Len() == 0 {
 		return nil
 	}
