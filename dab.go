@@ -225,11 +225,12 @@ func (dab *DownArrowsBot) connectReddit(ctx context.Context) error {
 }
 
 func (dab *DownArrowsBot) connectDiscord(ctx context.Context) error {
-	dab.logger.Print("connecting discord bot")
+	dab.logger.Print("attempting to log into discord")
 	bot, err := NewDiscordBot(dab.components.Storage, dab.logger, dab.conf.Discord.DiscordBotConf)
 	if err != nil {
 		return err
 	}
+	dab.logger.Print("successfully logged into discord")
 	dab.components.Discord = bot
 	return nil
 }
