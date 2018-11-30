@@ -26,7 +26,7 @@ func (rs *RedditSubs) StreamSub(ctx context.Context, sub string, ch chan Comment
 	// This assumes the sub isn't empty
 	first_time := (rs.storage.NbKnownPostIDs(sub) == 0)
 
-	for ctx.Err() == nil {
+	for sleepCtx(ctx, sleep) {
 
 		posts, _, err := rs.api.SubPosts(ctx, sub, "")
 		if isCancellation(err) {
@@ -53,10 +53,6 @@ func (rs *RedditSubs) StreamSub(ctx context.Context, sub string, ch chan Comment
 
 		for _, post := range new_posts {
 			ch <- post
-		}
-
-		if !sleepCtx(ctx, sleep) {
-			break
 		}
 
 	}

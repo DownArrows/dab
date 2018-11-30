@@ -180,11 +180,7 @@ func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
 }
 
 func (ru *RedditUsers) CheckUnsuspendedAndNotFound(ctx context.Context) error {
-	for ctx.Err() == nil {
-
-		if !sleepCtx(ctx, ru.unsuspensionInterval) {
-			break
-		}
+	for sleepCtx(ctx, ru.unsuspensionInterval) {
 
 		for _, user := range ru.storage.ListSuspendedAndNotFound() {
 
