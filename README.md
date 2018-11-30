@@ -173,6 +173,7 @@ This readme is written in markdown and is compatible with github-flavored markdo
  - start names at package-level with a capitalized letter only if they are used in another file
  - unless you add a lot of code, keep everything inside the main package (having to deal with multiple packages complicates things)
  - lay out files in that order: constants and variables, init function if any, types, file-specific types, auxilliary types + new function + methods, main type + new function + methods. Sometimes it is unclear what type is the most important type in a file (eg. their source is roughly the same length); lay things out however it seems logical
+ - for data structures that are used by several other parts of the code but for different sets of methods, define an interface for each usage of the data structure so that one can know at a glance who uses what
 
 ### Architecture
 
