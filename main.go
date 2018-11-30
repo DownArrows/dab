@@ -25,6 +25,7 @@ func main() {
 	var err error
 	select {
 	case <-sig:
+		fmt.Fprint(os.Stderr, "signal received, shutting down\n")
 		cancel()
 		err = <-done
 		break
@@ -35,8 +36,5 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Fatal error: %v\n", err)
 		os.Exit(1)
-	} else {
-		fmt.Fprint(os.Stderr, "quit\n")
-		os.Exit(0)
 	}
 }
