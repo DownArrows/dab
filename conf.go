@@ -30,7 +30,6 @@ const Defaults string = `{
 	"report": {
 		"leeway": "12h",
 		"cutoff": -50,
-		"max_length": 400000,
 		"nb_top": 5
 	},
 
@@ -68,11 +67,10 @@ type RedditUsersConf struct {
 }
 
 type ReportConf struct {
-	Leeway    Duration `json:"leeway"`
-	Timezone  Timezone `json:"-"`
-	Cutoff    int64    `json:"cutoff"`
-	MaxLength uint64   `json:"max_length"`
-	NbTop     uint     `json:"nb_top"`
+	Leeway   Duration `json:"leeway"`
+	Timezone Timezone `json:"-"`
+	Cutoff   int64    `json:"cutoff"`
+	NbTop    uint     `json:"nb_top"`
 }
 
 type DiscordBotConf struct {

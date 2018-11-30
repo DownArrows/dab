@@ -9,22 +9,20 @@ import (
 )
 
 type ReportFactory struct {
-	cutoff    int64
-	leeway    time.Duration
-	maxLength uint64
-	nbTop     uint
-	storage   ReportFactoryStorage
-	timezone  *time.Location
+	cutoff   int64
+	leeway   time.Duration
+	nbTop    uint
+	storage  ReportFactoryStorage
+	timezone *time.Location
 }
 
 func NewReportFactory(storage ReportFactoryStorage, conf ReportConf) ReportFactory {
 	return ReportFactory{
-		storage:   storage,
-		leeway:    conf.Leeway.Value,
-		timezone:  conf.Timezone.Value,
-		cutoff:    conf.Cutoff,
-		maxLength: conf.MaxLength,
-		nbTop:     conf.NbTop,
+		storage:  storage,
+		leeway:   conf.Leeway.Value,
+		timezone: conf.Timezone.Value,
+		cutoff:   conf.Cutoff,
+		nbTop:    conf.NbTop,
 	}
 }
 
@@ -44,6 +42,7 @@ func (rf ReportFactory) Report(start, end time.Time) Report {
 		End:               end,
 		MaxStatsSummaries: rf.nbTop,
 		Timezone:          rf.timezone,
+		CutOff:            rf.cutoff,
 	}
 }
 
@@ -94,6 +93,7 @@ type Report struct {
 	Stats             UserStatsMap
 	MaxStatsSummaries uint
 	Timezone          *time.Location
+	CutOff            int64
 }
 
 func (r Report) Head() ReportHead {
@@ -108,10 +108,12 @@ func (r Report) Head() ReportHead {
 	}
 
 	return ReportHead{
-		Delta:   deltas,
+		Number:  len(r.RawComments),
 		Average: averages,
+		Delta:   deltas,
 		Start:   r.Start,
 		End:     r.End,
+		CutOff:  r.CutOff,
 	}
 }
 
@@ -144,10 +146,12 @@ func (r Report) Len() int {
 }
 
 type ReportHead struct {
-	Delta   StatsSummaries
+	Number  int
 	Average StatsSummaries
+	Delta   StatsSummaries
 	Start   time.Time
 	End     time.Time
+	CutOff  int64
 }
 
 type ReportComment struct {

@@ -162,7 +162,7 @@ var HTMLReportPage = autoHTMLTemplate("HTMLReportPage", `
 
 <article id="report-head">
 {{with .Head}}
-	<h1>From {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}</h1>
+	<h1>{{.Number}} comments under {{.CutOff}} from {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}</h1>
 
 	<h2>Top {{.Delta | len}} negative <strong>Δk</strong> for this week
 	<sup>[<strong>Δk</strong> or "delta k" refers to the total change in karma]</sup></h2>
@@ -178,9 +178,9 @@ var HTMLReportPage = autoHTMLTemplate("HTMLReportPage", `
 	<li><strong>{{.Summary}}</strong> with {{.Count}} posts, by <a href="https://reddit.com/user/{{.Name}}">/u/{{.Name}}</a></li>
 	{{- end}}
 	</ol>
-	</article>
-	<hr/>
 {{- end}}
+</article>
+<hr/>
 
 <main>
 {{range .Comments}}
