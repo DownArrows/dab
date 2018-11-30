@@ -134,7 +134,7 @@ Note how the last value of a dictionary must not be followed by a comma:
 			"password": "hunter2",
 			"id": "XaiUdR5UBKl_FY",
 			"secret": "D8PvhefS9ZTZFOUxK-9Bu7iaRLt",
-			"user_agent": "{{.OS}}:agreatbot:v1.0 (by /u/AGreatUsername)",
+			"user_agent": "{{.OS}}:agreatbot:v{{.Version}} (by /u/AGreatUsername)",
 			"dvt_interval": "5m",
 			"compendium_update_interval": "1h"
 		},
