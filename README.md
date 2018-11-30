@@ -7,8 +7,18 @@ It is supposed to run continuously, typically on a server, and was designed to u
 If compiled with the default settings it will only depend on a libc.
 It has only been compiled and used on GNU/Linux so far.
 
+## Running and maintenance
+
 To run it simply call the binary. It needs a valid configuration file and to be able to open a database (defaults to `dab.db` in the current directory).
 An example [systemd](https://en.wikipedia.org/wiki/Systemd) unit file is provided.
+
+To backup the database, **do not** copy the file it opens (given in the `database` section of the config file, option `path`).
+Only use the built-in backup system by downloading the file through the HTTP interface (which must be enabled in the `web` section by setting `listen`).
+If after stopping the bot files ending in `-shm`, `-wal` and `-journal` are present in the folder containing the original database,
+**do not** delete them, they probably contain data and deleting them could leave the database corrupted.
+Instead leave them with the database, then re-run and stop the bot normally, or if you just want to repair the database, run it with the `-initdb` option.
+Those files are also present when the bot is running, which is perfectly normal.
+For more information about them see <https://sqlite.org/tempfiles.html>.
 
 ### Compiling
 
