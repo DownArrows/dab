@@ -39,18 +39,24 @@ func NewRedditUsers(
 
 func (ru *RedditUsers) AddUserServer(ctx context.Context, queries chan UserQuery) error {
 	ru.logger.Print("init addition of new users")
-	for query := range queries {
-		ru.logger.Print("received query to add a new user: ", query)
+	for ctx.Err() == nil {
+		select {
+		case <-ctx.Done():
+			break
+		case query := <-queries:
+			ru.logger.Print("received query to add a new user: ", query)
 
-		query = ru.AddUser(ctx, query.User.Name, query.User.Hidden, false)
-		if query.Error != nil {
-			msg := "error when adding the new user "
-			ru.logger.Print(msg, query.User.Name, query.Error)
+			query = ru.AddUser(ctx, query.User.Name, query.User.Hidden, false)
+			if query.Error != nil {
+				msg := "error when adding the new user "
+				ru.logger.Print(msg, query.User.Name, query.Error)
+			}
+
+			queries <- query
+			break
 		}
-
-		queries <- query
 	}
-	return nil
+	return ctx.Err()
 }
 
 func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool, force_suspended bool) UserQuery {
