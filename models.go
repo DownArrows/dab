@@ -16,9 +16,9 @@ type Comment struct {
 	Body       string  `json:"body" db:"body"`
 }
 
-func (comment Comment) FinishDecoding() Comment {
-	comment.Created = int64(comment.RawCreated)
-	return comment
+func (c Comment) FinishDecoding() Comment {
+	c.Created = int64(c.RawCreated)
+	return c
 }
 
 func (c Comment) CreatedTime() time.Time {
@@ -47,8 +47,8 @@ func (u User) AddedTime() time.Time {
 	return time.Unix(u.Added, 0)
 }
 
-func (user *User) Username(username string) bool {
-	return strings.ToLower(user.Name) == strings.ToLower(username)
+func (u *User) Username(username string) bool {
+	return strings.ToLower(u.Name) == strings.ToLower(username)
 }
 
 type UserQuery struct {
