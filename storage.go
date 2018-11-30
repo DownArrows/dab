@@ -143,20 +143,22 @@ func NewStorage(conf StorageConf) (*Storage, error) {
 		cleanupInterval: conf.CleanupInterval.Value,
 		path:            conf.Path,
 	}
-	if s.cleanupInterval < 1*time.Minute && s.cleanupInterval != 0*time.Second {
-		return nil, errors.New("database cleanup interval can't be under a minute if superior to 0s")
-	}
 
 	db, err := sql.Open(DatabaseDriverName, fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", s.path))
 	if err != nil {
-		s.Close()
 		return nil, err
 	}
 	s.db = sqlx.NewDb(db, "sqlite3")
 
+	ok := false
+	defer func() {
+		if !ok {
+			s.Close()
+		}
+	}()
+
 	// trigger connection hook
 	if err := db.Ping(); err != nil {
-		s.Close()
 		return nil, err
 	}
 	s.conn = <-connections
@@ -165,14 +167,12 @@ func NewStorage(conf StorageConf) (*Storage, error) {
 
 	if s.path != ":memory:" {
 		if err := s.enableWAL(); err != nil {
-			s.Close()
 			return nil, err
 		}
 	}
 
 	for _, query := range initQueries {
 		if _, err := s.db.Exec(query); err != nil {
-			s.Close()
 			return nil, err
 		}
 	}
@@ -180,13 +180,13 @@ func NewStorage(conf StorageConf) (*Storage, error) {
 	s.cache.KnownObjects = NewSyncSet()
 	known_objects, err := s.getKnownObjects()
 	if err != nil {
-		s.Close()
 		return nil, err
 	}
 	s.cache.KnownObjects.MultiPut(known_objects)
 	s.cache.SubPostIDs = make(map[string]*SyncSet)
 	s.cache.SubPostIDsLock = &sync.RWMutex{}
 
+	ok = true
 	return s, nil
 }
 
