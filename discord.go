@@ -13,20 +13,20 @@ import (
 )
 
 const (
-	EmojiCheckMark     string = "\u2705"
-	EmojiCrossBones    string = "\u2620"
-	EmojiCrossMark     string = "\u274c"
-	EmojiFire          string = "\U0001f525"
-	EmojiGrowingHeart  string = "\U0001f497"
-	EmojiHighVoltage   string = "\u26a1"
-	EmojiOkHand        string = "\U0001f44c"
-	EmojiOneHundred    string = "\U0001f4af"
-	EmojiPrayingHands  string = "\U0001f64f"
-	EmojiRainbow       string = "\U0001f308"
-	EmojiThumbDown     string = "\U0001f44e"
-	EmojiThumbsUp      string = "\U0001f44d"
-	EmojiWheelOfDharma string = "\u2638"
-	EmojiWhiteFlower   string = "\U0001f4ae"
+	EmojiCheckMark     = "\u2705"
+	EmojiCrossBones    = "\u2620"
+	EmojiCrossMark     = "\u274c"
+	EmojiFire          = "\U0001f525"
+	EmojiGrowingHeart  = "\U0001f497"
+	EmojiHighVoltage   = "\u26a1"
+	EmojiOkHand        = "\U0001f44c"
+	EmojiOneHundred    = "\U0001f4af"
+	EmojiPrayingHands  = "\U0001f64f"
+	EmojiRainbow       = "\U0001f308"
+	EmojiThumbDown     = "\U0001f44e"
+	EmojiThumbsUp      = "\U0001f44d"
+	EmojiWheelOfDharma = "\u2638"
+	EmojiWhiteFlower   = "\U0001f4ae"
 )
 
 const DiscordMessageLengthLimit = 2000
