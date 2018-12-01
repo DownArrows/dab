@@ -22,6 +22,27 @@ Instead leave them with the database, then re-run and stop the bot normally, or 
 Those files are also present when the bot is running, which is perfectly normal.
 For more information about them see <https://sqlite.org/tempfiles.html>.
 
+### Reddit and Discord credentials
+
+For the Discord component, you first need an account,
+then go on https://discordapp.com/developers/, create an application, add a bot to it, and get its client ID and token.
+Then put the token into DAB's configuration file, and substitute `CLIENT_ID` for the actual one in the following URL:
+`https://discordapp.com/oauth2/authorize?client_id=CLIENT_ID&scope=bot&permissions=0`.
+Open this URL in your browser and you should be prompted with the discord servers where you can invite bots.
+It may be possible that by the time you read this the exact steps have changed;
+if it did, refer to Discord's help and try to search around on the web.
+To get the numeric IDs of the channels you want to enable, go in your account's settings,
+enable the developer mode, and right click on each channel to get their ID (they must all be in the same server).
+
+For the Reddit component, you also need an account, but this account will be used directly by the bot;
+if you plan to do more than test it, it may be better to create an account just for it.
+Once you have an account, you need to create a new application of the type "personal script".
+On the old design, go in the account's preferences, tab "apps" and click on "are you a developer? create an app...",
+and select the "script" option. If it whines about not having an URL, give it `http://example.org/`, it won't matter.
+On the redesign, also go in your account's settings, and in the "Privacy & Security" tab go on "App authorization".
+At the time of writing, this will redirect you to the old design.
+Once you got a client ID and a secret, put the account's username, its password, the client ID and the secret inside the configuration file.
+
 ### Compiling
 
 You need at least Go 1.11, which you can download at <https://golang.org/dl/>, and a C compiler (probably gcc).
