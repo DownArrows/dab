@@ -208,6 +208,9 @@ Its instantiation shouldn't panic though, it needs to properly report errors and
 
 ### TODO
 
+ - add a "last\_scanned" column to tracked table so as to detect when an user needs to be scanned further than max\_age (useful if the bot was down for days)
+ - launch the web server while connecting to reddit and discord
+ - retry connecting to reddit and discord
  - auto post reports to a specific sub and maintain its wiki
  - better browsability of the web reports
  - replace blackfriday with snudown
