@@ -85,6 +85,14 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return dab.report()
 	}
 
+	if dab.runtimeConf.UserAdd {
+		dab.checkRedditConf()
+		if !dab.runtimeConf.Reddit {
+			return errors.New("configuration for connecting to reddit must be correct to register users")
+		}
+		return dab.userAdd(ctx)
+	}
+
 	connectors := NewTaskGroup(ctx)
 
 	dab.checkRedditConf()
@@ -102,13 +110,6 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	}
 	if isCancellation(ctx.Err()) {
 		return nil
-	}
-
-	if dab.runtimeConf.UserAdd {
-		if !dab.runtimeConf.Reddit {
-			return errors.New("reddit bot must be running to register users")
-		}
-		return dab.userAdd(ctx)
 	}
 
 	top_level := NewTaskGroup(ctx)
@@ -199,22 +200,27 @@ func (dab *DownArrowsBot) checkWebConf() {
 	}
 }
 
-func (dab *DownArrowsBot) initStorage() {
-}
-
-func (dab *DownArrowsBot) connectReddit(ctx context.Context) error {
+func (dab *DownArrowsBot) makeRedditAPI(ctx context.Context) (*RedditAPI, error) {
 	user_agent, err := template.New("UserAgent").Parse(dab.conf.Reddit.UserAgent)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	dab.logger.Print("attempting to log into reddit")
 	ra, err := NewRedditAPI(ctx, dab.conf.Reddit.RedditAuth, user_agent)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	dab.logger.Print("successfully logged into reddit")
 
+	return ra, nil
+}
+
+func (dab *DownArrowsBot) connectReddit(ctx context.Context) error {
+	ra, err := dab.makeRedditAPI(ctx)
+	if err != nil {
+		return err
+	}
 	dab.components.RedditScanner = NewRedditScanner(dab.logger, dab.storage, ra, dab.conf.Reddit.RedditScannerConf)
 	dab.components.RedditUsers = NewRedditUsers(dab.logger, dab.storage, ra, dab.conf.Reddit.RedditUsersConf)
 	dab.components.RedditSubs = NewRedditSubs(dab.logger, dab.storage, ra)
@@ -275,11 +281,18 @@ func (dab *DownArrowsBot) report() error {
 }
 
 func (dab *DownArrowsBot) userAdd(ctx context.Context) error {
+	ra, err := dab.makeRedditAPI(ctx)
+	if err != nil {
+		return err
+	}
+
+	ru := NewRedditUsers(dab.logger, dab.storage, ra, dab.conf.Reddit.RedditUsersConf)
+
 	usernames := dab.flagSet.Args()
 	for _, username := range usernames {
 		hidden := strings.HasPrefix(username, dab.conf.HidePrefix)
 		username = strings.TrimPrefix(username, dab.conf.HidePrefix)
-		if res := dab.components.RedditUsers.AddUser(ctx, username, hidden, true); res.Error != nil && !res.Exists {
+		if res := ru.AddUser(ctx, username, hidden, true); res.Error != nil && !res.Exists {
 			return res.Error
 		}
 	}
