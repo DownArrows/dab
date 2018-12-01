@@ -9,12 +9,14 @@ It has only been compiled and used on GNU/Linux so far.
 
 ## Running and maintenance
 
-To run it simply call the binary. It needs a valid configuration file and to be able to open a database (defaults to `dab.db` in the current directory).
-An example [systemd](https://en.wikipedia.org/wiki/Systemd) unit file is provided.
+To run it simply call the binary. It will expect a file named `dab.conf.json` in the current directory.
+To use another path for the configuration file use `dab -config /your/custom/path/dab.conf.json` (note that the file can have any name).
+It needs a valid configuration file and to be able to open the database it is configured with (defaults to `dab.db` in the current directory).
+A sample [systemd](https://en.wikipedia.org/wiki/Systemd) unit file is also provided.
 
 To backup the database, **do not** copy the file it opens (given in the `database` section of the config file, option `path`).
 Only use the built-in backup system by downloading the file through the HTTP interface (which must be enabled in the `web` section by setting `listen`).
-If after stopping the bot files ending in `-shm`, `-wal` and `-journal` are present in the folder containing the original database,
+If after the bot has stopped there are files ending in `-shm`, `-wal` and `-journal` in the folder containing the database file,
 **do not** delete them, they probably contain data and deleting them could leave the database corrupted.
 Instead leave them with the database, then re-run and stop the bot normally, or if you just want to repair the database, run it with the `-initdb` option.
 Those files are also present when the bot is running, which is perfectly normal.
@@ -182,20 +184,27 @@ This readme is written in markdown and is compatible with github-flavored markdo
  - use camel case for constants, types and variables at package-level
  - start names at package-level with a capitalized letter only if they are used in another file
  - unless you add a lot of code, keep everything inside the main package (having to deal with multiple packages complicates things)
- - lay out files in that order: constants and variables, init function if any, types, file-specific types, auxilliary types + new function + methods, main type + new function + methods. Sometimes it is unclear what type is the most important type in a file (eg. their source is roughly the same length); lay things out however it seems logical
+ - lay out files in that order, unless there is no clear central type,
+ in which case just do whatever makes the most sense when reading from top to bottom:
+    1. constants, variables, the init function if any
+    2. types used in other files
+    3. file-specific types followed by the function to create them and then their methods
+    4. the central type, followed by the function to create it, then the methods
  - for data structures that are used by several other parts of the code but for different sets of methods, define an interface for each usage of the data structure so that one can know at a glance who uses what
 
 ### Architecture
 
 This application has several components that run independently and communicate either through the database layer or through channels.
-They are managed by the `DAB` data structure; it checks what the user wants to do, what components can be launched according to the configuration file,
+They are managed by the `DownArrowsBot` data structure in `dab.go`;
+it checks what the user wants to do, what components can be launched according to the configuration file,
 propagates the root context for proper cancellation, and waits for each component to shut down and returns errors.
 It also logs what components are enabled and why some are disabled.
-Its main tool to achieve that is the `TaskGroup` data structure, which allows to manage groups of functions ran as goroutines and which have the following type: `func (context.Context) error`.
-Contexts propagate cancellation signals, and task groups allow to easily propagate a context and wait for each cancelled goroutine.
+Its main tool to achieve that is the `TaskGroup` data structure, which allows to manage groups of functions launched as goroutines.
+Those functions must have the following type signature: `func (context.Context) error`.
+If the function you want to manage with a task group has a different type signature, wrap it in an anonymous function.
 
-A component is a data structre which has one method with the `func (context.Context) error` signature (in which case it is called `Run`), or several.
-See the `DAB` data structure definition for the list of components.
+A component is a data structure which has one or several methods that take at least a context and return an error.
+See the `DownArrowsBot` data structure definition for the list of components.
 Since goroutines that write to channels would block if the goroutines reading the channels were to be stopped before them,
 a task group only for writers is used and stopped before the task group for readers, allowing for proper and orderly shutdown.
 Make sure that any function spawned by a task group properly returns if it receives a cancellation signal at any point
