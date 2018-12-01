@@ -45,9 +45,11 @@ Once you got a client ID and a secret, put the account's username, its password,
 
 ### Compiling
 
-You need at least Go 1.11, which you can download at <https://golang.org/dl/>, and a C compiler (probably gcc).
+You need at least Go 1.11, which you can download at <https://golang.org/dl/>, as well as git, the gcc compiler, and the headers of a C library.
+On Debian-based distributions you can get all those dependencies with `apt install golang gcc libc-dev git`.
+The version of Go may not be high enough, in which case download it from the official website and install it manually.
 See <https://golang.org/cmd/go/#hdr-Environment_variables> if you have specific needs.
-Once installed, go into the source folder, run `go get -d` to download the dependencies, and then `go build`.
+Once installed, go into the source folder, run `go get -d` to download the dependencies, and then `go build` (that may take a few minutes the first time).
 
 ### Web interface
 
