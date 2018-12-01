@@ -16,7 +16,6 @@ func main() {
 	done := make(chan error)
 	go func() {
 		done <- dab.Run(ctx, os.Args[1:])
-		cancel()
 	}()
 
 	sig := make(chan os.Signal, 1)
@@ -24,13 +23,12 @@ func main() {
 
 	var err error
 	select {
-	case <-sig:
-		fmt.Fprint(os.Stderr, "signal received, shutting down\n")
+	case err = <-done:
+		cancel()
+	case name := <-sig:
+		fmt.Fprintf(os.Stderr, "%s received, shutting down\n", name)
 		cancel()
 		err = <-done
-		break
-	case err = <-done:
-		break
 	}
 
 	if err != nil {

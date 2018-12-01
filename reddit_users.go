@@ -39,10 +39,11 @@ func NewRedditUsers(
 
 func (ru *RedditUsers) AddUserServer(ctx context.Context, queries chan UserQuery) error {
 	ru.logger.Print("init addition of new users")
-	for ctx.Err() == nil {
+Loop:
+	for {
 		select {
 		case <-ctx.Done():
-			break
+			break Loop
 		case query := <-queries:
 			ru.logger.Print("received query to add a new user: ", query)
 
@@ -53,7 +54,6 @@ func (ru *RedditUsers) AddUserServer(ctx context.Context, queries chan UserQuery
 			}
 
 			queries <- query
-			break
 		}
 	}
 	return ctx.Err()

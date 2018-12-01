@@ -131,25 +131,16 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 
 func (rs *RedditScanner) getUsersOrWait(ctx context.Context, full_scan bool) []User {
 	var users []User
-
-	for {
-
+	// We could be using a channel to signal when a new user is added,
+	// but this isn't worth complicating AddUser for a feature that
+	// is used in production only once, when the database is empty.
+	for sleepCtx(ctx, time.Second) {
 		if full_scan {
 			users = rs.storage.ListUsers()
 		} else {
 			users = rs.storage.ListActiveUsers()
 		}
-
 		if len(users) > 0 {
-			break
-		}
-		// We could be using a channel to signal when a new user is added,
-		// but this isn't worth complicating AddUser for a feature that
-		// is used in production only once, when the database is empty.
-		select {
-		case <-ctx.Done():
-			return users
-		case <-time.After(time.Second):
 			break
 		}
 	}
