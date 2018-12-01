@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const Version = "1.2.0"
+const Version = "1.3.0"
 
 type componentConf struct {
 	Enabled bool

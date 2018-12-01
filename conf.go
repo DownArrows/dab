@@ -74,11 +74,9 @@ type ReportConf struct {
 }
 
 type DiscordBotConf struct {
+	DiscordBotChannelsID
 	Admin      string   `json:"admin"`
-	General    string   `json:"general"`
 	HidePrefix string   `json:"hide_prefix"`
-	HighScores string   `json:"highscores"`
-	Log        string   `json:"log"`
 	Prefix     string   `json:"prefix"`
 	Token      string   `json:"token"`
 	Welcome    string   `json:"welcome"`

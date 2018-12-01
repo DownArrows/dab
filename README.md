@@ -111,17 +111,19 @@ For Go templates' syntax, see <http://golang.localhost/pkg/text/template/>.
 
 #### Discord
 
- - **admin** `string` (*none*): Discord ID of the privileged user (use Discord's developer mode to get them) (required to enable the Discord component)
- - **general** `string` (*none*): Discord ID of the main channel where loggable links are taken from and welcome messages are posted (required to enable the Discord component)
+ - **admin** `string` (*none*): Discord ID of the privileged user (use Discord's developer mode to get them);
+ if empty will use the owner of the channels' server, and if no channel is enabled, will disable privileged commands
+ - **general** `string` (*none*): Discord ID of the main channel where loggable links are taken from and welcome messages are posted;
+ required to have welcome messages and logged links, disabled if left empty
  - **hide\_prefix** `string` (*none*): Discord-specific hide prefix when registering users (overrides the global hide prefix)
- - **highscores** `string` (*none*): Discord ID of the channel where links to high-scoring comments are posted
+ - **highscores** `string` (*none*): Discord ID of the channel where links to high-scoring comments are posted; disabled if left empty
  - **highscore\_threshold** `int` (-1000): score at and below which a comment will be linked to in the highscore channel
- - **log** `string` (*none*): Discord ID of the channel where links to comments on reddit are reposted (required to enable the Discord component)
+ - **log** `string` (*none*): Discord ID of the channel where links to comments on reddit are reposted; disabled if left empty
  - **prefix** `string` (!): prefix for commands
  - **token** `string` (*none*): token to connect to Discord; leave out to disable the Discord component 
  - **welcome** `sting` (*none*): Go template of the welcome message; it is provided with two top-level keys,
    `ChannelsID` and `Member`. `ChannelsID` provides `General`, `Log` and `HighScores`, which contains the numeric ID of those channels.
-	`Member` provides `ID`, `Name`, and `FQN` (name followed by a discriminator).
+	`Member` provides `ID`, `Name`, and `FQN` (name followed by a discriminator). Disables welcome messages if left empty
 
 #### Reddit
 

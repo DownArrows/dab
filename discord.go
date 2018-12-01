@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"log"
 	"math/rand"
+	"reflect"
 	"regexp"
 	"strings"
 	"text/template"
@@ -109,25 +110,31 @@ type DiscordWelcomeData struct {
 }
 
 type DiscordBotChannelsID struct {
-	General    string
-	Log        string
-	HighScores string
+	General    string `json:"general"`
+	Log        string `json:"log"`
+	HighScores string `json:"highscores"`
 }
 
 type DiscordBot struct {
-	client     *discordgo.Session
-	done       chan error
-	logger     *log.Logger
-	redditLink *regexp.Regexp
-	storage    DiscordBotStorage
+	// dependencies
+	client  *discordgo.Session
+	logger  *log.Logger
+	storage DiscordBotStorage
+
+	// configuration
+	adminID    string
+	channelsID DiscordBotChannelsID
+	guildID    string
+	hidePrefix string
+	prefix     string
+	timezone   *time.Location
+	welcome    *template.Template
+
+	// miscellaneous
 	AddUser    chan UserQuery
-	AdminID    string
-	ChannelsID DiscordBotChannelsID
 	Commands   []DiscordCommand
-	HidePrefix string
-	Prefix     string
-	Timezone   *time.Location
-	Welcome    *template.Template
+	done       chan error
+	redditLink *regexp.Regexp
 }
 
 func NewDiscordBot(storage DiscordBotStorage, logger *log.Logger, conf DiscordBotConf) (*DiscordBot, error) {
@@ -136,29 +143,38 @@ func NewDiscordBot(storage DiscordBotStorage, logger *log.Logger, conf DiscordBo
 		return nil, err
 	}
 
+	welcome, err := template.New("DiscordWelcome").Parse(conf.Welcome) // works even if empty
+	if err != nil {
+		return nil, err
+	}
+
 	bot := &DiscordBot{
-		client:     session,
-		done:       make(chan error),
-		logger:     logger,
-		redditLink: regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
-		storage:    storage,
+		client:  session,
+		logger:  logger,
+		storage: storage,
+
+		adminID:    conf.Admin,
+		channelsID: conf.DiscordBotChannelsID,
+		hidePrefix: conf.HidePrefix,
+		prefix:     conf.Prefix,
+		timezone:   conf.Timezone.Value,
+		welcome:    welcome,
+
 		AddUser:    make(chan UserQuery),
-		HidePrefix: conf.HidePrefix,
-		Prefix:     conf.Prefix,
-		Timezone:   conf.Timezone.Value,
+		done:       make(chan error),
+		redditLink: regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
 	}
 
 	bot.Commands = bot.GetCommandsDescriptors()
 
-	if conf.Welcome != "" {
-		bot.Welcome = template.Must(template.New("DiscordWelcome").Parse(conf.Welcome))
+	if conf.Welcome != "" || conf.General != "" {
 		session.AddHandler(func(s *discordgo.Session, event *discordgo.GuildMemberAdd) {
-			bot.welcomeNewMember(event.Member)
+			bot.WelcomeNewMember(event.Member)
 		})
 	}
 
-	session.AddHandler(func(s *discordgo.Session, msg *discordgo.MessageCreate) { bot.onMessage(msg) })
-	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) { bot.onReady(conf) })
+	session.AddHandler(func(s *discordgo.Session, msg *discordgo.MessageCreate) { bot.OnMessage(msg) })
+	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) { bot.OnReady() })
 
 	return bot, nil
 }
@@ -207,60 +223,75 @@ func (bot *DiscordBot) MyColor(channelID string) int {
 	return bot.client.State.UserColor(bot.client.State.User.ID, channelID)
 }
 
-func (bot *DiscordBot) onReady(conf DiscordBotConf) {
+// this is executed on each (re)-connection to Discord
+func (bot *DiscordBot) OnReady() {
 	if err := bot.client.UpdateStatus(0, "Downvote Counter"); err != nil {
 		bot.fatal(fmt.Errorf("couldn't set status on discord: %v", err))
 		return
 	}
 
-	if _, err := bot.client.Channel(conf.General); err != nil {
-		bot.fatal(err)
-		return
-	}
-	bot.ChannelsID.General = conf.General
+	// Check the channels exist and are all in the same server
+	channels := reflect.ValueOf(bot.channelsID)
+	for i := 0; i < channels.NumField(); i++ {
+		channelID := channels.Field(i).String()
+		name := channels.Type().Field(i).Name
 
-	if _, err := bot.client.Channel(conf.Log); err != nil {
-		bot.fatal(err)
-		return
-	}
-	bot.ChannelsID.Log = conf.Log
+		if channelID == "" {
+			continue
+		}
 
-	if conf.HighScores != "" {
-		if _, err := bot.client.Channel(conf.HighScores); err != nil {
-			bot.fatal(err)
+		channel, err := bot.client.Channel(channelID)
+		if err != nil {
+			bot.fatal(fmt.Errorf("channel %s: %v", name, err))
 			return
 		}
-		bot.ChannelsID.HighScores = conf.HighScores
+
+		if bot.guildID == "" {
+			bot.guildID = channel.GuildID
+		} else if bot.guildID != channel.GuildID {
+			bot.fatal(fmt.Errorf("all channels must be in the same server: channel %s is not in server %s", name, bot.guildID))
+			return
+		}
 	}
 
-	if _, err := bot.client.User(conf.Admin); err != nil {
+	if bot.adminID == "" {
+		if bot.guildID == "" {
+			bot.logger.Print("no channel and no admin set; disabling privileged commands")
+		} else {
+			guild, err := bot.client.Guild(bot.guildID)
+			if err != nil {
+				bot.fatal(err)
+				return
+			}
+			bot.adminID = guild.OwnerID
+		}
+	} else if _, err := bot.client.User(bot.adminID); err != nil {
 		bot.fatal(err)
 		return
 	}
-	bot.AdminID = conf.Admin
 
 	bot.logger.Print("initialization ok")
 }
 
-func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
+func (bot *DiscordBot) WelcomeNewMember(member *discordgo.Member) {
 	var msg strings.Builder
 	data := DiscordWelcomeData{
-		ChannelsID: bot.ChannelsID,
+		ChannelsID: bot.channelsID,
 		Member: DiscordMember{
 			ID:            member.User.ID,
 			Name:          member.User.Username,
 			Discriminator: member.User.Discriminator,
 		},
 	}
-	if err := bot.Welcome.Execute(&msg, data); err != nil {
+	if err := bot.welcome.Execute(&msg, data); err != nil {
 		bot.fatal(err)
 	}
-	if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg.String()); err != nil {
+	if err := bot.ChannelMessageSend(bot.channelsID.General, msg.String()); err != nil {
 		bot.logger.Print(err)
 	}
 }
 
-func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
+func (bot *DiscordBot) OnMessage(dg_msg *discordgo.MessageCreate) {
 	var err error
 
 	if dg_msg.Author.ID == bot.client.State.User.ID {
@@ -303,7 +334,7 @@ func (bot *DiscordBot) RedditEvents(ctx context.Context, evts chan Comment) erro
 			bot.logger.Print("new event from reddit: ", comment)
 			if comment.Author == "DownvoteTrollingBot" || comment.Author == "DownvoteTrollingBot2" {
 				msg := "@everyone https://www.reddit.com" + comment.Permalink
-				if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
+				if err := bot.ChannelMessageSend(bot.channelsID.General, msg); err != nil {
 					bot.logger.Print("reddit events listener: ", err)
 				}
 			}
@@ -325,7 +356,7 @@ func (bot *DiscordBot) SignalSuspensions(ctx context.Context, suspensions chan U
 			}
 
 			msg := fmt.Sprintf("RIP /u/%s %s (%s)", user.Name, EmojiPrayingHands, state)
-			if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
+			if err := bot.ChannelMessageSend(bot.channelsID.General, msg); err != nil {
 				bot.logger.Print("suspensions listener: ", err)
 			}
 			break
@@ -341,7 +372,7 @@ func (bot *DiscordBot) SignalUnsuspensions(ctx context.Context, ch chan User) er
 		select {
 		case user := <-ch:
 			msg := fmt.Sprintf("%s /u/%s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
-			if err := bot.ChannelMessageSend(bot.ChannelsID.General, msg); err != nil {
+			if err := bot.ChannelMessageSend(bot.channelsID.General, msg); err != nil {
 				bot.logger.Print("unsuspensions listener: ", err)
 			}
 			break
@@ -359,7 +390,7 @@ func (bot *DiscordBot) SignalHighScores(ctx context.Context, ch chan Comment) er
 			link := "https://www.reddit.com" + comment.Permalink
 			tmpl := "a comment by /u/%s has reached %d: %s"
 			msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
-			if err := bot.ChannelMessageSend(bot.ChannelsID.HighScores, msg); err != nil {
+			if err := bot.ChannelMessageSend(bot.channelsID.HighScores, msg); err != nil {
 				bot.logger.Print("high-scores listener: ", err)
 			}
 			break
@@ -372,10 +403,10 @@ func (bot *DiscordBot) SignalHighScores(ctx context.Context, ch chan Comment) er
 
 func (bot *DiscordBot) MatchCommand(msg DiscordMessage) (DiscordCommand, DiscordMessage) {
 	for _, cmd := range bot.Commands {
-		if cmd.Admin && msg.Author.ID != bot.AdminID {
+		if cmd.Admin && msg.Author.ID != bot.adminID {
 			continue
 		}
-		if matches, content_rest := cmd.Match(bot.Prefix, msg.Content); matches {
+		if matches, content_rest := cmd.Match(bot.prefix, msg.Content); matches {
 			msg.Content = content_rest
 			msg.Args = strings.Split(msg.Content, " ")
 			return cmd, msg
@@ -405,7 +436,7 @@ func (bot *DiscordBot) command(msg DiscordMessage) error {
 }
 
 func (bot *DiscordBot) isLoggableRedditLink(msg DiscordMessage) bool {
-	return (msg.ChannelID == bot.ChannelsID.General &&
+	return (msg.ChannelID == bot.channelsID.General && // won't be true if General is not set (ie left empty)
 		bot.redditLink.MatchString(msg.Content) &&
 		!strings.Contains(strings.ToLower(msg.Content), "!nolog"))
 }
@@ -414,8 +445,11 @@ func (bot *DiscordBot) processRedditLink(msg DiscordMessage) error {
 	if err := bot.addRandomReactionTo(msg); err != nil {
 		return err
 	}
+	if bot.channelsID.Log == "" {
+		return nil
+	}
 	reply := msg.Author.FQN() + ": " + msg.Content
-	return bot.ChannelMessageSend(bot.ChannelsID.Log, reply)
+	return bot.ChannelMessageSend(bot.channelsID.Log, reply)
 }
 
 func (bot *DiscordBot) addRandomReactionTo(msg DiscordMessage) error {
@@ -495,8 +529,8 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 			return err
 		}
 
-		hidden := strings.HasPrefix(name, bot.HidePrefix)
-		name = TrimUsername(strings.TrimPrefix(name, bot.HidePrefix))
+		hidden := strings.HasPrefix(name, bot.hidePrefix)
+		name = TrimUsername(strings.TrimPrefix(name, bot.hidePrefix))
 
 		bot.AddUser <- UserQuery{User: User{Name: name, Hidden: hidden}}
 		reply := <-bot.AddUser
@@ -555,8 +589,8 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 		Title: "Information about /u/" + user.Name,
 		Color: bot.MyColor(msg.ChannelID),
 		Fields: []*discordgo.MessageEmbedField{
-			embedField("Created", user.CreatedTime().In(bot.Timezone).Format(time.RFC850), true),
-			embedField("Added", user.AddedTime().In(bot.Timezone).Format(time.RFC850), true),
+			embedField("Created", user.CreatedTime().In(bot.timezone).Format(time.RFC850), true),
+			embedField("Added", user.AddedTime().In(bot.timezone).Format(time.RFC850), true),
 		},
 	}
 
