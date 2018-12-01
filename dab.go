@@ -4,40 +4,99 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"strings"
-	"sync"
 	"text/template"
 	"time"
 )
 
-const Version = "1.1.4"
+const Version = "1.2.0"
+
+type componentConf struct {
+	Enabled bool
+	Name    string
+	Error   error
+}
+
+func (c componentConf) String() string {
+	if c.Enabled {
+		return fmt.Sprintf("%s: enabled", c.Name)
+	}
+	return fmt.Sprintf("%s: %s", c.Name, c.Error)
+}
+
+type DABComponentsConf struct {
+	Discord componentConf
+	Reddit  componentConf
+	Web     componentConf
+}
+
+func NewDABComponentsConf(conf Configuration) DABComponentsConf {
+	c := DABComponentsConf{}
+
+	reddit_required := map[string]string{
+		"id":         conf.Reddit.Id,
+		"password":   conf.Reddit.Password,
+		"secret":     conf.Reddit.Secret,
+		"user agent": conf.Reddit.UserAgent,
+		"username":   conf.Reddit.Username,
+	}
+	var reddit_invalid []string
+	for name, value := range reddit_required {
+		if value == "" {
+			reddit_invalid = append(reddit_invalid, name)
+		}
+	}
+
+	c.Reddit.Name = "reddit"
+	if len(reddit_invalid) > 0 {
+		c.Reddit.Error = errors.New("missing required fields " + strings.Join(reddit_invalid, ""))
+	} else {
+		c.Reddit.Enabled = true
+	}
+
+	c.Discord.Name = "discord"
+	if conf.Discord.Token == "" {
+		c.Discord.Error = errors.New("empty token")
+	} else {
+		c.Discord.Enabled = true
+	}
+
+	c.Web.Name = "web server"
+	if conf.Web.Listen == "" {
+		c.Web.Error = errors.New("missing or empty listen specification")
+	} else {
+		c.Web.Enabled = true
+	}
+
+	return c
+}
+
+func (c DABComponentsConf) String() string {
+	return fmt.Sprintf("%s; %s; %s", c.Discord, c.Reddit, c.Web)
+}
 
 type DownArrowsBot struct {
-	conf Configuration
-
 	flagSet    *flag.FlagSet
 	logger     *log.Logger
 	loggerOpts int
 	logOut     io.Writer
 	stdOut     io.Writer
 
+	conf Configuration
+
 	runtimeConf struct {
-		Discord  bool
-		InitDB   bool
-		Launched bool
-		Reddit   bool
-		Report   bool
-		UserAdd  bool
-		Web      bool
+		InitDB  bool
+		Report  bool
+		UserAdd bool
 	}
 
 	storage *Storage
 
 	components struct {
-		sync.Mutex
-		Enabled       []string
+		Conf          DABComponentsConf
 		Discord       *DiscordBot
 		RedditScanner *RedditScanner
 		RedditUsers   *RedditUsers
@@ -55,12 +114,6 @@ func NewDownArrowsBot(log_out io.Writer, logger_opts int, output io.Writer) *Dow
 		logOut:     log_out,
 		stdOut:     output,
 	}
-}
-
-func (dab *DownArrowsBot) enable(name string) {
-	dab.components.Lock()
-	defer dab.components.Unlock()
-	dab.components.Enabled = append(dab.components.Enabled, name)
 }
 
 func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
@@ -86,22 +139,19 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	}
 
 	if dab.runtimeConf.UserAdd {
-		dab.checkRedditConf()
-		if !dab.runtimeConf.Reddit {
-			return errors.New("configuration for connecting to reddit must be correct to register users")
+		if !dab.components.Conf.Reddit.Enabled {
+			return dab.components.Conf.Reddit.Error
 		}
 		return dab.userAdd(ctx)
 	}
 
 	connectors := NewTaskGroup(ctx)
 
-	dab.checkRedditConf()
-	if dab.runtimeConf.Reddit {
+	if dab.components.Conf.Reddit.Enabled {
 		connectors.Spawn(dab.connectReddit)
 	}
 
-	dab.checkDiscordConf()
-	if dab.runtimeConf.Discord {
+	if dab.components.Conf.Discord.Enabled {
 		connectors.Spawn(dab.connectDiscord)
 	}
 
@@ -129,27 +179,25 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 	top_level.Spawn(dab.storage.PeriodicVacuum)
 
-	if dab.runtimeConf.Reddit {
+	if dab.components.Conf.Reddit.Enabled {
 		writers.Spawn(dab.components.RedditScanner.Run)
 		writers.Spawn(dab.components.RedditUsers.AutoUpdateUsersFromCompendium)
 	}
 
-	if dab.runtimeConf.Discord {
+	if dab.components.Conf.Discord.Enabled {
 		top_level.Spawn(dab.components.Discord.Run)
 	}
 
-	if dab.runtimeConf.Reddit && dab.runtimeConf.Discord {
+	if dab.components.Conf.Reddit.Enabled && dab.components.Conf.Discord.Enabled {
 		dab.connectRedditAndDiscord(readers, writers)
 	}
 
-	dab.checkWebConf()
-	if dab.runtimeConf.Web {
+	if dab.components.Conf.Web.Enabled {
 		dab.components.Web = NewWebServer(dab.conf.Web, dab.components.Report, dab.storage)
 		top_level.Spawn(dab.components.Web.Run)
 	}
 
-	dab.runtimeConf.Launched = true
-	dab.logger.Print("launched the following components: ", strings.Join(dab.components.Enabled, ", "))
+	dab.logger.Print(dab.components.Conf)
 
 	return top_level.Wait().ToError()
 }
@@ -167,37 +215,9 @@ func (dab *DownArrowsBot) init(args []string) error {
 
 	conf, err := NewConfiguration(*path)
 	dab.conf = conf
+	dab.components.Conf = NewDABComponentsConf(conf)
+
 	return err
-}
-
-func (dab *DownArrowsBot) checkRedditConf() {
-	if dab.conf.Reddit.Username == "" || dab.conf.Reddit.Secret == "" || dab.conf.Reddit.Id == "" ||
-		dab.conf.Reddit.Password == "" || dab.conf.Reddit.UserAgent == "" {
-		fields := "id, secret, username, password, user_agent"
-		msg := "Disabling reddit bot; at least one of the required fields of 'reddit' in the configuration file is empty"
-		dab.logger.Print(msg, ": ", fields)
-	} else {
-		dab.runtimeConf.Reddit = true
-		dab.enable("reddit")
-	}
-}
-
-func (dab *DownArrowsBot) checkDiscordConf() {
-	if dab.conf.Discord.Token != "" {
-		dab.runtimeConf.Discord = true
-		dab.enable("discord")
-	} else {
-		dab.logger.Print("disabling discord bot; empty 'token' field in 'discord' section of the configuration file")
-	}
-}
-
-func (dab *DownArrowsBot) checkWebConf() {
-	if dab.conf.Web.Listen != "" {
-		dab.runtimeConf.Web = true
-		dab.enable("web server")
-	} else {
-		dab.logger.Print("disabling web server; empty 'listen' field in 'web' section of the configuration file")
-	}
 }
 
 func (dab *DownArrowsBot) makeRedditAPI(ctx context.Context) (*RedditAPI, error) {
