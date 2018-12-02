@@ -269,8 +269,6 @@ func (bot *DiscordBot) OnReady() {
 		bot.fatal(err)
 		return
 	}
-
-	bot.logger.Print("initialization ok")
 }
 
 func (bot *DiscordBot) WelcomeNewMember(member *discordgo.Member) {
@@ -316,7 +314,6 @@ func (bot *DiscordBot) OnMessage(dg_msg *discordgo.MessageCreate) {
 	}
 
 	if bot.isLoggableRedditLink(msg) {
-		bot.logger.Print("link to a comment on reddit posted by ", msg.Author.FQN())
 		err = bot.processRedditLink(msg)
 	} else {
 		err = bot.command(msg)
@@ -327,75 +324,74 @@ func (bot *DiscordBot) OnMessage(dg_msg *discordgo.MessageCreate) {
 	}
 }
 
-func (bot *DiscordBot) RedditEvents(ctx context.Context, evts chan Comment) error {
-	for ctx.Err() == nil {
+func (bot *DiscordBot) SignalNewRedditPosts(ctx context.Context, evts chan Comment) error {
+Loop:
+	for {
 		select {
 		case comment := <-evts:
-			bot.logger.Print("new event from reddit: ", comment)
+			bot.logger.Printf("new post on sub %s by %s on %s", comment.Sub, comment.Author, time.Unix(comment.Created, 0))
 			if comment.Author == "DownvoteTrollingBot" || comment.Author == "DownvoteTrollingBot2" {
 				msg := "@everyone https://www.reddit.com" + comment.Permalink
 				if err := bot.ChannelMessageSend(bot.channelsID.General, msg); err != nil {
-					bot.logger.Print("reddit events listener: ", err)
+					bot.logger.Printf("error when signaling new post on reddit: %v", err)
 				}
 			}
-			break
 		case <-ctx.Done():
-			break
+			break Loop
 		}
 	}
 	return ctx.Err()
 }
 
 func (bot *DiscordBot) SignalSuspensions(ctx context.Context, suspensions chan User) error {
-	for ctx.Err() == nil {
+Loop:
+	for {
 		select {
 		case user := <-suspensions:
 			state := "suspended"
 			if user.NotFound {
 				state = "deleted"
 			}
-
 			msg := fmt.Sprintf("RIP /u/%s %s (%s)", user.Name, EmojiPrayingHands, state)
 			if err := bot.ChannelMessageSend(bot.channelsID.General, msg); err != nil {
-				bot.logger.Print("suspensions listener: ", err)
+				bot.logger.Printf("error when signaling a suspension or deletion: %v", err)
 			}
-			break
 		case <-ctx.Done():
-			break
+			break Loop
 		}
 	}
 	return ctx.Err()
 }
 
 func (bot *DiscordBot) SignalUnsuspensions(ctx context.Context, ch chan User) error {
-	for ctx.Err() == nil {
+Loop:
+	for {
 		select {
 		case user := <-ch:
 			msg := fmt.Sprintf("%s /u/%s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
 			if err := bot.ChannelMessageSend(bot.channelsID.General, msg); err != nil {
-				bot.logger.Print("unsuspensions listener: ", err)
+				bot.logger.Printf("error when signaling an unsuspensions: %v", err)
 			}
-			break
 		case <-ctx.Done():
-			break
+			break Loop
 		}
 	}
 	return ctx.Err()
 }
 
 func (bot *DiscordBot) SignalHighScores(ctx context.Context, ch chan Comment) error {
-	for ctx.Err() == nil {
+Loop:
+	for {
 		select {
 		case comment := <-ch:
 			link := "https://www.reddit.com" + comment.Permalink
 			tmpl := "a comment by /u/%s has reached %d: %s"
 			msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
 			if err := bot.ChannelMessageSend(bot.channelsID.HighScores, msg); err != nil {
-				bot.logger.Print("high-scores listener: ", err)
+				bot.logger.Printf("error when signaling high-score: %v", err)
 			}
-			break
 		case <-ctx.Done():
-			break
+			break Loop
 		}
 	}
 	return ctx.Err()

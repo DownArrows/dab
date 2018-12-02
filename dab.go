@@ -9,10 +9,9 @@ import (
 	"log"
 	"strings"
 	"text/template"
-	"time"
 )
 
-const Version = "1.3.1"
+const Version = "1.4.0"
 
 type componentConf struct {
 	Enabled bool
@@ -121,6 +120,10 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
+	if err := dab.conf.HasSaneValues(); err != nil {
+		return err
+	}
+
 	dab.logger.Print("using database ", dab.conf.Database.Path)
 	if storage, err := NewStorage(dab.conf.Database); err != nil {
 		return err
@@ -177,11 +180,15 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return readers.Wait().ToError()
 	})
 
-	top_level.Spawn(dab.storage.PeriodicVacuum)
+	if dab.storage.PeriodicVacuumEnabled {
+		top_level.Spawn(dab.storage.PeriodicVacuum)
+	}
 
 	if dab.components.Conf.Reddit.Enabled {
 		writers.Spawn(dab.components.RedditScanner.Run)
-		writers.Spawn(dab.components.RedditUsers.AutoUpdateUsersFromCompendium)
+		if dab.components.RedditUsers.AutoUpdateUsersFromCompendiumEnabled {
+			writers.Spawn(dab.components.RedditUsers.AutoUpdateUsersFromCompendium)
+		}
 	}
 
 	if dab.components.Conf.Discord.Enabled {
@@ -210,7 +217,7 @@ func (dab *DownArrowsBot) init(args []string) error {
 	dab.flagSet.Parse(args)
 
 	if !dab.runtimeConf.UserAdd && dab.flagSet.NArg() > 0 {
-		return errors.New("No argument besides usernames when adding users is accepted")
+		return errors.New("no argument besides usernames when adding users is accepted")
 	}
 
 	conf, err := NewConfiguration(*path)
@@ -264,26 +271,30 @@ func (dab *DownArrowsBot) connectRedditAndDiscord(readers *TaskGroup, writers *T
 		return dab.components.RedditUsers.AddUserServer(ctx, dab.components.Discord.AddUser)
 	})
 
-	if dab.conf.Reddit.DVTInterval.Value > 0*time.Second {
+	if dab.conf.Reddit.DVTInterval.Value > 0 {
 		reddit_evts := make(chan Comment)
-		readers.Spawn(func(ctx context.Context) error { return dab.components.Discord.RedditEvents(ctx, reddit_evts) })
+		readers.Spawn(func(ctx context.Context) error {
+			return dab.components.Discord.SignalNewRedditPosts(ctx, reddit_evts)
+		})
 		writers.Spawn(func(ctx context.Context) error {
-			return dab.components.RedditSubs.StreamSub(ctx, "downvote_trolls", reddit_evts, dab.conf.Reddit.DVTInterval.Value)
+			return dab.components.RedditSubs.NewPostsOnSub(ctx, "downvote_trolls", reddit_evts, dab.conf.Reddit.DVTInterval.Value)
 		})
 	}
 
-	suspensions := dab.components.RedditScanner.Suspensions() // suspensions are actually watched by the scanning of comments, not here
+	suspensions := dab.components.RedditScanner.Suspensions()
 	readers.Spawn(func(ctx context.Context) error {
 		return dab.components.Discord.SignalSuspensions(ctx, suspensions)
 	})
 
-	writers.Spawn(dab.components.RedditUsers.CheckUnsuspendedAndNotFound)
-	readers.Spawn(func(ctx context.Context) error {
-		return dab.components.Discord.SignalUnsuspensions(ctx, dab.components.RedditUsers.Unsuspensions)
-	})
+	if dab.components.RedditUsers.UnsuspensionWatcherEnabled {
+		writers.Spawn(dab.components.RedditUsers.UnsuspensionWatcher)
+		readers.Spawn(func(ctx context.Context) error {
+			return dab.components.Discord.SignalUnsuspensions(ctx, dab.components.RedditUsers.Unsuspensions)
+		})
+	}
 
 	if dab.conf.Discord.HighScores != "" {
-		highscores := dab.components.RedditScanner.HighScores() // this also happens during the scanning of comments
+		highscores := dab.components.RedditScanner.HighScores()
 		readers.Spawn(func(ctx context.Context) error {
 			return dab.components.Discord.SignalHighScores(ctx, highscores)
 		})

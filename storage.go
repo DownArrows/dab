@@ -134,6 +134,8 @@ type Storage struct {
 		SubPostIDs     map[string]*SyncSet
 		SubPostIDsLock *sync.RWMutex
 	}
+
+	PeriodicVacuumEnabled bool
 }
 
 func NewStorage(conf StorageConf) (*Storage, error) {
@@ -142,6 +144,8 @@ func NewStorage(conf StorageConf) (*Storage, error) {
 		backupPath:      conf.BackupPath,
 		cleanupInterval: conf.CleanupInterval.Value,
 		path:            conf.Path,
+
+		PeriodicVacuumEnabled: conf.CleanupInterval.Value > 0,
 	}
 
 	db, err := sql.Open(DatabaseDriverName, fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", s.path))
@@ -210,10 +214,6 @@ func (s *Storage) Close() error {
 ************/
 
 func (s *Storage) PeriodicVacuum(ctx context.Context) error {
-	if s.cleanupInterval == 0*time.Second {
-		return nil
-	}
-
 	for sleepCtx(ctx, s.cleanupInterval) {
 		if _, err := s.db.ExecContext(ctx, "VACUUM"); err != nil {
 			return err

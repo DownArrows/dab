@@ -13,8 +13,11 @@ type RedditUsers struct {
 	logger  *log.Logger
 	storage RedditUsersStorage
 
-	compendiumUpdateInterval time.Duration
-	unsuspensionInterval     time.Duration
+	compendiumUpdateInterval             time.Duration
+	AutoUpdateUsersFromCompendiumEnabled bool
+
+	unsuspensionInterval       time.Duration
+	UnsuspensionWatcherEnabled bool
 
 	Unsuspensions chan User
 }
@@ -30,29 +33,26 @@ func NewRedditUsers(
 		logger:  logger,
 		storage: storage,
 
-		compendiumUpdateInterval: conf.CompendiumUpdateInterval.Value,
-		unsuspensionInterval:     conf.UnsuspensionInterval.Value,
+		compendiumUpdateInterval:             conf.CompendiumUpdateInterval.Value,
+		AutoUpdateUsersFromCompendiumEnabled: conf.CompendiumUpdateInterval.Value > 0,
 
-		Unsuspensions: make(chan User),
+		unsuspensionInterval:       conf.UnsuspensionInterval.Value,
+		UnsuspensionWatcherEnabled: conf.UnsuspensionInterval.Value > 0,
+		Unsuspensions:              make(chan User),
 	}
 }
 
 func (ru *RedditUsers) AddUserServer(ctx context.Context, queries chan UserQuery) error {
-	ru.logger.Print("init addition of new users")
+	ru.logger.Print("starting internal server to register users")
 Loop:
 	for {
 		select {
 		case <-ctx.Done():
 			break Loop
 		case query := <-queries:
-			ru.logger.Print("received query to add a new user: ", query)
-
+			ru.logger.Printf("received query to add a new user, %s", query)
 			query = ru.AddUser(ctx, query.User.Name, query.User.Hidden, false)
-			if query.Error != nil {
-				msg := "error when adding the new user "
-				ru.logger.Print(msg, query.User.Name, query.Error)
-			}
-
+			ru.logger.Printf("replying to query to add a new user, %s", query)
 			queries <- query
 		}
 	}
@@ -60,7 +60,6 @@ Loop:
 }
 
 func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool, force_suspended bool) UserQuery {
-	ru.logger.Print("trying to add user ", username)
 	query := UserQuery{User: User{Name: username}}
 
 	query = ru.storage.GetUser(username)
@@ -79,12 +78,10 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 	}
 
 	if !query.Exists {
-		ru.logger.Printf("user \"%s\" not found", username)
 		return query
 	}
 
 	if query.User.Suspended {
-		ru.logger.Printf("user \"%s\" was suspended", query.User.Name)
 		if !force_suspended {
 			query.Error = fmt.Errorf("user '%s' can't be added, forced mode not enabled", query.User.Name)
 			return query
@@ -93,14 +90,13 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 
 	if err := ru.storage.AddUser(query.User.Name, hidden, query.User.Created); err != nil {
 		query.Error = err
-		return query
 	}
 
-	ru.logger.Printf("new user \"%s\" sucessfully added", query.User.Name)
 	return query
 }
 
 func (ru *RedditUsers) AutoUpdateUsersFromCompendium(ctx context.Context) error {
+	ru.logger.Printf("updating users from the compendium with interval %s", ru.compendiumUpdateInterval)
 	for sleepCtx(ctx, ru.compendiumUpdateInterval) {
 		if err := ru.UpdateUsersFromCompendium(ctx); err != nil {
 			return err
@@ -179,7 +175,8 @@ func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
 	return nil
 }
 
-func (ru *RedditUsers) CheckUnsuspendedAndNotFound(ctx context.Context) error {
+func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
+	ru.logger.Printf("watching unsuspensions/undeletions with interval %s", ru.unsuspensionInterval)
 	for sleepCtx(ctx, ru.unsuspensionInterval) {
 
 		for _, user := range ru.storage.ListSuspendedAndNotFound() {

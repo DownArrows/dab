@@ -61,9 +61,14 @@ func (rs *RedditScanner) HighScores() chan Comment {
 
 func (rs *RedditScanner) Run(ctx context.Context) error {
 	var last_full_scan time.Time
+
+	rs.logger.Printf("starting comments scanner")
+
 	for ctx.Err() == nil {
+
 		now := time.Now().Round(0)
 		full_scan := now.Sub(last_full_scan) >= rs.fullScanInterval
+
 		users := rs.getUsersOrWait(ctx, full_scan)
 		if len(users) == 0 {
 			return ctx.Err()
@@ -79,7 +84,9 @@ func (rs *RedditScanner) Run(ctx context.Context) error {
 				return err
 			}
 		}
+
 	}
+
 	return ctx.Err()
 }
 

@@ -129,8 +129,8 @@ For Go templates' syntax, see <http://golang.localhost/pkg/text/template/>.
 
 #### Reddit
 
- - **compendium\_update\_interval** `duration` (*none*): interval between each scan of the compendium; leave out to disable, else must be at least a minute
- - **dvt\_interval** `string` (*none*): interval between each check of the downvote sub's new reports; leave out to disable, else must be at least one hour
+ - **compendium\_update\_interval** `duration` (*none*): interval between each scan of the compendium; leave out to disable, else must be at least an hour
+ - **dvt\_interval** `string` (*none*): interval between each check of the downvote sub's new reports; leave out to disable, else must be at least a minute
  - **full\_scan\_interval** `duration` (6h): interval between each scan of all users, inactive or not
  - **id** `string` (*none*): Reddit application ID for the bot (required for users' scanning)
  - **inactivity\_threshold** `duration` (2200h): if a user hasn't commented since that long ago, consider them "inactive" and scan them less often; must be at least one day
@@ -138,7 +138,7 @@ For Go templates' syntax, see <http://golang.localhost/pkg/text/template/>.
  - **max\_batches** `int` (5): maximum number of batches of comments to get from Reddit for a single user before moving to the next one
  - **password** `string` (*none*): Reddit password for the bot's account (required for users' scanning)
  - **secret** `string` (*none*): Reddit application secret for the bot (required for users' scanning)
- - **unsuspension\_interval** `duration` (15m): interval between each batch of checks for suspended or deleted users; put at `0s` to disable, else must be at least one minute
+ - **unsuspension\_interval** `duration` (*none*): interval between each batch of checks for suspended or deleted users; leave out to disable, else must be at least one minute
  - **user\_agent** `string` (*none*): Go template for the user agent of the bot on reddit; `OS` and `Version` are provided (required for users' scanning)
  - **username** `string` (*none*): Reddit username for the bot's account (required for users' scanning)
 
