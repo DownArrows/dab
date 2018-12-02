@@ -51,7 +51,6 @@ type WebServer struct {
 	Server          *http.Server
 	Reports         ReportFactory
 	markdownOptions blackfriday.Option
-	backupAuth      string
 	backupStorage   BackupStorage
 	done            chan error
 }
