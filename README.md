@@ -158,35 +158,35 @@ Note how the last value of a dictionary must not be followed by a comma:
 
 	{
 
-		"timezone": "Europe/London",
+		"timezone": "America/Chicago",
 
 		"database": {
-			"path": "/var/lib/dab/db.sqlite3",
-			"backup_path": "/var/lib/dab/db.sqlite3.backup",
-			"cleanup_interval": "6h"
+			"path":        "/var/lib/dab/db.sqlite3",
+			"backup_path": "/var/lib/dab/db.sqlite3.backup"
 		},
 
 		"reddit": {
-			"username": "AGreatUsername",
-			"password": "hunter2",
-			"id": "XaiUdR5UBKl_FY",
-			"secret": "D8PvhefS9ZTZFOUxK-9Bu7iaRLt",
+			"username":   "AGreatUsername",
+			"password":   "hunter2",
+			"id":         "XaiUdR5UBKl_FY",
+			"secret":     "D8PvhefS9ZTZFOUxK-9Bu7iaRLt",
 			"user_agent": "{{.OS}}:agreatbot:v{{.Version}} (by /u/AGreatUsername)",
-			"dvt_interval": "5m",
+			"max_age":                    "72h",
+			"dvt_interval":               "5m",
+			"unsuspension_interval":      "15m",
 			"compendium_update_interval": "1h"
 		},
 
 		"discord": {
-			"token": "NJx4MJt5ODt5MTk0MzM2Mjc6.DrQECx.pMN84B0UfL2WxxssdxHxx0MxxK8",
-			"admin": "308148615101724003",
-			"general": "508169151894056221",
-			"log": "508869940013213344",
+			"token":      "NJx4MJt5ODt5MTk0MzM2Mjc6.DrQECx.pMN84B0UfL2WxxssdxHxx0MxxK8",
+			"general":    "508169151894056221",
+			"log":        "508869940013213344",
 			"highscores": "508263683211452578",
-			"welcome": "Hello <@{{.Member.ID}}>!"
+			"welcome":    "Hello <@{{.Member.ID}}>!"
 		},
 
 		"web": {
-			"listen": "localhost:1234"
+			"listen": "localhost:12345"
 		}
 
 	}
