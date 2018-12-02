@@ -644,5 +644,5 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 }
 
 func TrimUsername(username string) string {
-	return strings.TrimPrefix(strings.TrimPrefix(username, "u/"), "/u/")
+	return strings.TrimPrefix(strings.TrimPrefix(username, "/u/"), "u/")
 }
