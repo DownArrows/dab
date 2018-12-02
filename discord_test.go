@@ -76,14 +76,16 @@ func TestCommandMatch(t *testing.T) {
 
 func TestCommandFind(t *testing.T) {
 
+	admin_id := "admin-id"
+
 	bot := DiscordBot{
 		Commands: []DiscordCommand{
 			DiscordCommand{Command: "simple"},
 			DiscordCommand{Command: "admin", Admin: true},
 			DiscordCommand{Command: "args", HasArgs: true},
 		},
-		AdminID: "admin-id",
-		Prefix:  "!",
+		adminID: admin_id,
+		prefix:  "!",
 	}
 
 	t.Run("basic matching", func(t *testing.T) {
@@ -96,7 +98,7 @@ func TestCommandFind(t *testing.T) {
 	t.Run("admin privilege matching", func(t *testing.T) {
 		msg := DiscordMessage{
 			Content: "!admin",
-			Author:  DiscordMember{ID: bot.AdminID},
+			Author:  DiscordMember{ID: admin_id},
 		}
 		cmd, _ := bot.MatchCommand(msg)
 		if cmd.Command != "admin" {
