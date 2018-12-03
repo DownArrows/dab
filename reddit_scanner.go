@@ -45,14 +45,14 @@ func NewRedditScanner(
 	}
 }
 
-func (rs *RedditScanner) Suspensions() chan User {
+func (rs *RedditScanner) Suspensions() <-chan User {
 	if rs.suspensions == nil {
 		rs.suspensions = make(chan User)
 	}
 	return rs.suspensions
 }
 
-func (rs *RedditScanner) HighScores() chan Comment {
+func (rs *RedditScanner) HighScores() <-chan Comment {
 	if rs.highScores == nil {
 		rs.highScores = make(chan Comment)
 	}

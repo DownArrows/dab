@@ -20,7 +20,7 @@ func NewRedditSubs(logger *log.Logger, storage RedditSubsStorage, api RedditSubs
 	}
 }
 
-func (rs *RedditSubs) NewPostsOnSub(ctx context.Context, sub string, ch chan Comment, sleep time.Duration) error {
+func (rs *RedditSubs) NewPostsOnSub(ctx context.Context, sub string, ch chan<- Comment, sleep time.Duration) error {
 	rs.logger.Printf("watching new posts from %s with interval %s", sub, sleep)
 
 	// This assumes the sub isn't empty

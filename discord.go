@@ -324,7 +324,7 @@ func (bot *DiscordBot) OnMessage(dg_msg *discordgo.MessageCreate) {
 	}
 }
 
-func (bot *DiscordBot) SignalNewRedditPosts(ctx context.Context, evts chan Comment) error {
+func (bot *DiscordBot) SignalNewRedditPosts(ctx context.Context, evts <-chan Comment) error {
 Loop:
 	for {
 		select {
@@ -343,7 +343,7 @@ Loop:
 	return ctx.Err()
 }
 
-func (bot *DiscordBot) SignalSuspensions(ctx context.Context, suspensions chan User) error {
+func (bot *DiscordBot) SignalSuspensions(ctx context.Context, suspensions <-chan User) error {
 Loop:
 	for {
 		select {
@@ -363,7 +363,7 @@ Loop:
 	return ctx.Err()
 }
 
-func (bot *DiscordBot) SignalUnsuspensions(ctx context.Context, ch chan User) error {
+func (bot *DiscordBot) SignalUnsuspensions(ctx context.Context, ch <-chan User) error {
 Loop:
 	for {
 		select {
@@ -379,7 +379,7 @@ Loop:
 	return ctx.Err()
 }
 
-func (bot *DiscordBot) SignalHighScores(ctx context.Context, ch chan Comment) error {
+func (bot *DiscordBot) SignalHighScores(ctx context.Context, ch <-chan Comment) error {
 Loop:
 	for {
 		select {
