@@ -122,9 +122,14 @@ var initQueries = []string{
 			FROM tracked WHERE deleted = 0`,
 }
 
+type storageBackup struct {
+	sync.Mutex
+	Path   string
+	MaxAge time.Duration
+}
+
 type Storage struct {
-	backupMaxAge    time.Duration
-	backupPath      string
+	backup          storageBackup
 	cleanupInterval time.Duration
 	conn            *sqlite3.SQLiteConn
 	db              *sqlx.DB
@@ -140,10 +145,13 @@ type Storage struct {
 
 func NewStorage(conf StorageConf) (*Storage, error) {
 	s := &Storage{
-		backupMaxAge:    conf.BackupMaxAge.Value,
-		backupPath:      conf.BackupPath,
 		cleanupInterval: conf.CleanupInterval.Value,
 		path:            conf.Path,
+
+		backup: storageBackup{
+			Path:   conf.BackupPath,
+			MaxAge: conf.BackupMaxAge.Value,
+		},
 
 		PeriodicVacuumEnabled: conf.CleanupInterval.Value > 0,
 	}
@@ -223,13 +231,16 @@ func (s *Storage) PeriodicVacuum(ctx context.Context) error {
 }
 
 func (s *Storage) Backup() error {
-	if older, err := fileOlderThan(s.backupPath, s.backupMaxAge); err != nil {
+	s.backup.Lock()
+	defer s.backup.Unlock()
+
+	if older, err := fileOlderThan(s.backup.Path, s.backup.MaxAge); err != nil {
 		return err
 	} else if !older {
 		return nil
 	}
 
-	dest_db, err := sql.Open(DatabaseDriverName, "file:"+s.backupPath)
+	dest_db, err := sql.Open(DatabaseDriverName, "file:"+s.backup.Path)
 	if err != nil {
 		return err
 	}
@@ -257,7 +268,7 @@ func (s *Storage) Backup() error {
 }
 
 func (s *Storage) BackupPath() string {
-	return s.backupPath
+	return s.backup.Path
 }
 
 /*****
