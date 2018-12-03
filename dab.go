@@ -11,7 +11,7 @@ import (
 	"text/template"
 )
 
-const Version = "1.4.3"
+const Version = "1.4.4"
 
 type componentConf struct {
 	Enabled bool

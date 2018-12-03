@@ -137,7 +137,7 @@ type Storage struct {
 	cache           struct {
 		KnownObjects   *SyncSet
 		SubPostIDs     map[string]*SyncSet
-		SubPostIDsLock *sync.RWMutex
+		SubPostIDsLock sync.Mutex
 	}
 
 	PeriodicVacuumEnabled bool
@@ -196,7 +196,7 @@ func NewStorage(conf StorageConf) (*Storage, error) {
 	}
 	s.cache.KnownObjects.MultiPut(known_objects)
 	s.cache.SubPostIDs = make(map[string]*SyncSet)
-	s.cache.SubPostIDsLock = &sync.RWMutex{}
+	s.cache.SubPostIDsLock = sync.Mutex{}
 
 	ok = true
 	return s, nil
@@ -572,21 +572,17 @@ func (s *Storage) NbKnownPostIDs(sub string) int {
 }
 
 func (s *Storage) readSubPostIDs(sub string, cb func(*SyncSet)) {
-	lock := s.cache.SubPostIDsLock
+	s.cache.SubPostIDsLock.Lock()
+	defer s.cache.SubPostIDsLock.Unlock()
+
 	cache := s.cache.SubPostIDs
 
-	lock.RLock()
 	if _, ok := cache[sub]; !ok {
-		lock.RUnlock()
-		lock.Lock()
 		cache[sub] = NewSyncSet()
 		cache[sub].MultiPut(s.getPostIDsOf(sub))
-		lock.Unlock()
-		lock.RLock()
 	}
 
 	cb(cache[sub])
-	lock.RUnlock()
 }
 
 func (s *Storage) getPostIDsOf(sub string) []string {
