@@ -289,7 +289,7 @@ func (dab *DownArrowsBot) connectRedditAndDiscord(readers *TaskGroup, writers *T
 	if dab.components.RedditUsers.UnsuspensionWatcherEnabled {
 		writers.Spawn(dab.components.RedditUsers.UnsuspensionWatcher)
 		readers.Spawn(func(ctx context.Context) error {
-			return dab.components.Discord.SignalUnsuspensions(ctx, dab.components.RedditUsers.Unsuspensions)
+			return dab.components.Discord.SignalUnsuspensions(ctx, dab.components.RedditUsers.Unsuspensions())
 		})
 	}
 

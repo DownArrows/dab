@@ -16,10 +16,9 @@ type RedditUsers struct {
 	compendiumUpdateInterval             time.Duration
 	AutoUpdateUsersFromCompendiumEnabled bool
 
+	unsuspensions              chan User
 	unsuspensionInterval       time.Duration
 	UnsuspensionWatcherEnabled bool
-
-	Unsuspensions chan User
 }
 
 func NewRedditUsers(
@@ -36,9 +35,9 @@ func NewRedditUsers(
 		compendiumUpdateInterval:             conf.CompendiumUpdateInterval.Value,
 		AutoUpdateUsersFromCompendiumEnabled: conf.CompendiumUpdateInterval.Value > 0,
 
+		unsuspensions:              make(chan User),
 		unsuspensionInterval:       conf.UnsuspensionInterval.Value,
 		UnsuspensionWatcherEnabled: conf.UnsuspensionInterval.Value > 0,
-		Unsuspensions:              make(chan User),
 	}
 }
 
@@ -175,6 +174,10 @@ func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
 	return nil
 }
 
+func (ru *RedditUsers) Unsuspensions() <-chan User {
+	return ru.unsuspensions
+}
+
 func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
 	ru.logger.Printf("watching unsuspensions/undeletions with interval %s", ru.unsuspensionInterval)
 	for sleepCtx(ctx, ru.unsuspensionInterval) {
@@ -235,7 +238,7 @@ func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
 
 			user.NotFound = res.Exists
 			user.Suspended = res.User.Suspended
-			ru.Unsuspensions <- res.User
+			ru.unsuspensions <- res.User
 
 		}
 
