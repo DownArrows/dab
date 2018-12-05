@@ -195,7 +195,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	}
 
 	if dab.components.State.Discord.Enabled {
-		top_level.Spawn(dab.components.Discord.Run)
+		writers.Spawn(dab.components.Discord.Run)
 	}
 
 	if dab.components.State.Reddit.Enabled && dab.components.State.Discord.Enabled {
