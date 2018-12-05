@@ -13,27 +13,27 @@ import (
 
 const Version = "1.4.4"
 
-type componentConf struct {
+type componentState struct {
 	Enabled bool
 	Name    string
 	Error   error
 }
 
-func (c componentConf) String() string {
+func (c componentState) String() string {
 	if c.Enabled {
 		return fmt.Sprintf("%s: enabled", c.Name)
 	}
 	return fmt.Sprintf("%s: %s", c.Name, c.Error)
 }
 
-type DABComponentsConf struct {
-	Discord componentConf
-	Reddit  componentConf
-	Web     componentConf
+type DABComponentsState struct {
+	Discord componentState
+	Reddit  componentState // subsumes several components related to reddit
+	Web     componentState
 }
 
-func NewDABComponentsConf(conf Configuration) DABComponentsConf {
-	c := DABComponentsConf{}
+func NewDABComponentsState(conf Configuration) DABComponentsState {
+	c := DABComponentsState{}
 
 	reddit_required := map[string]string{
 		"id":         conf.Reddit.Id,
@@ -73,7 +73,7 @@ func NewDABComponentsConf(conf Configuration) DABComponentsConf {
 	return c
 }
 
-func (c DABComponentsConf) String() string {
+func (c DABComponentsState) String() string {
 	return fmt.Sprintf("%s; %s; %s", c.Discord, c.Reddit, c.Web)
 }
 
@@ -92,15 +92,18 @@ type DownArrowsBot struct {
 		UserAdd bool
 	}
 
-	storage *Storage
+	layers struct {
+		Storage *Storage
+		Report  ReportFactory
+		// RedditAPI is also a layer but is passed around as an argument instead
+	}
 
 	components struct {
-		Conf          DABComponentsConf
+		State         DABComponentsState
 		Discord       *DiscordBot
 		RedditScanner *RedditScanner
 		RedditUsers   *RedditUsers
 		RedditSubs    *RedditSubs
-		Report        ReportFactory
 		Web           *WebServer
 	}
 }
@@ -128,33 +131,33 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	if storage, err := NewStorage(dab.conf.Database); err != nil {
 		return err
 	} else {
-		dab.storage = storage
-		defer dab.storage.Close()
+		dab.layers.Storage = storage
+		defer dab.layers.Storage.Close()
 	}
 
 	if dab.runtimeConf.InitDB {
 		return nil
 	}
 
-	dab.components.Report = NewReportFactory(dab.storage, dab.conf.Report)
+	dab.layers.Report = NewReportFactory(dab.layers.Storage, dab.conf.Report)
 	if dab.runtimeConf.Report {
 		return dab.report()
 	}
 
 	if dab.runtimeConf.UserAdd {
-		if !dab.components.Conf.Reddit.Enabled {
-			return dab.components.Conf.Reddit.Error
+		if !dab.components.State.Reddit.Enabled {
+			return dab.components.State.Reddit.Error
 		}
 		return dab.userAdd(ctx)
 	}
 
 	connectors := NewTaskGroup(ctx)
 
-	if dab.components.Conf.Reddit.Enabled {
+	if dab.components.State.Reddit.Enabled {
 		connectors.Spawn(dab.connectReddit)
 	}
 
-	if dab.components.Conf.Discord.Enabled {
+	if dab.components.State.Discord.Enabled {
 		connectors.Spawn(dab.connectDiscord)
 	}
 
@@ -180,31 +183,31 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return readers.Wait().ToError()
 	})
 
-	if dab.storage.PeriodicVacuumEnabled {
-		top_level.Spawn(dab.storage.PeriodicVacuum)
+	if dab.layers.Storage.PeriodicVacuumEnabled {
+		top_level.Spawn(dab.layers.Storage.PeriodicVacuum)
 	}
 
-	if dab.components.Conf.Reddit.Enabled {
+	if dab.components.State.Reddit.Enabled {
 		writers.Spawn(dab.components.RedditScanner.Run)
 		if dab.components.RedditUsers.AutoUpdateUsersFromCompendiumEnabled {
 			writers.Spawn(dab.components.RedditUsers.AutoUpdateUsersFromCompendium)
 		}
 	}
 
-	if dab.components.Conf.Discord.Enabled {
+	if dab.components.State.Discord.Enabled {
 		top_level.Spawn(dab.components.Discord.Run)
 	}
 
-	if dab.components.Conf.Reddit.Enabled && dab.components.Conf.Discord.Enabled {
+	if dab.components.State.Reddit.Enabled && dab.components.State.Discord.Enabled {
 		dab.connectRedditAndDiscord(readers, writers)
 	}
 
-	if dab.components.Conf.Web.Enabled {
-		dab.components.Web = NewWebServer(dab.conf.Web, dab.components.Report, dab.storage)
+	if dab.components.State.Web.Enabled {
+		dab.components.Web = NewWebServer(dab.conf.Web, dab.layers.Report, dab.layers.Storage)
 		top_level.Spawn(dab.components.Web.Run)
 	}
 
-	dab.logger.Print(dab.components.Conf)
+	dab.logger.Print(dab.components.State)
 
 	return top_level.Wait().ToError()
 }
@@ -222,7 +225,7 @@ func (dab *DownArrowsBot) init(args []string) error {
 
 	conf, err := NewConfiguration(*path)
 	dab.conf = conf
-	dab.components.Conf = NewDABComponentsConf(conf)
+	dab.components.State = NewDABComponentsState(conf)
 
 	return err
 }
@@ -248,16 +251,16 @@ func (dab *DownArrowsBot) connectReddit(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	dab.components.RedditScanner = NewRedditScanner(dab.logger, dab.storage, ra, dab.conf.Reddit.RedditScannerConf)
-	dab.components.RedditUsers = NewRedditUsers(dab.logger, dab.storage, ra, dab.conf.Reddit.RedditUsersConf)
-	dab.components.RedditSubs = NewRedditSubs(dab.logger, dab.storage, ra)
+	dab.components.RedditScanner = NewRedditScanner(dab.logger, dab.layers.Storage, ra, dab.conf.Reddit.RedditScannerConf)
+	dab.components.RedditUsers = NewRedditUsers(dab.logger, dab.layers.Storage, ra, dab.conf.Reddit.RedditUsersConf)
+	dab.components.RedditSubs = NewRedditSubs(dab.logger, dab.layers.Storage, ra)
 
 	return nil
 }
 
 func (dab *DownArrowsBot) connectDiscord(ctx context.Context) error {
 	dab.logger.Print("attempting to log into discord")
-	bot, err := NewDiscordBot(dab.storage, dab.logger, dab.conf.Discord.DiscordBotConf)
+	bot, err := NewDiscordBot(dab.layers.Storage, dab.logger, dab.conf.Discord.DiscordBotConf)
 	if err != nil {
 		return err
 	}
@@ -303,8 +306,8 @@ func (dab *DownArrowsBot) connectRedditAndDiscord(readers *TaskGroup, writers *T
 
 func (dab *DownArrowsBot) report() error {
 	dab.logger.Print("printing report for last week")
-	year, week := dab.components.Report.LastWeekCoordinates()
-	report := dab.components.Report.ReportWeek(year, week)
+	year, week := dab.layers.Report.LastWeekCoordinates()
+	report := dab.layers.Report.ReportWeek(year, week)
 	if report.Len() == 0 {
 		return errors.New("empty report")
 	}
@@ -317,7 +320,7 @@ func (dab *DownArrowsBot) userAdd(ctx context.Context) error {
 		return err
 	}
 
-	ru := NewRedditUsers(dab.logger, dab.storage, ra, dab.conf.Reddit.RedditUsersConf)
+	ru := NewRedditUsers(dab.logger, dab.layers.Storage, ra, dab.conf.Reddit.RedditUsersConf)
 
 	usernames := dab.flagSet.Args()
 	for _, username := range usernames {
