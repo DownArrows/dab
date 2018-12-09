@@ -46,12 +46,6 @@ func (rf ReportFactory) Report(start, end time.Time) Report {
 	}
 }
 
-func (rf ReportFactory) DurationUntilNextWeek() time.Duration {
-	year, week := rf.CurrentWeekCoordinates()
-	start := rf.WeekNumToStartDate(year, week+1)
-	return rf.Now().Sub(start)
-}
-
 func (rf ReportFactory) CurrentWeekCoordinates() (uint8, int) {
 	year, week := rf.Now().ISOWeek()
 	return uint8(week), year
