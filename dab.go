@@ -11,7 +11,7 @@ import (
 	"text/template"
 )
 
-const Version = "1.4.4"
+const Version = "1.4.5"
 
 type componentState struct {
 	Enabled bool
@@ -51,7 +51,7 @@ func NewDABComponentsState(conf Configuration) DABComponentsState {
 
 	c.Reddit.Name = "reddit"
 	if len(reddit_invalid) > 0 {
-		c.Reddit.Error = errors.New("missing required fields " + strings.Join(reddit_invalid, ""))
+		c.Reddit.Error = errors.New("missing required fields: " + strings.Join(reddit_invalid, ", "))
 	} else {
 		c.Reddit.Enabled = true
 	}
