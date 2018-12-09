@@ -31,9 +31,12 @@ type RedditSubsAPI interface {
 	SubPosts(context.Context, string, string) ([]Comment, string, error)
 }
 
-const accessTokenURL = "https://www.reddit.com/api/v1/access_token"
+const accessTokenRawURL = "https://www.reddit.com/api/v1/access_token"
 
-const requestBaseURL = "https://oauth.reddit.com"
+var requestBaseURL = &url.URL{
+	Scheme: "https",
+	Host:   "oauth.reddit.com",
+}
 
 type oAuthResponse struct {
 	Token   string `json:"access_token"`
@@ -116,7 +119,7 @@ func (ra *RedditAPI) connect(ctx context.Context) error {
 	}
 	auth_form := strings.NewReader(auth_conf.Encode())
 
-	req, _ := http.NewRequest("POST", accessTokenURL, auth_form)
+	req, _ := http.NewRequest("POST", accessTokenRawURL, auth_form)
 
 	req.Header.Set("User-Agent", ra.userAgent)
 	req.SetBasicAuth(ra.auth.Id, ra.auth.Secret)
@@ -169,7 +172,7 @@ func (ra *RedditAPI) AboutUser(ctx context.Context, username string) UserQuery {
 		return query
 	}
 
-	res := ra.request(ctx, "GET", "/u/"+username+"/about", nil)
+	res := ra.request(ctx, "GET", &url.URL{Path: "/u/" + username + "/about"}, nil)
 	if res.Error != nil {
 		query.Error = res.Error
 		return query
@@ -197,13 +200,13 @@ func (ra *RedditAPI) AboutUser(ctx context.Context, username string) UserQuery {
 }
 
 func (ra *RedditAPI) WikiPage(ctx context.Context, sub, page string) (string, error) {
-	path := "/r/" + sub + "/wiki/" + page
-	res := ra.request(ctx, "GET", path, nil)
+	relative_url := &url.URL{Path: "/r/" + sub + "/wiki/" + page}
+	res := ra.request(ctx, "GET", relative_url, nil)
 	if res.Error != nil {
 		return "", res.Error
 	}
 	if res.Status != 200 {
-		return "", fmt.Errorf("invalid status when fetching '%s': %d", path, res.Status)
+		return "", fmt.Errorf("invalid status when fetching '%s': %d", relative_url, res.Status)
 	}
 
 	parsed := &wikiPage{}
@@ -220,12 +223,14 @@ func (ra *RedditAPI) SubPosts(ctx context.Context, sub string, position string) 
 }
 
 func (ra *RedditAPI) getListing(ctx context.Context, path, position string, nb uint) ([]Comment, string, int, error) {
-	url := fmt.Sprintf("%s?sort=new&limit=%d", path, nb)
+	query := url.Values{}
+	query.Set("sort", "new")
+	query.Set("limit", fmt.Sprintf("%d", nb))
 	if position != "" {
-		url += ("&after=" + position)
+		query.Set("after", position)
 	}
 
-	res := ra.request(ctx, "GET", url, nil)
+	res := ra.request(ctx, "GET", &url.URL{Path: path, RawQuery: query.Encode()}, nil)
 	if res.Error != nil {
 		return nil, position, res.Status, res.Error
 	}
@@ -254,9 +259,16 @@ func (ra *RedditAPI) getListing(ctx context.Context, path, position string, nb u
 	return comments, new_position, res.Status, nil
 }
 
-func (ra *RedditAPI) request(ctx context.Context, verb, path string, data io.Reader) redditResponse {
+func (ra *RedditAPI) request(ctx context.Context, verb string, relative_url *url.URL, data io.Reader) redditResponse {
 	make_req := func() (*http.Request, error) {
-		return http.NewRequest(verb, requestBaseURL+path, data)
+		query, err := url.ParseQuery(relative_url.RawQuery)
+		if err != nil {
+			return nil, err
+		}
+		query.Set("raw_json", "1")
+		relative_url.RawQuery = query.Encode()
+		full_url := requestBaseURL.ResolveReference(relative_url)
+		return http.NewRequest(verb, full_url.String(), data)
 	}
 	return ra.rawRequest(ctx, make_req)
 }
