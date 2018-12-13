@@ -59,7 +59,6 @@ Here is the explanation of each table and their columns:
  - `known_objects`: set of various values to persist for specific purposes
     - `id`: identifier or content of the thing
     - `date`: when this thing was added
-}
 
 ## Administrator manual
 
