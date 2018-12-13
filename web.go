@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"gopkg.in/russross/blackfriday.v2"
+	"github.com/russross/blackfriday"
 	"html/template"
 	"net/http"
 	"strconv"
