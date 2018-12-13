@@ -131,7 +131,7 @@ The command line interface only affects the overall behavior of the program:
  - `-report` Print the report for last week on the standard output and exit.
  - `-useradd` Add one or multiple usernames to be tracked and exit.
 
-### Configuration file
+### Configuration
 
 The configuration file is a JSON file whose top-level data container is a dictionary.
 The lists below show every option, where each title is the key for a sub-dictionary,
@@ -143,62 +143,50 @@ They are JSON strings validated and interpreted according to
 <http://golang.localhost/pkg/time/#ParseDuration> and <http://golang.localhost/pkg/time/#LoadLocation>.
 For Go templates' syntax, see <http://golang.localhost/pkg/text/template/>.
 
-#### Top level
+ - `hide_prefix` *string* (hide/): prefix you can add to usernames to hide them from reports (used by `-useradd` and on Discord)
+ - `timezone` *timezone* (UTC): timezone used to format dates and compute weeks and years
+ - `database`
+    - `backup_max_age` *duration* (24h): if the backup is older than that when a backup is requested, the backup will be refreshed; must be at least one hour
+    - `backup_path` *string* (./dab.db.backup): path to the backup of the database
+    - `cleanup_interval` *duration* (*none*): interval between clean-ups of the database (reduces its size); leave out to disable, else must be at least one hour
+    - `path` *string* (./dab.db): path to the database file
+ - `discord`
+    - `admin` *string* (*none*): Discord ID of the privileged user (use Discord's developer mode to get them);
+      if empty will use the owner of the channels' server, and if no channel is enabled, will disable privileged commands
+    - `general` *string* (*none*): Discord ID of the main channel where loggable links are taken from and welcome messages are posted;
+      required to have welcome messages and logged links, disabled if left empty
+    - `hide_prefix` *string* (*none*): Discord-specific hide prefix when registering users (overrides the global hide prefix)
+    - `highscores` *string* (*none*): Discord ID of the channel where links to high-scoring comments are posted; disabled if left empty
+    - `highscore_threshold` *int* (-1000): score at and below which a comment will be linked to in the highscore channel
+    - `log` *string* (*none*): Discord ID of the channel where links to comments on reddit are reposted; disabled if left empty
+    - `prefix` *string* (!): prefix for commands
+    - `token` *string* (*none*): token to connect to Discord; leave out to disable the Discord component
+    - `welcome` *string* (*none*): Go template of the welcome message; it is provided with two top-level keys,
+      `ChannelsID` and `Member`. `ChannelsID` provides `General`, `Log` and `HighScores`, which contains the numeric ID of those channels.
+      `Member` provides `ID`, `Name`, and `FQN` (name followed by a discriminator). Disables welcome messages if left empty
+ - `reddit`
+    - `compendium_update_interval` *duration* (*none*): interval between each scan of the compendium; leave out to disable, else must be at least an hour
+    - `dvt_interval` *string* (*none*): interval between each check of the downvote sub's new reports; leave out to disable, else must be at least a minute
+    - `full_scan_interval` *duration* (6h): interval between each scan of all users, inactive or not
+    - `id` *string* (*none*): Reddit application ID for the bot (required for users' scanning)
+    - `inactivity_threshold` *duration* (2200h): if a user hasn't commented since that long ago, consider them "inactive" and scan them less often;
+      must be at least one day
+    - `max_age` *duration* (24h): don't get more batches of an user's comments if the oldest comment found is older than that; must be at least one day
+    - `max_batches` *int* (5): maximum number of batches of comments to get from Reddit for a single user before moving to the next one
+    - `password` *string* (*none*): Reddit password for the bot's account (required for users' scanning)
+    - `secret` *string* (*none*): Reddit application secret for the bot (required for users' scanning)
+    - `unsuspension_interval` *duration* (*none*): interval between each batch of checks for suspended or deleted users;
+      leave out to disable, else must be at least one minute
+    - `user_agent` *string* (*none*): Go template for the user agent of the bot on reddit; `OS` and `Version` are provided (required for users' scanning)
+    - `username` *string* (*none*): Reddit username for the bot's account (required for users' scanning)
+ - `report`
+    - `cutoff` *int* (-50): ignore comments whose score is higher than this
+    - `leeway` *duration* (12h): shift back the time window for comments' inclusion in the report to include those that were made late; cannot be negative
+    - `nb_top` *int* (5): maximum number of users to include in the list of statistics for the report
+ - `web`
+    - `listen` *string* (*none*): `hostname:port` or `ip:port` or `:port` (all interface) specification for the webserver to listen to; leave out to disable
 
-(**put those options directly inside the main dictionary**)
-
-  - **hide\_prefix** `string` (hide/): prefix you can add to usernames to hide them from reports (used by `-useradd` and on Discord)
-  - **timezone** `timezone` (UTC): timezone used to format dates and compute weeks and years
-
-#### Database
-
- - **backup\_max\_age** `duration` (24h): if the backup is older than that when a backup is requested, the backup will be refreshed; must be at least one hour
- - **backup\_path** `string` (./dab.db.backup): path to the backup of the database
- - **cleanup\_interval** `duration` (*none*): interval between clean-ups of the database (reduces its size); leave out to disable, else must be at least one hour
- - **path** `string` (./dab.db): path to the database file
-
-#### Discord
-
- - **admin** `string` (*none*): Discord ID of the privileged user (use Discord's developer mode to get them);
- if empty will use the owner of the channels' server, and if no channel is enabled, will disable privileged commands
- - **general** `string` (*none*): Discord ID of the main channel where loggable links are taken from and welcome messages are posted;
- required to have welcome messages and logged links, disabled if left empty
- - **hide\_prefix** `string` (*none*): Discord-specific hide prefix when registering users (overrides the global hide prefix)
- - **highscores** `string` (*none*): Discord ID of the channel where links to high-scoring comments are posted; disabled if left empty
- - **highscore\_threshold** `int` (-1000): score at and below which a comment will be linked to in the highscore channel
- - **log** `string` (*none*): Discord ID of the channel where links to comments on reddit are reposted; disabled if left empty
- - **prefix** `string` (!): prefix for commands
- - **token** `string` (*none*): token to connect to Discord; leave out to disable the Discord component 
- - **welcome** `sting` (*none*): Go template of the welcome message; it is provided with two top-level keys,
-   `ChannelsID` and `Member`. `ChannelsID` provides `General`, `Log` and `HighScores`, which contains the numeric ID of those channels.
-	`Member` provides `ID`, `Name`, and `FQN` (name followed by a discriminator). Disables welcome messages if left empty
-
-#### Reddit
-
- - **compendium\_update\_interval** `duration` (*none*): interval between each scan of the compendium; leave out to disable, else must be at least an hour
- - **dvt\_interval** `string` (*none*): interval between each check of the downvote sub's new reports; leave out to disable, else must be at least a minute
- - **full\_scan\_interval** `duration` (6h): interval between each scan of all users, inactive or not
- - **id** `string` (*none*): Reddit application ID for the bot (required for users' scanning)
- - **inactivity\_threshold** `duration` (2200h): if a user hasn't commented since that long ago, consider them "inactive" and scan them less often; must be at least one day
- - **max\_age** `duration` (24h): don't get more batches of an user's comments if the oldest comment found is older than that; must be at least one day
- - **max\_batches** `int` (5): maximum number of batches of comments to get from Reddit for a single user before moving to the next one
- - **password** `string` (*none*): Reddit password for the bot's account (required for users' scanning)
- - **secret** `string` (*none*): Reddit application secret for the bot (required for users' scanning)
- - **unsuspension\_interval** `duration` (*none*): interval between each batch of checks for suspended or deleted users; leave out to disable, else must be at least one minute
- - **user\_agent** `string` (*none*): Go template for the user agent of the bot on reddit; `OS` and `Version` are provided (required for users' scanning)
- - **username** `string` (*none*): Reddit username for the bot's account (required for users' scanning)
-
-#### Report
-
- - **cutoff** `int` (-50): ignore comments whose score is higher than this
- - **leeway** `duration` (12h): shift back the time window for comments' inclusion in the report to include those that were made late; cannot be negative
- - **nb\_top** `int` (5): maximum number of users to include in the list of statistics for the report
-
-#### Web
-
- - **listen** `string` (*none*): `hostname:port` or `ip:port` or `:port` (all interface) specification for the webserver to listen to; leave out to disable
-
-### Example
+### Sample configuration
 
 Note how the last value of a dictionary must not be followed by a comma:
 
