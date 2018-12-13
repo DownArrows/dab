@@ -66,7 +66,7 @@ type RedditUsersConf struct {
 }
 
 type ReportConf struct {
-	Cutoff   int64    `json:"cutoff"`
+	CutOff   int64    `json:"cutoff"`
 	Leeway   Duration `json:"leeway"`
 	NbTop    uint     `json:"nb_top"`
 	Timezone Timezone `json:"-"`
@@ -164,7 +164,7 @@ func (conf Configuration) HasSaneValues() error {
 		return errors.New("interval between batches of checks of suspended and deleted users can't be less than a minute if non-zero")
 	} else if conf.Report.Leeway.Value < 0 {
 		return errors.New("reports' leeway can't be negative")
-	} else if conf.Report.Cutoff > 0 {
+	} else if conf.Report.CutOff > 0 {
 		return errors.New("reports' cut-off can't be higher than 0")
 	}
 	return nil

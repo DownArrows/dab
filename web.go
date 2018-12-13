@@ -48,18 +48,18 @@ type HTMLReportComment struct {
 }
 
 type WebServer struct {
-	Server          *http.Server
-	Reports         ReportFactory
-	markdownOptions blackfriday.Option
 	backupStorage   BackupStorage
 	done            chan error
+	markdownOptions blackfriday.Option
+	reports         ReportFactory
+	server          *http.Server
 }
 
 func NewWebServer(conf WebConf, reports ReportFactory, bs BackupStorage) *WebServer {
 	md_exts := blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis
 
 	wsrv := &WebServer{
-		Reports:         reports,
+		reports:         reports,
 		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(md_exts)),
 		backupStorage:   bs,
 		done:            make(chan error),
@@ -73,7 +73,7 @@ func NewWebServer(conf WebConf, reports ReportFactory, bs BackupStorage) *WebSer
 	mux.HandleFunc("/reports/source/", wsrv.ReportSource)
 	mux.HandleFunc("/backup", wsrv.Backup)
 
-	wsrv.Server = &http.Server{Addr: conf.Listen, Handler: mux}
+	wsrv.server = &http.Server{Addr: conf.Listen, Handler: mux}
 
 	return wsrv
 }
@@ -84,13 +84,13 @@ func (wsrv *WebServer) fatal(err error) {
 
 func (wsrv *WebServer) Run(ctx context.Context) error {
 	go func() {
-		wsrv.done <- wsrv.Server.ListenAndServe()
+		wsrv.done <- wsrv.server.ListenAndServe()
 	}()
 
 	var err error
 	select {
 	case <-ctx.Done():
-		wsrv.Server.Close()
+		wsrv.server.Close()
 	case err = <-wsrv.done:
 		break
 	}
@@ -111,7 +111,7 @@ func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	report := wsrv.Reports.ReportWeek(week, year)
+	report := wsrv.reports.ReportWeek(week, year)
 	if report.Len() == 0 {
 		http.NotFound(w, r)
 		return
@@ -131,7 +131,7 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	report := wsrv.Reports.ReportWeek(week, year)
+	report := wsrv.reports.ReportWeek(week, year)
 	if report.Len() == 0 {
 		http.NotFound(w, r)
 		return
@@ -161,12 +161,12 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wsrv *WebServer) ReportCurrent(w http.ResponseWriter, r *http.Request) {
-	week, year := wsrv.Reports.CurrentWeekCoordinates()
+	week, year := wsrv.reports.CurrentWeekCoordinates()
 	redirectToReport(week, year, w, r)
 }
 
 func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
-	week, year := wsrv.Reports.LastWeekCoordinates()
+	week, year := wsrv.reports.LastWeekCoordinates()
 	redirectToReport(week, year, w, r)
 }
 

@@ -214,7 +214,10 @@ This readme is written in markdown and is compatible with github-flavored markdo
 ### Conventions
 
  - always use go fmt (you may be able to configure or install a plugin for your editor or IDE to do that automatically)
- - export as few struct fields as possible and type them in camel case
+ - type struct fields and methods names in camel case,
+   but only capitalize the first letter if they are to be used outside of the struct's methods and creation function(s)
+   (we treat unexported fields and methods like private methods and attributes in object-oriented programming,
+   although since everything is in the same package at this point it's nothing more than a convention that isn't enforced by the compiler)
  - sort by name struct fields, or if they are really about different things, separate them with a blank line
  - use snake case for variables inside functions
  - use camel case for constants, types and variables at package-level

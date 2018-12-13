@@ -9,7 +9,7 @@ import (
 )
 
 type ReportFactory struct {
-	cutoff   int64
+	cutOff   int64
 	leeway   time.Duration
 	nbTop    uint
 	storage  ReportFactoryStorage
@@ -21,7 +21,7 @@ func NewReportFactory(storage ReportFactoryStorage, conf ReportConf) ReportFacto
 		storage:  storage,
 		leeway:   conf.Leeway.Value,
 		timezone: conf.Timezone.Value,
-		cutoff:   conf.Cutoff,
+		cutOff:   conf.CutOff,
 		nbTop:    conf.NbTop,
 	}
 }
@@ -36,13 +36,13 @@ func (rf ReportFactory) ReportWeek(week_num uint8, year int) Report {
 
 func (rf ReportFactory) Report(start, end time.Time) Report {
 	return Report{
-		RawComments:       rf.storage.GetCommentsBelowBetween(rf.cutoff, start, end),
+		RawComments:       rf.storage.GetCommentsBelowBetween(rf.cutOff, start, end),
 		Stats:             rf.storage.StatsBetween(start, end),
 		Start:             start,
 		End:               end,
 		MaxStatsSummaries: rf.nbTop,
 		Timezone:          rf.timezone,
-		CutOff:            rf.cutoff,
+		CutOff:            rf.cutOff,
 	}
 }
 

@@ -132,7 +132,7 @@ type DiscordBot struct {
 
 	// miscellaneous
 	AddUser    chan UserQuery
-	Commands   []DiscordCommand
+	commands   []DiscordCommand
 	done       chan error
 	redditLink *regexp.Regexp
 }
@@ -165,16 +165,16 @@ func NewDiscordBot(storage DiscordBotStorage, logger *log.Logger, conf DiscordBo
 		redditLink: regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
 	}
 
-	bot.Commands = bot.GetCommandsDescriptors()
+	bot.commands = bot.getCommandsDescriptors()
 
 	if conf.Welcome != "" || conf.General != "" {
 		session.AddHandler(func(s *discordgo.Session, event *discordgo.GuildMemberAdd) {
-			bot.WelcomeNewMember(event.Member)
+			bot.welcomeNewMember(event.Member)
 		})
 	}
 
-	session.AddHandler(func(s *discordgo.Session, msg *discordgo.MessageCreate) { bot.OnMessage(msg) })
-	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) { bot.OnReady() })
+	session.AddHandler(func(s *discordgo.Session, msg *discordgo.MessageCreate) { bot.onMessage(msg) })
+	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) { bot.onReady() })
 
 	return bot, nil
 }
@@ -209,22 +209,22 @@ func (bot *DiscordBot) isDMChannel(channelID string) (bool, error) {
 	return channel.Type == discordgo.ChannelTypeDM, nil
 }
 
-func (bot *DiscordBot) ChannelMessageSend(channelID, content string) error {
+func (bot *DiscordBot) channelMessageSend(channelID, content string) error {
 	_, err := bot.client.ChannelMessageSend(channelID, content)
 	return err
 }
 
-func (bot *DiscordBot) ChannelEmbedSend(channelID string, embed *discordgo.MessageEmbed) error {
+func (bot *DiscordBot) channelEmbedSend(channelID string, embed *discordgo.MessageEmbed) error {
 	_, err := bot.client.ChannelMessageSendEmbed(channelID, embed)
 	return err
 }
 
-func (bot *DiscordBot) MyColor(channelID string) int {
+func (bot *DiscordBot) myColor(channelID string) int {
 	return bot.client.State.UserColor(bot.client.State.User.ID, channelID)
 }
 
 // this is executed on each (re)-connection to Discord
-func (bot *DiscordBot) OnReady() {
+func (bot *DiscordBot) onReady() {
 	if err := bot.client.UpdateStatus(0, "Downvote Counter"); err != nil {
 		bot.fatal(fmt.Errorf("couldn't set status on discord: %v", err))
 		return
@@ -271,7 +271,7 @@ func (bot *DiscordBot) OnReady() {
 	}
 }
 
-func (bot *DiscordBot) WelcomeNewMember(member *discordgo.Member) {
+func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
 	var msg strings.Builder
 	data := DiscordWelcomeData{
 		ChannelsID: bot.channelsID,
@@ -284,12 +284,12 @@ func (bot *DiscordBot) WelcomeNewMember(member *discordgo.Member) {
 	if err := bot.welcome.Execute(&msg, data); err != nil {
 		bot.fatal(err)
 	}
-	if err := bot.ChannelMessageSend(bot.channelsID.General, msg.String()); err != nil {
+	if err := bot.channelMessageSend(bot.channelsID.General, msg.String()); err != nil {
 		bot.logger.Print(err)
 	}
 }
 
-func (bot *DiscordBot) OnMessage(dg_msg *discordgo.MessageCreate) {
+func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
 	var err error
 
 	if dg_msg.Author.ID == bot.client.State.User.ID {
@@ -332,7 +332,7 @@ Loop:
 			bot.logger.Printf("new post on sub %s by %s on %s", comment.Sub, comment.Author, time.Unix(comment.Created, 0))
 			if comment.Author == "DownvoteTrollingBot" || comment.Author == "DownvoteTrollingBot2" {
 				msg := "@everyone https://www.reddit.com" + comment.Permalink
-				if err := bot.ChannelMessageSend(bot.channelsID.General, msg); err != nil {
+				if err := bot.channelMessageSend(bot.channelsID.General, msg); err != nil {
 					bot.logger.Printf("error when signaling new post on reddit: %v", err)
 				}
 			}
@@ -353,7 +353,7 @@ Loop:
 				state = "deleted"
 			}
 			msg := fmt.Sprintf("RIP /u/%s %s (%s)", user.Name, EmojiPrayingHands, state)
-			if err := bot.ChannelMessageSend(bot.channelsID.General, msg); err != nil {
+			if err := bot.channelMessageSend(bot.channelsID.General, msg); err != nil {
 				bot.logger.Printf("error when signaling a suspension or deletion: %v", err)
 			}
 		case <-ctx.Done():
@@ -369,7 +369,7 @@ Loop:
 		select {
 		case user := <-ch:
 			msg := fmt.Sprintf("%s /u/%s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
-			if err := bot.ChannelMessageSend(bot.channelsID.General, msg); err != nil {
+			if err := bot.channelMessageSend(bot.channelsID.General, msg); err != nil {
 				bot.logger.Printf("error when signaling an unsuspensions: %v", err)
 			}
 		case <-ctx.Done():
@@ -387,7 +387,7 @@ Loop:
 			link := "https://www.reddit.com" + comment.Permalink
 			tmpl := "a comment by /u/%s has reached %d: %s"
 			msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
-			if err := bot.ChannelMessageSend(bot.channelsID.HighScores, msg); err != nil {
+			if err := bot.channelMessageSend(bot.channelsID.HighScores, msg); err != nil {
 				bot.logger.Printf("error when signaling high-score: %v", err)
 			}
 		case <-ctx.Done():
@@ -397,8 +397,8 @@ Loop:
 	return ctx.Err()
 }
 
-func (bot *DiscordBot) MatchCommand(msg DiscordMessage) (DiscordCommand, DiscordMessage) {
-	for _, cmd := range bot.Commands {
+func (bot *DiscordBot) matchCommand(msg DiscordMessage) (DiscordCommand, DiscordMessage) {
+	for _, cmd := range bot.commands {
 		if cmd.Admin && msg.Author.ID != bot.adminID {
 			continue
 		}
@@ -412,7 +412,7 @@ func (bot *DiscordBot) MatchCommand(msg DiscordMessage) (DiscordCommand, Discord
 }
 
 func (bot *DiscordBot) command(msg DiscordMessage) error {
-	cmd, msg := bot.MatchCommand(msg)
+	cmd, msg := bot.matchCommand(msg)
 	if cmd.Command == "" {
 		return nil
 	}
@@ -445,7 +445,7 @@ func (bot *DiscordBot) processRedditLink(msg DiscordMessage) error {
 		return nil
 	}
 	reply := msg.Author.FQN() + ": " + msg.Content
-	return bot.ChannelMessageSend(bot.channelsID.Log, reply)
+	return bot.channelMessageSend(bot.channelsID.Log, reply)
 }
 
 func (bot *DiscordBot) addRandomReactionTo(msg DiscordMessage) error {
@@ -455,7 +455,7 @@ func (bot *DiscordBot) addRandomReactionTo(msg DiscordMessage) error {
 	return bot.client.MessageReactionAdd(msg.ChannelID, msg.ID, reaction)
 }
 
-func (bot *DiscordBot) GetCommandsDescriptors() []DiscordCommand {
+func (bot *DiscordBot) getCommandsDescriptors() []DiscordCommand {
 	return []DiscordCommand{{
 		Command:  "karma",
 		Callback: bot.karma,
@@ -505,7 +505,7 @@ func (bot *DiscordBot) GetCommandsDescriptors() []DiscordCommand {
 
 func (bot *DiscordBot) simpleReply(reply string) func(DiscordMessage) error {
 	return func(msg DiscordMessage) error {
-		return bot.ChannelMessageSend(msg.ChannelID, reply)
+		return bot.channelMessageSend(msg.ChannelID, reply)
 	}
 }
 
@@ -516,7 +516,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 	status := &discordgo.MessageEmbed{
 		Title:       "Registration",
 		Description: fmt.Sprintf("request from <@%s>", msg.Author.ID),
-		Color:       bot.MyColor(msg.ChannelID),
+		Color:       bot.myColor(msg.ChannelID),
 		Fields:      []*discordgo.MessageEmbedField{},
 	}
 
@@ -542,7 +542,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 		}
 	}
 
-	return bot.ChannelEmbedSend(msg.ChannelID, status)
+	return bot.channelEmbedSend(msg.ChannelID, status)
 }
 
 func (bot *DiscordBot) editUsers(action_name string, action func(string) error) func(DiscordMessage) error {
@@ -553,7 +553,7 @@ func (bot *DiscordBot) editUsers(action_name string, action func(string) error) 
 		status := &discordgo.MessageEmbed{
 			Title:       strings.Title(action_name),
 			Description: fmt.Sprintf("request from <@%s>", msg.Author.ID),
-			Color:       bot.MyColor(msg.ChannelID),
+			Color:       bot.myColor(msg.ChannelID),
 			Fields:      []*discordgo.MessageEmbedField{},
 		}
 
@@ -566,7 +566,7 @@ func (bot *DiscordBot) editUsers(action_name string, action func(string) error) 
 			}
 		}
 
-		return bot.ChannelEmbedSend(msg.ChannelID, status)
+		return bot.channelEmbedSend(msg.ChannelID, status)
 	}
 }
 
@@ -577,13 +577,13 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 
 	if !query.Exists {
 		response := fmt.Sprintf("<@%s> user '%s' not found in the database.", msg.Author.ID, username)
-		return bot.ChannelMessageSend(msg.ChannelID, response)
+		return bot.channelMessageSend(msg.ChannelID, response)
 	}
 
 	user := query.User
 	embed := &discordgo.MessageEmbed{
 		Title: "Information about /u/" + user.Name,
-		Color: bot.MyColor(msg.ChannelID),
+		Color: bot.myColor(msg.ChannelID),
 		Fields: []*discordgo.MessageEmbedField{
 			embedField("Created", user.CreatedTime().In(bot.timezone).Format(time.RFC850), true),
 			embedField("Added", user.AddedTime().In(bot.timezone).Format(time.RFC850), true),
@@ -594,7 +594,7 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 	embedAddField(embed, "Suspended", fmt.Sprintf("%t", user.Suspended), true)
 	embedAddField(embed, "Inactive", fmt.Sprintf("%t", user.Inactive), true)
 
-	return bot.ChannelEmbedSend(msg.ChannelID, embed)
+	return bot.channelEmbedSend(msg.ChannelID, embed)
 
 }
 
@@ -608,7 +608,7 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 	if !res.Exists {
 		reply := fmt.Sprintf("<@%s> user %s not found.", msg.Author.ID, username)
-		return bot.ChannelMessageSend(msg.ChannelID, reply)
+		return bot.channelMessageSend(msg.ChannelID, reply)
 	}
 
 	embed := &discordgo.MessageEmbed{
@@ -640,7 +640,7 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 	}
 
 	embedAddField(embed, "Total", fmt.Sprintf("%d", positive+negative), true)
-	return bot.ChannelEmbedSend(msg.ChannelID, embed)
+	return bot.channelEmbedSend(msg.ChannelID, embed)
 }
 
 func TrimUsername(username string) string {
