@@ -133,8 +133,8 @@ The command line interface only affects the overall behavior of the program:
 ### Configuration
 
 The configuration file is a JSON file whose top-level data container is a dictionary.
-The lists below show every option, where each title is the key for a sub-dictionary,
-and follows the pattern `<option's key> <type> (<default>): <explanation>`.
+The list below shows every option, where a sub-list corresponds to a dictionary,
+and each option follows the pattern `<option's key> <type> (<default>): <explanation>`.
 All keys *must* be in lower case.
 
 There are two application-specific types: timezone and duration.
