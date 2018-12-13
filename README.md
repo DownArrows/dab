@@ -41,6 +41,7 @@ Here is the explanation of each table and their columns:
     - `deleted`: 1 if user is marked as deleted (will not be scanned or included in reports anymore)
     - `hidden`: 1 if user is scanned but not shown in reports
     - `inactive`: 1 if considered inactive
+    - `last_scan`: UNIX timestamp of the last time this user was scanned
     - `new`: 1 until all reachable pages of comments of that user have been saved
     - `position`: reddit-specific ID of the position in the pages of comments of that user
  - `users`: view of the `user_archive` table without deleted users,
@@ -278,7 +279,6 @@ Its instantiation shouldn't panic though, it needs to properly report errors and
 
 ### TODO
 
- - add a "last\_scanned" column to tracked table so as to detect when an user needs to be scanned further than max\_age (useful if the bot was down for days)
  - launch the web server while connecting to reddit and discord
  - retry connecting to reddit and discord
  - auto post reports to a specific sub and maintain its wiki

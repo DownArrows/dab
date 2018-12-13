@@ -593,6 +593,9 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 	embedAddField(embed, "Hidden from reports", fmt.Sprintf("%t", user.Hidden), true)
 	embedAddField(embed, "Suspended", fmt.Sprintf("%t", user.Suspended), true)
 	embedAddField(embed, "Inactive", fmt.Sprintf("%t", user.Inactive), true)
+	if user.LastScan > 0 {
+		embedAddField(embed, "Last scan", user.LastScanTime().In(bot.timezone).Format(time.RFC850), true)
+	}
 
 	return bot.channelEmbedSend(msg.ChannelID, embed)
 

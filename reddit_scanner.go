@@ -96,9 +96,13 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 		for i := uint(0); i < rs.maxBatches; i++ {
 			var err error
 			var comments []Comment
-
 			var limit uint
-			if user.New || user.Position != "" || user.BatchSize+rs.commentsLeeway > MaxRedditListingLength {
+			last_scan := time.Now().Round(0).Sub(user.LastScanTime())
+
+			if user.New || // if the user is new, we need to scan everything as fast as possible
+				user.Position != "" || // we don't know how many relevant comments the next page has, so take as many as possible
+				user.BatchSize+rs.commentsLeeway > MaxRedditListingLength || // don't request more than the maximum, else we'll look stupid
+				last_scan > rs.maxAge { // use rs.maxAge as a heuristic to say if too much time has passed since the last scan
 				limit = MaxRedditListingLength
 			} else {
 				limit = user.BatchSize + rs.commentsLeeway
@@ -111,7 +115,7 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 				rs.logger.Printf("error while scanning user %s: %v", user.Name, err)
 			}
 
-			user, err = rs.storage.SaveCommentsUpdateUser(comments, user, rs.maxAge)
+			user, err = rs.storage.SaveCommentsUpdateUser(comments, user, last_scan+rs.maxAge)
 			if err != nil {
 				rs.logger.Printf("error while registering comments of user %s: %v", user.Name, err)
 			}

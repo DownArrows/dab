@@ -35,6 +35,7 @@ type User struct {
 	BatchSize uint   `db:"batch_size" json:"-"`
 	Hidden    bool   `db:"hidden" json:"-"`
 	Inactive  bool   `db:"inactive" json:"-"`
+	LastScan  int64  `db:"last_scan" json:"-"`
 	New       bool   `db:"new" json:"-"`
 	Position  string `db:"position" json:"-"`
 }
@@ -45,6 +46,10 @@ func (u User) CreatedTime() time.Time {
 
 func (u User) AddedTime() time.Time {
 	return time.Unix(u.Added, 0)
+}
+
+func (u User) LastScanTime() time.Time {
+	return time.Unix(u.LastScan, 0)
 }
 
 func (u *User) Username(username string) bool {

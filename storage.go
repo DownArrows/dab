@@ -89,11 +89,12 @@ var initQueries = []string{
 			deleted BOOLEAN DEFAULT 0 NOT NULL,
 			hidden BOOLEAN NOT NULL,
 			inactive BOOLEAN DEFAULT 0 NOT NULL,
+			last_scan INTEGER DEFAULT 0 NOT NULL,
 			new BOOLEAN DEFAULT 1 NOT NULL,
 			position TEXT DEFAULT "" NOT NULL
 		) WITHOUT ROWID`, MaxRedditListingLength),
 	`CREATE INDEX IF NOT EXISTS user_archive_idx
-			ON user_archive (deleted, inactive, suspended, not_found, hidden)`,
+			ON user_archive (deleted, last_scan, inactive, suspended, not_found, hidden)`,
 	`CREATE TABLE IF NOT EXISTS comments (
 			id TEXT PRIMARY KEY,
 			author TEXT NOT NULL,
@@ -116,9 +117,9 @@ var initQueries = []string{
 			date INTEGER NOT NULL
 		) WITHOUT ROWID`,
 	`CREATE VIEW IF NOT EXISTS
-			users(name, created, not_found, suspended, added, batch_size, hidden, inactive, new, position)
+			users(name, created, not_found, suspended, added, batch_size, hidden, inactive, last_scan, new, position)
 		AS
-			SELECT name, created, not_found, suspended, added, batch_size, hidden, inactive, new, position
+			SELECT name, created, not_found, suspended, added, batch_size, hidden, inactive, last_scan, new, position
 			FROM user_archive WHERE deleted = 0`,
 }
 
@@ -357,15 +358,15 @@ func (s *Storage) anyListUsers(q string) []User {
 }
 
 func (s *Storage) ListUsers() []User {
-	return s.anyListUsers("SELECT * FROM users WHERE suspended = 0 AND not_found = 0 ORDER BY name")
+	return s.anyListUsers("SELECT * FROM users WHERE suspended = 0 AND not_found = 0 ORDER BY last_scan")
 }
 
 func (s *Storage) ListSuspendedAndNotFound() []User {
-	return s.anyListUsers("SELECT * FROM users WHERE suspended = 1 OR not_found = 1 ORDER BY name")
+	return s.anyListUsers("SELECT * FROM users WHERE suspended = 1 OR not_found = 1 ORDER BY last_scan")
 }
 
 func (s *Storage) ListActiveUsers() []User {
-	return s.anyListUsers("SELECT * FROM users WHERE inactive = 0 AND suspended = 0 AND not_found = 0 ORDER BY name")
+	return s.anyListUsers("SELECT * FROM users WHERE inactive = 0 AND suspended = 0 AND not_found = 0 ORDER BY last_scan")
 }
 
 func (s *Storage) UpdateInactiveStatus(max_age time.Duration) error {
@@ -394,7 +395,7 @@ func (s *Storage) UpdateInactiveStatus(max_age time.Duration) error {
 // This method may seem to have a lot of logic for something in the storage layer,
 // but most of it used to be in the scanner for reddit and outside of a transaction;
 // putting the data-consistency related logic here simplifies greatly the overall code.
-func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, maxAge time.Duration) (User, error) {
+func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, max_age time.Duration) (User, error) {
 	if user.Suspended {
 		return user, s.SuspendUser(user.Name)
 	} else if user.NotFound {
@@ -422,13 +423,10 @@ func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, maxAge t
 	// Frow now on we don't need to check for an error because if the user doesn't exist,
 	// then the constraints would have made the previous statement fail.
 
-	// Use time.Time.Round to remove the monotonic clock measurement, as
-	// we don't need it for the precision we want and one parameter depends
-	// on an external source (the comments' timestamps).
 	now := time.Now().Round(0)
 	user.BatchSize = 0
 	for _, comment := range comments {
-		if now.Sub(comment.CreatedTime()) < maxAge {
+		if now.Sub(comment.CreatedTime()) < max_age {
 			user.BatchSize++
 		}
 	}
@@ -445,7 +443,10 @@ func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, maxAge t
 		user.BatchSize = MaxRedditListingLength
 	}
 
-	tx.MustExec("UPDATE user_archive SET position = ?, batch_size = ? WHERE name = ?", user.Position, user.BatchSize, user.Name)
+	user.LastScan = now.Unix()
+
+	query := "UPDATE user_archive SET position = ?, batch_size = ?, last_scan = ? WHERE name = ?"
+	tx.MustExec(query, user.Position, user.BatchSize, user.LastScan, user.Name)
 
 	return user, tx.Commit()
 }
