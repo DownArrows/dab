@@ -1,26 +1,43 @@
 # Down Arrows Bot
 
-## User documentation
-
 This bot scans some reddit users, interacts with a discord server of your choice, and build reports about their most downvoted comments.
 It is supposed to run continuously, typically on a server, and was designed to use as few resources as possible.
-If compiled with the default settings it will only depend on a libc.
-It has only been compiled and used on GNU/Linux so far.
 
-## Running and maintenance
+## End user manual
 
-To run it simply call the binary. It will expect a file named `dab.conf.json` in the current directory.
-To use another path for the configuration file use `dab -config /your/custom/path/dab.conf.json` (note that the file can have any name).
-It needs a valid configuration file and to be able to open the database it is configured with (defaults to `dab.db` in the current directory).
-A sample [systemd](https://en.wikipedia.org/wiki/Systemd) unit file is also provided.
+### Web interface
 
-To backup the database, **do not** copy the file it opens (given in the `database` section of the config file, option `path`).
-Only use the built-in backup system by downloading the file through the HTTP interface (which must be enabled in the `web` section by setting `listen`).
-If after the bot has stopped there are files ending in `-shm`, `-wal` and `-journal` in the folder containing the database file,
-**do not** delete them, they probably contain data and deleting them could leave the database corrupted.
-Instead leave them with the database, then re-run and stop the bot normally, or if you just want to repair the database, run it with the `-initdb` option.
-Those files are also present when the bot is running, which is perfectly normal.
-For more information about them see <https://sqlite.org/tempfiles.html>.
+Reports are accessible at `/reports/<year>/<week number>`, `/reports/current` and `/reports/lastweek`.
+
+### Discord commands
+
+Commands must start with the configured prefix, and if they take arguments, must be separated from them by a single white space.
+Some are reserved to the privileged user.
+It accepts usernames as `AGreatUsername` and `/u/AGreatUsername` and `u/AGreatUsername`.
+
+ - `karma` give negative/positive/total karma for the given username
+ - `version` post the bot's version
+ - `register` try to register a list of usernames; if it starts with the hiding prefix the user will be hidden from reports
+ - `unregister` (privileged) unregister one or several user
+ - `purge` (privileged) completely remove from the database one or several users
+ - `info` information about an user: creation date, registration date, suspension or deletion status, inactive status
+ - `hide` hide an user from reports
+ - `unhide` don't hide an user from reports
+ - `sip` or `sipthebep` quote from sipthebep
+ - `sep` or `separator` or `=` post a separation rule
+
+## Administrator manual
+
+DAB has only been compiled and used on GNU/Linux so far.
+It should theoretically work on other platforms.
+
+### Compiling
+
+You need at least Go 1.11, which you can download at <https://golang.org/dl/>, as well as git, the gcc compiler, and the headers of a C library.
+On Debian-based distributions you can get all those dependencies with `apt install golang gcc libc-dev git`.
+The version of Go may not be high enough, in which case download it from the official website and install it manually.
+See <https://golang.org/cmd/go/#hdr-Environment_variables> if you have specific needs.
+Once installed, go into the source folder, run `go get -d` to download the dependencies, and then `go build` (that may take a few minutes the first time).
 
 ### Reddit and Discord credentials
 
@@ -43,36 +60,30 @@ On the redesign, also go in your account's settings, and in the "Privacy & Secur
 At the time of writing, this will redirect you to the old design.
 Once you got a client ID and a secret, put the account's username, its password, the client ID and the secret inside the configuration file.
 
-### Compiling
+### Running and maintenance
 
-You need at least Go 1.11, which you can download at <https://golang.org/dl/>, as well as git, the gcc compiler, and the headers of a C library.
-On Debian-based distributions you can get all those dependencies with `apt install golang gcc libc-dev git`.
-The version of Go may not be high enough, in which case download it from the official website and install it manually.
-See <https://golang.org/cmd/go/#hdr-Environment_variables> if you have specific needs.
-Once installed, go into the source folder, run `go get -d` to download the dependencies, and then `go build` (that may take a few minutes the first time).
+To run it simply call the binary. It will expect a file named `dab.conf.json` in the current directory.
+To use another path for the configuration file use `dab -config /your/custom/path/dab.conf.json` (note that the file can have any name).
+It needs a valid configuration file and to be able to open the database it is configured with (defaults to `dab.db` in the current directory).
+A sample [systemd](https://en.wikipedia.org/wiki/Systemd) unit file is also provided.
 
-### Web interface
+To backup the database, **do not** copy the file it opens (given in the `database` section of the config file, option `path`).
+Only use the built-in backup system by downloading the file with HTTP (which must be enabled in the `web` section by setting `listen`).
+It serves a cached backup if it is not too old (`backup_max_age` in the configuration file), and otherwise creates one before sending it.
+This can be used in a backup script called by cron, like so:
 
-Reports are accessible at `/reports/<year>/<week>`, `/reports/current` and `/reports/lastweek`.
-An uncompressed backup of the database can be downloaded at `/backup`;
-it serves a cached backup if it is not too old, and otherwise creates one before sending it.
+	#!/bin/sh
+	set -e
+	src="/var/lib/dab/db.sqlite3"
+	bak="/srv/dab/dab.db.bak"
+	wget -O"$bak" -q http://localhost:12345/backup
+	rsync -e "ssh -i /root/.ssh/backup" "$bak" backup@anothercomputer:/var/backups/dab.sqlite3
 
-### Discord commands
-
-Commands must start with the configured prefix, and if they take arguments, must be separated from them by a single white space.
-Some are reserved to the privileged user.
-It accepts usernames as `AGreatUsername` and `/u/AGreatUsername` and `u/AGreatUsername`.
-
- - `karma` give negative/positive/total karma for the given username
- - `version` post the bot's version
- - `register` try to register a list of usernames; if it starts with the hiding prefix the user will be hidden from reports
- - `unregister` (privileged) unregister one or several user
- - `purge` (privileged) completely remove from the database one or several users
- - `info` information about an user: creation date, registration date, suspension or deletion status, inactive status
- - `hide` hide an user from reports
- - `unhide` don't hide an user from reports
- - `sip` or `sipthebep` quote from sipthebep
- - `sep` or `separator` or `=` post a separation rule
+If after the bot has stopped there are files ending in `-shm`, `-wal` and `-journal` in the folder containing the database file,
+**do not** delete them, they probably contain data and deleting them could leave the database corrupted.
+Instead leave them with the database, then re-run and stop the bot normally, or if you just want to repair the database, run it with the `-initdb` option.
+Those files are also present when the bot is running, which is perfectly normal.
+For more information about them see <https://sqlite.org/tempfiles.html>.
 
 ### Command line interface 
 
