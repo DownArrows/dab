@@ -24,7 +24,42 @@ It accepts usernames as `AGreatUsername` and `/u/AGreatUsername` and `u/AGreatUs
  - `hide` hide an user from reports
  - `unhide` don't hide an user from reports
  - `sip` or `sipthebep` quote from sipthebep
- - `sep` or `separator` or `=` post a separation rule
+ - `sep` or `separator` or `=` post a separation rule
+
+### Database
+
+If you want to browse the database, you can use something like the [DB Browser for SQLite](https://sqlitebrowser.org/).
+Here is the explanation of each table and their columns:
+
+ - `user_archive`: table of all registered reddit users, deleted or not
+    - `name`: name of the user
+    - `created`: UNIX timestamp of the creation date according to reddit
+    - `not_found`: 1 if trying to get information about this user resulted in a 404 not found error
+    - `suspended`: 1 if suspended according to reddit's API
+    - `added`: UNIX timestamp of the date when the user was added to the database
+    - `batch_size`: Number of comments below the max age on the last scan
+    - `deleted`: 1 if user is marked as deleted (will not be scanned or included in reports anymore)
+    - `hidden`: 1 if user is scanned but not shown in reports
+    - `inactive`: 1 if considered inactive
+    - `new`: 1 until all reachable pages of comments of that user have been saved
+    - `position`: reddit-specific ID of the position in the pages of comments of that user
+ - `users`: view of the `user_archive` table without deleted users,
+ - `comments`: table of comments from registered users
+    - `id`: reddit-specific ID of that comment
+    - `author`: name of the user who made that comment
+    - `score`: score of the comment
+    - `permalink`: path to the comment in the web interface (not a full URL)
+    - `sub`: name of the subreddit where the comment was made
+    - `created`: UNIX timestamp of when the comment was first made
+    - `body`: HTML-escaped textual content of the comment
+ - `seen_posts`: basic information about posts that have already been seen by the bot (avoids repeated actions)
+    - `id`: reddit ID of the post
+    - `sub`: name of the subreddit where the post was made
+    - `created`: UNIX timestamp of when the post was made
+ - `known_objects`: set of various values to persist for specific purposes
+    - `id`: identifier or content of the thing
+    - `date`: when this thing was added
+}
 
 ## Administrator manual
 
@@ -62,14 +97,14 @@ Once you got a client ID and a secret, put the account's username, its password,
 
 ### Running and maintenance
 
-To run it simply call the binary. It will expect a file named `dab.conf.json` in the current directory.
+To run it simply call the binary. It will expect a file named `dab.conf.json` in the current directory.
 To use another path for the configuration file use `dab -config /your/custom/path/dab.conf.json` (note that the file can have any name).
-It needs a valid configuration file and to be able to open the database it is configured with (defaults to `dab.db` in the current directory).
+It needs a valid configuration file and to be able to open the database it is configured with (defaults to `dab.db` in the current directory).
 A sample [systemd](https://en.wikipedia.org/wiki/Systemd) unit file is also provided.
 
 To backup the database, **do not** copy the file it opens (given in the `database` section of the config file, option `path`).
 Only use the built-in backup system by downloading the file with HTTP (which must be enabled in the `web` section by setting `listen`).
-It serves a cached backup if it is not too old (`backup_max_age` in the configuration file), and otherwise creates one before sending it.
+It serves a cached backup if it is not too old (`backup_max_age` in the configuration file), and otherwise creates one before sending it.
 This can be used in a backup script called by cron, like so:
 
 	#!/bin/sh
@@ -85,7 +120,7 @@ Instead leave them with the database, then re-run and stop the bot normally, or 
 Those files are also present when the bot is running, which is perfectly normal.
 For more information about them see <https://sqlite.org/tempfiles.html>.
 
-### Command line interface 
+### Command line interface
 
 Most of the configuration happens in the configuration file.
 The command line interface only affects the overall behavior of the program:
@@ -239,7 +274,7 @@ it checks what the user wants to do, what components can be launched according t
 propagates the root context for proper cancellation, and waits for each component to shut down and returns errors.
 It also logs what components are enabled and why some are disabled.
 Its main tool to achieve that is the `TaskGroup` data structure, which allows to manage groups of functions launched as goroutines.
-Those functions must have the following type signature: `func (context.Context) error`.
+Those functions must have the following type signature: `func (context.Context) error`.
 If the function you want to manage with a task group has a different type signature, wrap it in an anonymous function.
 
 A component is a data structure which has one or several methods that take at least a context and return an error.

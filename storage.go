@@ -79,7 +79,7 @@ func init() {
 
 var initQueries = []string{
 	fmt.Sprintf(`
-		CREATE TABLE IF NOT EXISTS tracked (
+		CREATE TABLE IF NOT EXISTS user_archive (
 			name TEXT PRIMARY KEY,
 			created INTEGER NOT NULL,
 			not_found BOOLEAN DEFAULT 0 NOT NULL,
@@ -92,8 +92,8 @@ var initQueries = []string{
 			new BOOLEAN DEFAULT 1 NOT NULL,
 			position TEXT DEFAULT "" NOT NULL
 		) WITHOUT ROWID`, MaxRedditListingLength),
-	`CREATE INDEX IF NOT EXISTS tracked_idx
-			ON tracked (deleted, inactive, suspended, not_found, hidden)`,
+	`CREATE INDEX IF NOT EXISTS user_archive_idx
+			ON user_archive (deleted, inactive, suspended, not_found, hidden)`,
 	`CREATE TABLE IF NOT EXISTS comments (
 			id TEXT PRIMARY KEY,
 			author TEXT NOT NULL,
@@ -102,7 +102,7 @@ var initQueries = []string{
 			sub TEXT NOT NULL,
 			created INTEGER NOT NULL,
 			body TEXT NOT NULL,
-			FOREIGN KEY (author) REFERENCES tracked(name)
+			FOREIGN KEY (author) REFERENCES user_archive(name)
 		) WITHOUT ROWID`,
 	`CREATE INDEX IF NOT EXISTS comments_stats_idx
 			ON comments (created)`,
@@ -119,7 +119,7 @@ var initQueries = []string{
 			users(name, created, not_found, suspended, added, batch_size, hidden, inactive, new, position)
 		AS
 			SELECT name, created, not_found, suspended, added, batch_size, hidden, inactive, new, position
-			FROM tracked WHERE deleted = 0`,
+			FROM user_archive WHERE deleted = 0`,
 }
 
 type storageBackup struct {
@@ -277,7 +277,7 @@ func (s *Storage) BackupPath() string {
 
 func (s *Storage) AddUser(username string, hidden bool, created int64) error {
 	stmt, err := s.db.Prepare(`
-		INSERT INTO tracked(name, hidden, created, added)
+		INSERT INTO user_archive(name, hidden, created, added)
 		VALUES (?, ?, ?, strftime("%s", CURRENT_TIMESTAMP))`)
 	autopanic(err)
 	defer stmt.Close()
@@ -308,31 +308,31 @@ func (s *Storage) simpleEditUser(query, username string) error {
 }
 
 func (s *Storage) DelUser(username string) error {
-	return s.simpleEditUser("UPDATE tracked SET deleted = 1 WHERE name = ? COLLATE NOCASE", username)
+	return s.simpleEditUser("UPDATE user_archive SET deleted = 1 WHERE name = ? COLLATE NOCASE", username)
 }
 
 func (s *Storage) HideUser(username string) error {
-	return s.simpleEditUser("UPDATE tracked SET hidden = 1 WHERE name = ? COLLATE NOCASE", username)
+	return s.simpleEditUser("UPDATE user_archive SET hidden = 1 WHERE name = ? COLLATE NOCASE", username)
 }
 
 func (s *Storage) UnHideUser(username string) error {
-	return s.simpleEditUser("UPDATE tracked SET hidden = 0 WHERE name = ? COLLATE NOCASE", username)
+	return s.simpleEditUser("UPDATE user_archive SET hidden = 0 WHERE name = ? COLLATE NOCASE", username)
 }
 
 func (s *Storage) SuspendUser(username string) error {
-	return s.simpleEditUser("UPDATE tracked SET suspended = 1 WHERE name = ?", username)
+	return s.simpleEditUser("UPDATE user_archive SET suspended = 1 WHERE name = ?", username)
 }
 
 func (s *Storage) UnSuspendUser(username string) error {
-	return s.simpleEditUser("UPDATE tracked SET suspended = 0 WHERE name = ?", username)
+	return s.simpleEditUser("UPDATE user_archive SET suspended = 0 WHERE name = ?", username)
 }
 
 func (s *Storage) NotFoundUser(username string) error {
-	return s.simpleEditUser("UPDATE tracked SET not_found = 1 WHERE name = ?", username)
+	return s.simpleEditUser("UPDATE user_archive SET not_found = 1 WHERE name = ?", username)
 }
 
 func (s *Storage) FoundUser(username string) error {
-	return s.simpleEditUser("UPDATE tracked SET not_found = 0 WHERE name = ?", username)
+	return s.simpleEditUser("UPDATE user_archive SET not_found = 0 WHERE name = ?", username)
 }
 
 func (s *Storage) PurgeUser(username string) error {
@@ -340,7 +340,7 @@ func (s *Storage) PurgeUser(username string) error {
 
 	// This must happen before deleting the user due to the foreign key constraints
 	tx.MustExec("DELETE FROM comments WHERE author = ? COLLATE NOCASE", username)
-	r := tx.MustExec("DELETE FROM tracked WHERE name = ? COLLATE NOCASE", username)
+	r := tx.MustExec("DELETE FROM user_archive WHERE name = ? COLLATE NOCASE", username)
 	if nb, _ := r.RowsAffected(); nb == 0 {
 		tx.Rollback()
 		return fmt.Errorf("no user named '%s'", username)
@@ -372,7 +372,7 @@ func (s *Storage) UpdateInactiveStatus(max_age time.Duration) error {
 	// We use two SQL statements instead of one because SQLite is too limited
 	// to do that in a single statement that isn't exceedingly complicated.
 	template := `
-		UPDATE tracked SET inactive = ?
+		UPDATE user_archive SET inactive = ?
 		WHERE name IN (
 			SELECT author FROM (
 				SELECT author, max(created) AS last
@@ -434,7 +434,7 @@ func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, maxAge t
 	}
 
 	if user.New && user.Position == "" { // end of the listing reached
-		tx.MustExec("UPDATE tracked SET new = 0 WHERE name = ?", user.Name)
+		tx.MustExec("UPDATE user_archive SET new = 0 WHERE name = ?", user.Name)
 	}
 
 	if !user.New && user.BatchSize < uint(len(comments)) { // position resetting doesn't apply to new users
@@ -445,7 +445,7 @@ func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, maxAge t
 		user.BatchSize = MaxRedditListingLength
 	}
 
-	tx.MustExec("UPDATE tracked SET position = ?, batch_size = ? WHERE name = ?", user.Position, user.BatchSize, user.Name)
+	tx.MustExec("UPDATE user_archive SET position = ?, batch_size = ? WHERE name = ?", user.Position, user.BatchSize, user.Name)
 
 	return user, tx.Commit()
 }
