@@ -11,7 +11,7 @@ Reports are accessible at `/reports/<year>/<week number>`, `/reports/current` an
 
 ### Discord commands
 
-Commands must start with the configured prefix, and if they take arguments, must be separated from them by a single white space.
+Commands must start with the configured prefix (defaults to `!`), and if they take arguments, must be separated from them by a single white space.
 Some are reserved to the privileged user.
 It accepts usernames as `AGreatUsername` and `/u/AGreatUsername` and `u/AGreatUsername`.
 
@@ -25,6 +25,10 @@ It accepts usernames as `AGreatUsername` and `/u/AGreatUsername` and `u/AGreatUs
  - `unhide` don't hide an user from reports
  - `sip` or `sipthebep` quote from sipthebep
  - `sep` or `separator` or `=` post a separation rule
+
+If you post a link in the main channel that contains a link to a comment on reddit,
+it will be reposted on the log channel if the administrator of the bot has enabled this feature.
+To prevent that, add the command `nolog` anywhere in your comment.
 
 ### Database
 
