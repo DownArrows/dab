@@ -145,7 +145,7 @@ type Storage struct {
 		SubPostIDsLock sync.Mutex
 	}
 
-	PeriodicVacuumEnabled bool
+	PeriodicCleanupEnabled bool
 }
 
 func NewStorage(conf StorageConf) (*Storage, error) {
@@ -158,7 +158,7 @@ func NewStorage(conf StorageConf) (*Storage, error) {
 			MaxAge: conf.BackupMaxAge.Value,
 		},
 
-		PeriodicVacuumEnabled: conf.CleanupInterval.Value > 0,
+		PeriodicCleanupEnabled: conf.CleanupInterval.Value > 0,
 	}
 
 	db, err := sql.Open(DatabaseDriverName, fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", s.path))
@@ -226,9 +226,12 @@ func (s *Storage) Close() error {
  Maintenance
 ************/
 
-func (s *Storage) PeriodicVacuum(ctx context.Context) error {
+func (s *Storage) PeriodicCleanup(ctx context.Context) error {
 	for sleepCtx(ctx, s.cleanupInterval) {
 		if _, err := s.db.ExecContext(ctx, "PRAGMA incremental_vacuum"); err != nil {
+			return err
+		}
+		if _, err := s.db.ExecContext(ctx, "PRAGMA optimize"); err != nil {
 			return err
 		}
 	}

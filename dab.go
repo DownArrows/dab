@@ -183,8 +183,8 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return readers.Wait().ToError()
 	})
 
-	if dab.layers.Storage.PeriodicVacuumEnabled {
-		top_level.Spawn(dab.layers.Storage.PeriodicVacuum)
+	if dab.layers.Storage.PeriodicCleanupEnabled {
+		top_level.Spawn(dab.layers.Storage.PeriodicCleanup)
 	}
 
 	if dab.components.State.Reddit.Enabled {
