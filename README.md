@@ -166,7 +166,8 @@ For Go templates' syntax, see <http://golang.localhost/pkg/text/template/>.
  - `database`
     - `backup_max_age` *duration* (24h): if the backup is older than that when a backup is requested, the backup will be refreshed; must be at least one hour
     - `backup_path` *string* (./dab.db.backup): path to the backup of the database
-    - `cleanup_interval` *duration* (*none*): interval between clean-ups of the database (reduces its size); leave out to disable, else must be at least one hour
+    - `cleanup_interval` *duration* (*none*): interval between clean-ups of the database (reduces its size and optimizes queries);
+       leave out to disable, else must be at least one minute
     - `path` *string* (./dab.db): path to the database file
  - `discord`
     - `admin` *string* (*none*): Discord ID of the privileged user (use Discord's developer mode to get them);
