@@ -78,6 +78,7 @@ func init() {
 }
 
 var initQueries = []string{
+	"PRAGMA auto_vacuum = 'incremental'",
 	fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS user_archive (
 			name TEXT PRIMARY KEY,
@@ -224,7 +225,7 @@ func (s *Storage) Close() error {
 
 func (s *Storage) PeriodicVacuum(ctx context.Context) error {
 	for sleepCtx(ctx, s.cleanupInterval) {
-		if _, err := s.db.ExecContext(ctx, "VACUUM"); err != nil {
+		if _, err := s.db.ExecContext(ctx, "PRAGMA incremental_vacuum"); err != nil {
 			return err
 		}
 	}

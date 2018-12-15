@@ -15,7 +15,7 @@ const Defaults string = `{
 	"database": {
 		"backup_max_age": "24h",
 		"backup_path": "./dab.db.backup",
-		"cleanup_interval": "6h",
+		"cleanup_interval": "30m",
 		"path": "./dab.db"
 	},
 
@@ -146,8 +146,8 @@ func (conf Configuration) HasSaneValues() error {
 		return errors.New("backup max age before renewal can't be less than an hour")
 	} else if conf.Database.Path == conf.Database.BackupPath {
 		return errors.New("backup path can't be the same as the database's path")
-	} else if val := conf.Database.CleanupInterval.Value; val != 0 && val < time.Hour {
-		return errors.New("interval between database cleanups can't be less than an hour")
+	} else if val := conf.Database.CleanupInterval.Value; val != 0 && val < time.Minute {
+		return errors.New("interval between database cleanups can't be less than a minute")
 	} else if val := conf.Reddit.CompendiumUpdateInterval.Value; val != 0 && val < time.Minute {
 		return errors.New("interval between each check of the compendium can't be less than a minute if non-zero")
 	} else if conf.Reddit.FullScanInterval.Value < time.Hour {
