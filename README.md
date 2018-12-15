@@ -32,6 +32,20 @@ To prevent that, add the command `nolog` anywhere in your comment.
 
 ### Database
 
+The database is an SQLite file.
+You can use a file identification tool (like `file` on UNIX-like OSes) to get information about it.
+It has the application ID `3499` (or `dab` in hexadecimal),
+and the version of the bot that last wrote into the database is encoded in the "user version" field
+as an integer, which you can decode with this python script:
+
+	encoded = # put the version integer here
+	major = encoded // 2**(2*8)
+	encoded %= 2**(2*8)
+	minor = encoded // 2**8
+	bugfix = encoded % 2**8
+	version = "%d.%d.%d" % (major, minor, bugfix)
+	print(version)
+
 If you want to browse the database, you can use something like the [DB Browser for SQLite](https://sqlitebrowser.org/).
 Here is the explanation of each table and their columns:
 
