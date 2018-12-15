@@ -62,6 +62,8 @@ type KnownObjects interface {
 	SaveKnownObject(string) error
 }
 
+const ApplicationFileID int32 = 0x00000dab
+
 var ErrNoComment = errors.New("no comment found")
 
 const DatabaseDriverName = "sqlite3_dab"
@@ -79,6 +81,7 @@ func init() {
 
 var initQueries = []string{
 	"PRAGMA auto_vacuum = 'incremental'",
+	fmt.Sprintf("PRAGMA application_id = %d", ApplicationFileID),
 	fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS user_archive (
 			name TEXT PRIMARY KEY,
