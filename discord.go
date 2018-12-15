@@ -462,7 +462,7 @@ func (bot *DiscordBot) getCommandsDescriptors() []DiscordCommand {
 		HasArgs:  true,
 	}, {
 		Command:  "version",
-		Callback: bot.simpleReply(Version),
+		Callback: bot.simpleReply(Version.String()),
 		Admin:    true,
 	}, {
 		Command:  "register",

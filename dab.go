@@ -11,7 +11,7 @@ import (
 	"text/template"
 )
 
-const Version = "1.6.0"
+var Version = version{1, 6, 1}
 
 type componentState struct {
 	Enabled bool

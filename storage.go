@@ -82,6 +82,7 @@ func init() {
 var initQueries = []string{
 	"PRAGMA auto_vacuum = 'incremental'",
 	fmt.Sprintf("PRAGMA application_id = %d", ApplicationFileID),
+	fmt.Sprintf("PRAGMA user_version = %d", Version.ToInt32()),
 	fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS user_archive (
 			name TEXT PRIMARY KEY,
