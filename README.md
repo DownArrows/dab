@@ -35,16 +35,30 @@ To prevent that, add the command `nolog` anywhere in your comment.
 The database is an SQLite file.
 You can use a file identification tool (like `file` on UNIX-like OSes) to get information about it.
 It has the application ID `3499` (or `dab` in hexadecimal),
-and the version of the bot that last wrote into the database is encoded in the "user version" field
-as an integer, which you can decode with this python script:
+and the version of the bot that last wrote into the database is encoded in the "user version" field.
+You can check an SQLite file is a valid DAB database and get its version with the following python (2 and 3) script:
 
-	encoded = # put the version integer here
-	major = encoded // 2**(2*8)
-	encoded %= 2**(2*8)
-	minor = encoded // 2**8
-	bugfix = encoded % 2**8
-	version = "%d.%d.%d" % (major, minor, bugfix)
-	print(version)
+	import sys
+	import struct
+	db_path = sys.argv[1]
+	with open(db_path, "rb") as f:
+		 # https://www.sqlite.org/fileformat2.html#database_header
+		 if f.read(16) != b"SQLite format 3\x00":
+			  print("'{path}' is not an SQLite 3 file.".format(path=db_path))
+			  exit(1)
+		 f.seek(68) # application ID
+		 app_id = struct.unpack(">L", f.read(4))[0]
+		 if app_id != 0xdab:
+			  msg = "'{path}' has incorrect application id {id} (expected 0xdab)."
+			  print(msg.format(path=db_path, id=app_id))
+			  exit(1)
+		 f.seek(60) # user version
+		 v = bytearray(f.read(4))
+		 msg = "File last written by DAB version {major}.{minor}.{bugfix}."
+		 print(msg.format(major=v[1], minor=v[2], bugfix=v[3]))
+
+Save this script in a file, for example named `dab_db.py`, and run it on `dab.db` with `python dab_db.py dab.db`.
+
 
 If you want to browse the database, you can use something like the [DB Browser for SQLite](https://sqlitebrowser.org/).
 Here is the explanation of each table and their columns:
