@@ -21,6 +21,13 @@ func SleepCtx(ctx context.Context, duration time.Duration) bool {
 	}
 }
 
+// Launches and shuts down a group of goroutine which take a context and return an error.
+// Use TaskGroup.Spawn to launch functions asynchronously,
+// and once you're done use TaskGroup.Wait to wait on them.
+// To cancel a TaskGroup, use TaskGroup.Cancel, or cancel the context you passed
+// when creating the TaskGroup.
+// TaskGroup.Wait returns a type of error that contains multiple errors and which
+// can be converted to a normal error that can be usefully compared to nil.
 type TaskGroup struct {
 	cancel  context.CancelFunc
 	context context.Context
@@ -113,6 +120,7 @@ func (eg *ErrorGroup) ToError() error {
 	return eg
 }
 
+// Set of strings that can be used from multiple goroutines.
 type SyncSet struct {
 	sync.RWMutex
 	data map[string]bool
