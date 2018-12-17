@@ -99,7 +99,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	if err := connectors.Wait().ToError(); err != nil {
 		return err
 	}
-	if isCancellation(ctx.Err()) {
+	if IsCancellation(ctx.Err()) {
 		return nil
 	}
 

@@ -294,12 +294,13 @@ They are managed by the `DownArrowsBot` data structure in `dab.go`;
 it checks what the user wants to do, what components can be launched according to the configuration file,
 propagates the root context for proper cancellation, and waits for each component to shut down and returns errors.
 It also logs what components are enabled and why some are disabled.
-Its main tool to achieve that is the `TaskGroup` data structure, which allows to manage groups of functions launched as goroutines.
+Its main tool to achieve that is the `TaskGroup` data structure (in `concurrency.go`),
+which allows to manage groups of functions launched as goroutines.
 Those functions must have the following type signature: `func (context.Context) error`.
 If the function you want to manage with a task group has a different type signature, wrap it in an anonymous function.
 
 A component is a data structure which has one or several methods that take at least a context and return an error.
-See the `DownArrowsBot` data structure definition for the list of components.
+See the `DownArrowsBot` data structure definition in `dab.go` for the list of components.
 Since goroutines that write to channels would block if the goroutines reading the channels were to be stopped before them,
 a task group only for writers is used and stopped before the task group for readers, allowing for proper and orderly shutdown.
 Make sure that any function spawned by a task group properly returns if it receives a cancellation signal at any point

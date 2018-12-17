@@ -26,10 +26,10 @@ func (rs *RedditSubs) NewPostsOnSub(ctx context.Context, sub string, ch chan<- C
 	// This assumes the sub isn't empty
 	first_time := (rs.storage.NbKnownPostIDs(sub) == 0)
 
-	for sleepCtx(ctx, sleep) {
+	for SleepCtx(ctx, sleep) {
 
 		posts, _, err := rs.api.SubPosts(ctx, sub, "")
-		if isCancellation(err) {
+		if IsCancellation(err) {
 			return err
 		} else if err != nil {
 			rs.logger.Printf("error when watching sub %s: %v", sub, err)

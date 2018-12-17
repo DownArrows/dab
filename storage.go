@@ -228,7 +228,7 @@ func (s *Storage) Close() error {
 ************/
 
 func (s *Storage) PeriodicCleanup(ctx context.Context) error {
-	for sleepCtx(ctx, s.cleanupInterval) {
+	for SleepCtx(ctx, s.cleanupInterval) {
 		if _, err := s.db.ExecContext(ctx, "PRAGMA incremental_vacuum"); err != nil {
 			return err
 		}

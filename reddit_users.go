@@ -96,7 +96,7 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 
 func (ru *RedditUsers) AutoUpdateUsersFromCompendium(ctx context.Context) error {
 	ru.logger.Printf("updating users from the compendium with interval %s", ru.compendiumUpdateInterval)
-	for sleepCtx(ctx, ru.compendiumUpdateInterval) {
+	for SleepCtx(ctx, ru.compendiumUpdateInterval) {
 		if err := ru.UpdateUsersFromCompendium(ctx); err != nil {
 			return err
 		}
@@ -148,7 +148,7 @@ func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
 		}
 
 		result := ru.AddUser(ctx, username, false, false)
-		if isCancellation(result.Error) {
+		if IsCancellation(result.Error) {
 			return result.Error
 		} else if result.Error != nil {
 			if !result.Exists {
@@ -180,12 +180,12 @@ func (ru *RedditUsers) Unsuspensions() <-chan User {
 
 func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
 	ru.logger.Printf("watching unsuspensions/undeletions with interval %s", ru.unsuspensionInterval)
-	for sleepCtx(ctx, ru.unsuspensionInterval) {
+	for SleepCtx(ctx, ru.unsuspensionInterval) {
 
 		for _, user := range ru.storage.ListSuspendedAndNotFound() {
 
 			res := ru.api.AboutUser(ctx, user.Name)
-			if isCancellation(res.Error) {
+			if IsCancellation(res.Error) {
 				return res.Error
 			}
 			if res.Error != nil {

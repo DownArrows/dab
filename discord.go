@@ -531,7 +531,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 		bot.AddUser <- UserQuery{User: User{Name: name, Hidden: hidden}}
 		reply := <-bot.AddUser
 
-		if isCancellation(reply.Error) {
+		if IsCancellation(reply.Error) {
 			continue
 		} else if reply.Error != nil {
 			embedAddField(status, reply.User.Name, fmt.Sprintf("%s %s", EmojiCrossMark, reply.Error), false)
