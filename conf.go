@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
+	"strings"
 	"time"
 )
 
@@ -168,6 +170,70 @@ func (conf Configuration) HasSaneValues() error {
 		return errors.New("reports' cut-off can't be higher than 0")
 	}
 	return nil
+}
+
+func (conf Configuration) Components() ComponentsConf {
+	c := ComponentsConf{}
+
+	reddit_required := map[string]string{
+		"id":         conf.Reddit.Id,
+		"password":   conf.Reddit.Password,
+		"secret":     conf.Reddit.Secret,
+		"user agent": conf.Reddit.UserAgent,
+		"username":   conf.Reddit.Username,
+	}
+	var reddit_invalid []string
+	for name, value := range reddit_required {
+		if value == "" {
+			reddit_invalid = append(reddit_invalid, name)
+		}
+	}
+
+	c.Reddit.Name = "reddit"
+	if len(reddit_invalid) > 0 {
+		c.Reddit.Error = errors.New("missing required fields: " + strings.Join(reddit_invalid, ", "))
+	} else {
+		c.Reddit.Enabled = true
+	}
+
+	c.Discord.Name = "discord"
+	if conf.Discord.Token == "" {
+		c.Discord.Error = errors.New("empty token")
+	} else {
+		c.Discord.Enabled = true
+	}
+
+	c.Web.Name = "web server"
+	if conf.Web.Listen == "" {
+		c.Web.Error = errors.New("missing or empty listen specification")
+	} else {
+		c.Web.Enabled = true
+	}
+
+	return c
+}
+
+type componentConf struct {
+	Enabled bool
+	Name    string
+	Error   error
+}
+
+func (c componentConf) String() string {
+	if c.Enabled {
+		return fmt.Sprintf("%s: enabled", c.Name)
+	}
+	return fmt.Sprintf("%s: %s", c.Name, c.Error)
+}
+
+type ComponentsConf struct {
+	Discord componentConf
+	Reddit  componentConf // subsumes several components related to reddit
+	Web     componentConf
+}
+
+func (c ComponentsConf) String() string {
+	return fmt.Sprintf("%s; %s; %s", c.Discord, c.Reddit, c.Web)
 }
 
 type Duration struct {

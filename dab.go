@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"log"
 	"strings"
@@ -12,70 +11,6 @@ import (
 )
 
 var Version = version{1, 6, 1}
-
-type componentState struct {
-	Enabled bool
-	Name    string
-	Error   error
-}
-
-func (c componentState) String() string {
-	if c.Enabled {
-		return fmt.Sprintf("%s: enabled", c.Name)
-	}
-	return fmt.Sprintf("%s: %s", c.Name, c.Error)
-}
-
-type DABComponentsState struct {
-	Discord componentState
-	Reddit  componentState // subsumes several components related to reddit
-	Web     componentState
-}
-
-func NewDABComponentsState(conf Configuration) DABComponentsState {
-	c := DABComponentsState{}
-
-	reddit_required := map[string]string{
-		"id":         conf.Reddit.Id,
-		"password":   conf.Reddit.Password,
-		"secret":     conf.Reddit.Secret,
-		"user agent": conf.Reddit.UserAgent,
-		"username":   conf.Reddit.Username,
-	}
-	var reddit_invalid []string
-	for name, value := range reddit_required {
-		if value == "" {
-			reddit_invalid = append(reddit_invalid, name)
-		}
-	}
-
-	c.Reddit.Name = "reddit"
-	if len(reddit_invalid) > 0 {
-		c.Reddit.Error = errors.New("missing required fields: " + strings.Join(reddit_invalid, ", "))
-	} else {
-		c.Reddit.Enabled = true
-	}
-
-	c.Discord.Name = "discord"
-	if conf.Discord.Token == "" {
-		c.Discord.Error = errors.New("empty token")
-	} else {
-		c.Discord.Enabled = true
-	}
-
-	c.Web.Name = "web server"
-	if conf.Web.Listen == "" {
-		c.Web.Error = errors.New("missing or empty listen specification")
-	} else {
-		c.Web.Enabled = true
-	}
-
-	return c
-}
-
-func (c DABComponentsState) String() string {
-	return fmt.Sprintf("%s; %s; %s", c.Discord, c.Reddit, c.Web)
-}
 
 type DownArrowsBot struct {
 	flagSet    *flag.FlagSet
@@ -99,7 +34,7 @@ type DownArrowsBot struct {
 	}
 
 	components struct {
-		State         DABComponentsState
+		ConfState     ComponentsConf
 		Discord       *DiscordBot
 		RedditScanner *RedditScanner
 		RedditUsers   *RedditUsers
@@ -145,19 +80,19 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	}
 
 	if dab.runtimeConf.UserAdd {
-		if !dab.components.State.Reddit.Enabled {
-			return dab.components.State.Reddit.Error
+		if !dab.components.ConfState.Reddit.Enabled {
+			return dab.components.ConfState.Reddit.Error
 		}
 		return dab.userAdd(ctx)
 	}
 
 	connectors := NewTaskGroup(ctx)
 
-	if dab.components.State.Reddit.Enabled {
+	if dab.components.ConfState.Reddit.Enabled {
 		connectors.Spawn(dab.connectReddit)
 	}
 
-	if dab.components.State.Discord.Enabled {
+	if dab.components.ConfState.Discord.Enabled {
 		connectors.Spawn(dab.connectDiscord)
 	}
 
@@ -187,27 +122,27 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		top_level.Spawn(dab.layers.Storage.PeriodicCleanup)
 	}
 
-	if dab.components.State.Reddit.Enabled {
+	if dab.components.ConfState.Reddit.Enabled {
 		writers.Spawn(dab.components.RedditScanner.Run)
 		if dab.components.RedditUsers.AutoUpdateUsersFromCompendiumEnabled {
 			writers.Spawn(dab.components.RedditUsers.AutoUpdateUsersFromCompendium)
 		}
 	}
 
-	if dab.components.State.Discord.Enabled {
+	if dab.components.ConfState.Discord.Enabled {
 		writers.Spawn(dab.components.Discord.Run)
 	}
 
-	if dab.components.State.Reddit.Enabled && dab.components.State.Discord.Enabled {
+	if dab.components.ConfState.Reddit.Enabled && dab.components.ConfState.Discord.Enabled {
 		dab.connectRedditAndDiscord(readers, writers)
 	}
 
-	if dab.components.State.Web.Enabled {
+	if dab.components.ConfState.Web.Enabled {
 		dab.components.Web = NewWebServer(dab.conf.Web, dab.layers.Report, dab.layers.Storage)
 		top_level.Spawn(dab.components.Web.Run)
 	}
 
-	dab.logger.Print(dab.components.State)
+	dab.logger.Print(dab.components.ConfState)
 
 	return top_level.Wait().ToError()
 }
@@ -225,7 +160,7 @@ func (dab *DownArrowsBot) init(args []string) error {
 
 	conf, err := NewConfiguration(*path)
 	dab.conf = conf
-	dab.components.State = NewDABComponentsState(conf)
+	dab.components.ConfState = conf.Components()
 
 	return err
 }
