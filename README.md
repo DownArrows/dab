@@ -136,7 +136,19 @@ Once you got a client ID and a secret, put the account's username, its password,
 To run it simply call the binary. It will expect a file named `dab.conf.json` in the current directory.
 To use another path for the configuration file use `dab -config /your/custom/path/dab.conf.json` (note that the file can have any name).
 It needs a valid configuration file and to be able to open the database it is configured with (defaults to `dab.db` in the current directory).
-A sample [systemd](https://en.wikipedia.org/wiki/Systemd) unit file is also provided.
+
+If you want to run it with [systemd](https://en.wikipedia.org/wiki/Systemd), here is a sample unit file to get you started:
+
+	[Unit]
+	Description=DAB (Down Arrow Bot)
+	After=network.target
+
+	[Install]
+	WantedBy=multi-user.target
+
+	[Service]
+	ExecStart=/usr/local/bin/dab -config /etc/dab.conf.json
+	Restart=on-failure
 
 To backup the database, **do not** copy the file it opens (given in the `database` section of the config file, option `path`).
 Only use the built-in backup system by downloading the file with HTTP (which must be enabled in the `web` section by setting `listen`).
