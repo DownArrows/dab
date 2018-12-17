@@ -98,6 +98,10 @@ Here is the explanation of each table and their columns:
 DAB has only been compiled and used on GNU/Linux so far.
 It should theoretically work on other platforms.
 
+The configuration is organized around three main components — discord, reddit, the web server — that can be activated independently.
+You can only launch the web server on an already populated database, or only scan reddit and don't connect to discord.
+See the section on the available configuration options to see what is necessary to enable each component.
+
 ### Compiling
 
 You need at least Go 1.11, which you can download at <https://golang.org/dl/>, as well as git, the gcc compiler, and the headers of a C library.
