@@ -103,6 +103,8 @@ The configuration is organized around three main components — discord, reddit,
 You can only launch the web server on an already populated database, or only scan reddit and don't connect to discord.
 See the section on the available configuration options to see what is necessary to enable each component.
 
+Versioning follows [semver](https://semver.org/).
+
 ### Compiling
 
 You need at least Go 1.11, which you can download at <https://golang.org/dl/>, as well as git, the gcc compiler, and the headers of a C library.
@@ -307,6 +309,7 @@ This readme is written in markdown and is compatible with github-flavored markdo
     3. file-specific types followed by the function to create them and then their methods
     4. the central type, followed by the function to create it, then the methods
  - for data structures that are used by several other parts of the code but for different sets of methods, define an interface for each usage of the data structure so that one can know at a glance who uses what
+ - increment the version according to semver by changing the variable `Version` in `dab.go`
 
 ### Architecture
 

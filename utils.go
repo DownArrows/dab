@@ -35,17 +35,17 @@ func (v version) Minor() uint8 {
 	return v[1]
 }
 
-func (v version) BugFix() uint8 {
+func (v version) Patch() uint8 {
 	return v[2]
 }
 
 func (v version) String() string {
-	return fmt.Sprintf("%d.%d.%d", v.Major(), v.Minor(), v.BugFix())
+	return fmt.Sprintf("%d.%d.%d", v.Major(), v.Minor(), v.Patch())
 }
 
 // Encodes the version on the lower three bytes of a 32 bits integer.
 func (v version) ToInt32() int32 {
-	return (int32(v.Major()) * 65536) + (int32(v.Minor()) * 256) + int32(v.BugFix())
+	return (int32(v.Major()) * 65536) + (int32(v.Minor()) * 256) + int32(v.Patch())
 }
 
 func versionFromInt32(encoded int32) version {
@@ -54,7 +54,7 @@ func versionFromInt32(encoded int32) version {
 	encoded %= 65536
 	minor := encoded / 256
 
-	bugfix := encoded % 256
+	patch := encoded % 256
 
-	return version{byte(major), byte(minor), byte(bugfix)}
+	return version{byte(major), byte(minor), byte(patch)}
 }

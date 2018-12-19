@@ -10,7 +10,7 @@ import (
 	"text/template"
 )
 
-var Version = version{1, 6, 1}
+var Version = version{1, 6, 2}
 
 type DownArrowsBot struct {
 	flagSet    *flag.FlagSet
