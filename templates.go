@@ -46,6 +46,7 @@ var HTMLReportPage = autoHTMLTemplate("HTMLReportPage", `
 <!DOCTYPE html>
 <head>
 	<meta charset="utf-8"/>
+	<meta name="viewport" content="initial-scale=1"/>
 	<title>Report of year {{.Year}} week {{.Week}}</title>
 	<style>
 		:root {
@@ -60,6 +61,11 @@ var HTMLReportPage = autoHTMLTemplate("HTMLReportPage", `
 			max-width: 63rem;
 			margin: 1rem auto;
 			color: var(--fg);
+			font-size: 0.75em;
+		}
+
+		@media (min-width: 40rem) {
+			body { font-size: 1em }
 		}
 
 		body > h1, article > h1 {
@@ -68,14 +74,23 @@ var HTMLReportPage = autoHTMLTemplate("HTMLReportPage", `
 
 		#title {
 			text-align: center;
-			font-size: 2em;
-			margin-bottom: 2em;
+			font-size: 1.5em;
+		}
+
+		@media (min-width: 40rem) {
+			#title {
+				font-size: 2em;
+				margin-bottom: 2em;
+			}
 		}
 
 		aside {
-			float: right;
 			font-weight: bold;
 			margin-right: 1em;
+		}
+
+		@media (min-width: 40rem) {
+			aside { float: right }
 		}
 
 		aside a::after {
@@ -89,12 +104,17 @@ var HTMLReportPage = autoHTMLTemplate("HTMLReportPage", `
 			font-size: smaller;
 		}
 
-		#report-head h1 {
-			font-size: 1.5em;
+		#report-head {
+			margin: var(--spacing);
 		}
 
-		#report-head h2 {
-			font-size: 1.25em;
+		#report-head h1, #report-head h2 {
+			font-size: 1em;
+		}
+
+		@media (min-width: 30em) {
+			#report-head h1 { font-size: 1.5em }
+			#report-head h2 { font-size: 1.25em }
 		}
 
 		#report-head ol {
@@ -137,6 +157,11 @@ var HTMLReportPage = autoHTMLTemplate("HTMLReportPage", `
 
 		main {
 			margin-bottom: 1em;
+		}
+
+		dd, a {
+			overflow-wrap: break-word;
+			word-break: break-all;
 		}
 
 		a {
