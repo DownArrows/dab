@@ -3,6 +3,25 @@
 This bot scans some reddit users, interacts with a discord server of your choice, and build reports about their most downvoted comments.
 It is supposed to run continuously, typically on a server, and was designed to use as few resources as possible.
 
+Table of contents:
+
+ - [End user manual](#end-user-manual)
+    - [Web interface](#web-interface)
+    - [Discord commands](#discord-commands)
+    - [Database](#database)
+ - [Administrator manual](#administrator-manual)
+    - [Compiling](#compiling)
+    - [Reddit and Discord credentials](#reddit-and-discord-credentials)
+    - [Running](#running)
+    - [Maintenance](#maintenance)
+    - [Command line interface](#command-line-interface)
+    - [Configuration](#configuration)
+    - [Sample configuration](#sample-configuration)
+ - [Developper manual](#developper-manual)
+    - [Conventions](#conventions)
+    - [Architecture](#architecture)
+    - [TODO](#todo)
+
 ## End user manual
 
 ### Web interface
