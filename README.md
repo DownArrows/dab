@@ -157,7 +157,6 @@ This can be used in a backup script called by cron, like so:
 
 	#!/bin/sh
 	set -e
-	src="/var/lib/dab/db.sqlite3"
 	bak="/srv/dab/dab.db.bak"
 	wget -O"$bak" -q http://localhost:12345/backup
 	rsync -e "ssh -i /root/.ssh/backup" "$bak" backup@anothercomputer:/var/backups/dab.sqlite3
