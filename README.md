@@ -17,7 +17,7 @@ Table of contents:
     - [Command line interface](#command-line-interface)
     - [Configuration](#configuration)
     - [Sample configuration](#sample-configuration)
- - [Developper manual](#developper-manual)
+ - [Developer manual](#developer-manual)
     - [Conventions](#conventions)
     - [Architecture](#architecture)
     - [TODO](#todo)
