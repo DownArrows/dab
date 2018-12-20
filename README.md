@@ -20,6 +20,7 @@ Table of contents:
  - [Developer manual](#developer-manual)
     - [Conventions](#conventions)
     - [Architecture](#architecture)
+    - [Database schema](#database-schema)
     - [TODO](#todo)
 
 ## End user manual
@@ -79,50 +80,19 @@ You can check an SQLite file is a valid DAB database and get its version with th
 
 Save this script in a file, for example named `dab_db.py`, and run it on `dab.db` with `python dab_db.py dab.db`.
 
-
 If you want to browse the database, you can use something like the [DB Browser for SQLite](https://sqlitebrowser.org/).
-Here is the explanation of each table and their columns:
-
- - `user_archive`: table of all registered reddit users, deleted or not
-    - `name`: name of the user
-    - `created`: UNIX timestamp of the creation date according to reddit
-    - `not_found`: 1 if trying to get information about this user resulted in a 404 not found error
-    - `suspended`: 1 if suspended according to reddit's API
-    - `added`: UNIX timestamp of the date when the user was added to the database
-    - `batch_size`: Number of comments below the max age on the last scan
-    - `deleted`: 1 if user is marked as deleted (will not be scanned or included in reports anymore)
-    - `hidden`: 1 if user is scanned but not shown in reports
-    - `inactive`: 1 if considered inactive
-    - `last_scan`: UNIX timestamp of the last time this user was scanned
-    - `new`: 1 until all reachable pages of comments of that user have been saved
-    - `position`: reddit-specific ID of the position in the pages of comments of that user
- - `users`: view of the `user_archive` table without deleted users,
- - `comments`: table of comments from registered users
-    - `id`: reddit-specific ID of that comment
-    - `author`: name of the user who made that comment
-    - `score`: score of the comment
-    - `permalink`: path to the comment in the web interface (not a full URL)
-    - `sub`: name of the subreddit where the comment was made
-    - `created`: UNIX timestamp of when the comment was first made
-    - `body`: HTML-escaped textual content of the comment
- - `seen_posts`: basic information about posts that have already been seen by the bot (avoids repeated actions)
-    - `id`: reddit ID of the post
-    - `sub`: name of the subreddit where the post was made
-    - `created`: UNIX timestamp of when the post was made
- - `known_objects`: set of various values to persist for specific purposes
-    - `id`: identifier or content of the thing
-    - `date`: when this thing was added
+See [the developer section](#database-schema) for documentation about the tables and their columns.
 
 ## Administrator manual
 
 DAB has only been compiled and used on GNU/Linux so far.
 It should theoretically work on other platforms.
 
-The configuration is organized around three main components — discord, reddit, the web server — that can be activated independently.
+The configuration is organized around three main components — discord, reddit, the web server — that can be activated independently.
 You can only launch the web server on an already populated database, or only scan reddit and don't connect to discord.
 See the section on the available configuration options to see what is necessary to enable each component.
 
-Versioning follows [semver](https://semver.org/).
+Versioning follows [semver](https://semver.org/) and applies to everything documented in the end user and administrator manuals.
 
 ### Compiling
 
@@ -353,6 +323,38 @@ Make sure that any function spawned by a task group properly returns if it recei
 Since its methods panic on most errors (because most errors would mean a serious issue with the database, requiring to immediately stop),
 it must be closed last, after all components have been stopped.
 Its instantiation shouldn't panic though, it needs to properly report errors and close the database.
+
+### Database schema
+
+ - `user_archive`: table of all registered reddit users, deleted or not
+    - `name`: name of the user
+    - `created`: UNIX timestamp of the creation date according to reddit
+    - `not_found`: 1 if trying to get information about this user resulted in a 404 not found error
+    - `suspended`: 1 if suspended according to reddit's API
+    - `added`: UNIX timestamp of the date when the user was added to the database
+    - `batch_size`: Number of comments below the max age on the last scan
+    - `deleted`: 1 if user is marked as deleted (will not be scanned or included in reports anymore)
+    - `hidden`: 1 if user is scanned but not shown in reports
+    - `inactive`: 1 if considered inactive
+    - `last_scan`: UNIX timestamp of the last time this user was scanned
+    - `new`: 1 until all reachable pages of comments of that user have been saved
+    - `position`: reddit-specific ID of the position in the pages of comments of that user
+ - `users`: view of the `user_archive` table without deleted users,
+ - `comments`: table of comments from registered users
+    - `id`: reddit-specific ID of that comment
+    - `author`: name of the user who made that comment
+    - `score`: score of the comment
+    - `permalink`: path to the comment in the web interface (not a full URL)
+    - `sub`: name of the subreddit where the comment was made
+    - `created`: UNIX timestamp of when the comment was first made
+    - `body`: HTML-escaped textual content of the comment
+ - `seen_posts`: basic information about posts that have already been seen by the bot (avoids repeated actions)
+    - `id`: reddit ID of the post
+    - `sub`: name of the subreddit where the post was made
+    - `created`: UNIX timestamp of when the post was made
+ - `known_objects`: set of various values to persist for specific purposes
+    - `id`: identifier or content of the thing
+    - `date`: when this thing was added
 
 ### TODO
 
