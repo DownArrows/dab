@@ -54,6 +54,8 @@ func NewDownArrowsBot(log_out io.Writer, logger_opts int, output io.Writer) *Dow
 }
 
 func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
+	dab.logger.Printf("running DAB version %s", Version)
+
 	if err := dab.init(args); err != nil {
 		return err
 	}

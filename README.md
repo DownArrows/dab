@@ -17,6 +17,7 @@ Table of contents:
     - [Command line interface](#command-line-interface)
     - [Configuration](#configuration)
     - [Sample configuration](#sample-configuration)
+    - [Database identification](#database-management)
  - [Developer manual](#developer-manual)
     - [Conventions](#conventions)
     - [Architecture](#architecture)
@@ -53,35 +54,9 @@ To prevent that, add the command `nolog` anywhere in your comment.
 
 ### Database
 
-The database is an SQLite file.
-You can use a file identification tool (like `file` on UNIX-like OSes) to get information about it.
-It has the application ID `3499` (or `dab` in hexadecimal),
-and the version of the bot that last wrote into the database is encoded in the "user version" field.
-You can check an SQLite file is a valid DAB database and get its version with the following python (2 and 3) script:
-
-	import sys
-	import struct
-	db_path = sys.argv[1]
-	with open(db_path, "rb") as f:
-		 # https://www.sqlite.org/fileformat2.html#database_header
-		 if f.read(16) != b"SQLite format 3\x00":
-			  print("'{path}' is not an SQLite 3 file.".format(path=db_path))
-			  exit(1)
-		 f.seek(68) # application ID
-		 app_id = struct.unpack(">L", f.read(4))[0]
-		 if app_id != 0xdab:
-			  msg = "'{path}' has incorrect application id {id} (expected 0xdab)."
-			  print(msg.format(path=db_path, id=app_id))
-			  exit(1)
-		 f.seek(60) # user version
-		 v = bytearray(f.read(4))
-		 msg = "File last written by DAB version {major}.{minor}.{bugfix}."
-		 print(msg.format(major=v[1], minor=v[2], bugfix=v[3]))
-
-Save this script in a file, for example named `dab_db.py`, and run it on `dab.db` with `python dab_db.py dab.db`.
-
-If you want to browse the database, you can use something like the [DB Browser for SQLite](https://sqlitebrowser.org/).
-See [the developer section](#database-schema) for documentation about the tables and their columns.
+The database contains no private data and thus a backup can be publicly shared.
+If you have such a backup and want to browse the database, you can use something like the [DB Browser for SQLite](https://sqlitebrowser.org/).
+See [the administrator section](#database-identification) and [the developer section](#database-schema) for detailed documentation about it.
 
 ## Administrator manual
 
@@ -269,6 +244,46 @@ Note how the last value of a dictionary must not be followed by a comma:
 		}
 
 	}
+
+### Database identification
+
+The database is an SQLite file which contains in its header a specific application
+format and the version of DAB that last wrote into it.
+
+You can use a file identification tool (like `file` on UNIX-like OSes) to get information
+about the database. It has the application ID `3499` (or `dab` in hexadecimal),
+and the version of the bot that last wrote into the database is encoded as an integer.
+You can check whether an SQLite file is a valid DAB database and decode
+its version with the following python (2 and 3) script:
+
+	import sys
+	import struct
+	db_path = sys.argv[1]
+	with open(db_path, "rb") as f:
+		 # https://www.sqlite.org/fileformat2.html#database_header
+		 if f.read(16) != b"SQLite format 3\x00":
+			  print("'{path}' is not an SQLite 3 file.".format(path=db_path))
+			  exit(1)
+		 f.seek(68) # application ID
+		 app_id = struct.unpack(">L", f.read(4))[0]
+		 if app_id != 0xdab:
+			  msg = "'{path}' has incorrect application ID 0x{id:x} (expected 0xdab)."
+			  print(msg.format(path=db_path, id=app_id))
+			  exit(1)
+		 f.seek(60) # user version
+		 v = bytearray(f.read(4))
+		 msg = "File last written by DAB version {major}.{minor}.{bugfix}."
+		 print(msg.format(major=v[1], minor=v[2], bugfix=v[3]))
+
+Save this script in a file, for example named `dab_db.py`, and run it on `dab.db` with `python dab_db.py dab.db`.
+
+Starting with 1.7, if it finds in the database a version more recent that itself, it will refuse to start.
+If you have a database written by DAB prior to 1.6, or if you manipulated the database and removed the
+correct headers, you can set things straight with the following queries:
+
+	PRAGMA application_id = 0xdab;
+	-- Sets version to 1.6.0, edit for the version you target;
+	PRAGMA application_id = 1 * 65536 + 6 * 256 + 0
 
 ## Developer manual
 

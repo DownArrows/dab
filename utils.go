@@ -46,6 +46,16 @@ func (v SemVer) Patch() uint8 {
 	return v[2]
 }
 
+func (v SemVer) After(ov SemVer) bool {
+	return (v.Major() > ov.Major() ||
+		v.Major() == ov.Major() && v.Minor() > ov.Minor() ||
+		v.Major() == ov.Major() && v.Minor() == ov.Minor() && v.Patch() > ov.Patch())
+}
+
+func (v SemVer) Equal(ov SemVer) bool {
+	return v.Major() == ov.Major() && v.Minor() == ov.Minor() && v.Patch() == ov.Patch()
+}
+
 func (v SemVer) String() string {
 	return fmt.Sprintf("%d.%d.%d", v.Major(), v.Minor(), v.Patch())
 }

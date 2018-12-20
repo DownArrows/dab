@@ -184,13 +184,23 @@ func NewStorage(logger *log.Logger, conf StorageConf) (*Storage, error) {
 	}
 
 	if s.path != ":memory:" {
+
+		if err := s.checkApplicationID(); err != nil {
+			return nil, err
+		}
+
+		if err := s.compareVersions(); err != nil {
+			return nil, err
+		}
+
 		if err := s.enableWAL(); err != nil {
 			return nil, err
 		}
-	}
 
-	if err := s.startupChecks(); err != nil {
-		return nil, err
+		if err := s.startupChecks(); err != nil {
+			return nil, err
+		}
+
 	}
 
 	if err := s.init(); err != nil {
@@ -220,6 +230,43 @@ func (s *Storage) connect() error {
 
 	s.db.SetMaxOpenConns(1)
 
+	return nil
+}
+
+func (s *Storage) checkApplicationID() error {
+	var app_id int32
+	if err := s.db.Get(&app_id, "PRAGMA application_id"); err != nil {
+		return err
+	} else if app_id != ApplicationFileID {
+		return fmt.Errorf("database is not a valid DAB database (found application ID 0x%x instead of 0x%x)", app_id, ApplicationFileID)
+	}
+	return nil
+}
+
+func (s *Storage) compareVersions() error {
+	var int_version int32
+	if err := s.db.Get(&int_version, "PRAGMA user_version"); err != nil {
+		return err
+	}
+
+	if int_version == 0 {
+		var names []string
+		if err := s.db.Select(&names, "SELECT name FROM sqlite_master WHERE type = 'table'"); err != nil && err != sql.ErrNoRows {
+			return err
+		} else if len(names) > 0 {
+			return errors.New("database already has tables but no version is set, refusing to continue")
+		}
+		return nil
+	}
+
+	found_version := SemVerFromInt32(int_version)
+	if !Version.Equal(found_version) {
+		if Version.After(found_version) {
+			s.logger.Printf("database last written by previous version %s", found_version)
+		} else {
+			return fmt.Errorf("database last written by version %s more recent than current version", found_version)
+		}
+	}
 	return nil
 }
 
