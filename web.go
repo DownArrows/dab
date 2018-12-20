@@ -22,7 +22,9 @@ func newWebResponse(w http.ResponseWriter, r *http.Request) webResponse {
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		w.Header().Set("Content-Encoding", "gzip")
 		gw, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
-		autopanic(err)
+		if err != nil {
+			panic(err)
+		}
 		return webResponse{Actual: w, Gzip: gw}
 	}
 	return webResponse{Actual: w}

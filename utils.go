@@ -8,12 +8,6 @@ import (
 	"time"
 )
 
-func autopanic(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
 func fileOlderThan(path string, max_age time.Duration) (bool, error) {
 	stat, err := os.Stat(path)
 	if err != nil {

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+	"os"
 	"testing"
 	"time"
 )
@@ -9,9 +11,11 @@ func rnow() time.Time {
 	return time.Now().Round(time.Second)
 }
 
+var logger = log.New(os.Stdout, "", log.Lshortfile)
+
 func TestCRUDUsers(t *testing.T) {
 
-	s, _ := NewStorage(StorageConf{Path: ":memory:"})
+	s, _ := NewStorage(logger, StorageConf{Path: ":memory:"})
 	name := "Someone"
 	created := rnow().Unix()
 
@@ -53,7 +57,7 @@ func TestCRUDUsers(t *testing.T) {
 }
 
 func TestCRUDComments(t *testing.T) {
-	s, _ := NewStorage(StorageConf{Path: ":memory:"})
+	s, _ := NewStorage(logger, StorageConf{Path: ":memory:"})
 
 	author1 := User{
 		Name:    "Author1",
@@ -208,7 +212,7 @@ func TestCRUDComments(t *testing.T) {
 }
 
 func TestKeyValue(t *testing.T) {
-	s, _ := NewStorage(StorageConf{Path: ":memory:"})
+	s, _ := NewStorage(logger, StorageConf{Path: ":memory:"})
 	t.Run("known object write", func(t *testing.T) {
 		if err := s.SaveKnownObject("someid"); err != nil {
 			t.Error(err)

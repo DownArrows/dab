@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	"github.com/mattn/go-sqlite3"
+	"log"
 	"sync"
 	"time"
 )
@@ -146,6 +147,7 @@ type Storage struct {
 	cleanupInterval time.Duration
 	conn            *sqlite3.SQLiteConn
 	db              *sqlx.DB
+	logger          *log.Logger
 	path            string
 	cache           struct {
 		KnownObjects   *SyncSet
@@ -156,39 +158,30 @@ type Storage struct {
 	PeriodicCleanupEnabled bool
 }
 
-func NewStorage(conf StorageConf) (*Storage, error) {
+func NewStorage(logger *log.Logger, conf StorageConf) (*Storage, error) {
 	s := &Storage{
-		cleanupInterval: conf.CleanupInterval.Value,
-		path:            conf.Path,
-
+		logger: logger,
 		backup: storageBackup{
 			Path:   conf.BackupPath,
 			MaxAge: conf.BackupMaxAge.Value,
 		},
-
+		path:                   conf.Path,
+		cleanupInterval:        conf.CleanupInterval.Value,
 		PeriodicCleanupEnabled: conf.CleanupInterval.Value > 0,
 	}
 
-	db, err := sql.Open(DatabaseDriverName, fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", s.path))
-	if err != nil {
-		return nil, err
-	}
-	s.db = sqlx.NewDb(db, "sqlite3")
-
-	ok := false
+	var ok bool
 	defer func() {
 		if !ok {
-			s.Close()
+			if err := s.Close(); err != nil {
+				s.logger.Print(err)
+			}
 		}
 	}()
 
-	// trigger connection hook
-	if err := db.Ping(); err != nil {
+	if err := s.connect(); err != nil {
 		return nil, err
 	}
-	s.conn = <-connections
-
-	s.db.SetMaxOpenConns(1)
 
 	if s.path != ":memory:" {
 		if err := s.enableWAL(); err != nil {
@@ -196,30 +189,38 @@ func NewStorage(conf StorageConf) (*Storage, error) {
 		}
 	}
 
-	if errs := s.foreignKeysCheck(); len(errs) > 0 {
-		return nil, fmt.Errorf("foreign key error: \n%v", ErrorsToError(errs, "\n\t"))
-	}
-	if errs := s.quickCheck(); len(errs) > 0 {
-		return nil, fmt.Errorf("integrity check error: \n%v", ErrorsToError(errs, "\n\t"))
-	}
-
-	for _, query := range initQueries {
-		if _, err := s.db.Exec(query); err != nil {
-			return nil, err
-		}
-	}
-
-	s.cache.KnownObjects = NewSyncSet()
-	known_objects, err := s.getKnownObjects()
-	if err != nil {
+	if err := s.startupChecks(); err != nil {
 		return nil, err
 	}
-	s.cache.KnownObjects.MultiPut(known_objects)
-	s.cache.SubPostIDs = make(map[string]*SyncSet)
-	s.cache.SubPostIDsLock = sync.Mutex{}
+
+	if err := s.init(); err != nil {
+		return nil, err
+	}
 
 	ok = true
 	return s, nil
+}
+
+func (s *Storage) Close() error {
+	return s.db.Close()
+}
+
+func (s *Storage) connect() error {
+	db, err := sql.Open(DatabaseDriverName, fmt.Sprintf("file:%s?_foreign_keys=1&cache=shared", s.path))
+	if err != nil {
+		return err
+	}
+	s.db = sqlx.NewDb(db, "sqlite3")
+
+	// trigger connection hook
+	if err := db.Ping(); err != nil {
+		return err
+	}
+	s.conn = <-connections
+
+	s.db.SetMaxOpenConns(1)
+
+	return nil
 }
 
 func (s *Storage) enableWAL() error {
@@ -233,8 +234,39 @@ func (s *Storage) enableWAL() error {
 	return nil
 }
 
-func (s *Storage) Close() error {
-	return s.db.Close()
+func (s *Storage) startupChecks() error {
+	if errs := s.foreignKeysCheck(); len(errs) > 0 {
+		return fmt.Errorf("foreign key error: \n%v", ErrorsToError(errs, "\n\t"))
+	}
+	if errs := s.quickCheck(); len(errs) > 0 {
+		return fmt.Errorf("integrity check error: \n%v", ErrorsToError(errs, "\n\t"))
+	}
+	return nil
+}
+
+func (s *Storage) init() error {
+	for _, query := range initQueries {
+		if _, err := s.db.Exec(query); err != nil {
+			return err
+		}
+	}
+
+	s.cache.KnownObjects = NewSyncSet()
+	known_objects, err := s.getKnownObjects()
+	if err != nil {
+		return err
+	}
+	s.cache.KnownObjects.MultiPut(known_objects)
+	s.cache.SubPostIDs = make(map[string]*SyncSet)
+	s.cache.SubPostIDsLock = sync.Mutex{}
+
+	return nil
+}
+
+func (s *Storage) autofatal(err error) {
+	if err != nil {
+		s.logger.Fatal(err)
+	}
 }
 
 /***********
@@ -246,7 +278,7 @@ func (s *Storage) foreignKeysCheck() []error {
 	if err := s.db.Select(&checks, "PRAGMA foreign_key_check"); err == sql.ErrNoRows {
 		return []error{}
 	} else if err != nil {
-		panic(err)
+		s.logger.Fatal(err)
 	}
 
 	errs := make([]error, 0, len(checks))
@@ -266,7 +298,7 @@ func (s *Storage) foreignKeysCheck() []error {
 
 func (s *Storage) quickCheck() []error {
 	var results []string
-	autopanic(s.db.Select(&results, "PRAGMA quick_check"))
+	s.autofatal(s.db.Select(&results, "PRAGMA quick_check"))
 	if results[0] == "ok" {
 		return []error{}
 	}
@@ -338,7 +370,7 @@ func (s *Storage) AddUser(username string, hidden bool, created int64) error {
 	stmt, err := s.db.Prepare(`
 		INSERT INTO user_archive(name, hidden, created, added)
 		VALUES (?, ?, ?, strftime("%s", CURRENT_TIMESTAMP))`)
-	autopanic(err)
+	s.autofatal(err)
 	defer stmt.Close()
 	_, err = stmt.Exec(username, hidden, created)
 	return err
@@ -411,7 +443,7 @@ func (s *Storage) PurgeUser(username string) error {
 func (s *Storage) anyListUsers(q string) []User {
 	var users []User
 	err := s.db.Select(&users, q)
-	autopanic(err)
+	s.autofatal(err)
 	return users
 }
 
@@ -565,20 +597,20 @@ func (s *Storage) StatsBetween(since, until time.Time) UserStatsMap {
 			AND users.hidden = 0
 			AND comments.created BETWEEN ? AND ?
 		GROUP BY comments.author`)
-	autopanic(err)
+	s.autofatal(err)
 	defer stmt.Close()
 
 	rows, err := stmt.Query(since.Unix(), until.Unix())
-	autopanic(err)
+	s.autofatal(err)
 	defer rows.Close()
 
 	var stats = UserStatsMap{}
 	for rows.Next() {
 		var data UserStats
-		autopanic(rows.Scan(&data.Name, &data.Average, &data.Delta, &data.Count))
+		s.autofatal(rows.Scan(&data.Name, &data.Average, &data.Delta, &data.Count))
 		stats[data.Name] = data
 	}
-	autopanic(rows.Err())
+	s.autofatal(rows.Err())
 
 	return stats
 }

@@ -63,7 +63,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	}
 
 	dab.logger.Print("using database ", dab.conf.Database.Path)
-	if storage, err := NewStorage(dab.conf.Database); err != nil {
+	if storage, err := NewStorage(dab.logger, dab.conf.Database); err != nil {
 		return err
 	} else {
 		dab.layers.Storage = storage
