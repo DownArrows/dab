@@ -38,30 +38,30 @@ func ErrorsToError(errs []error, sep string) error {
 	return errors.New(strings.Join(strs, sep))
 }
 
-type version [3]byte
+type SemVer [3]byte
 
-func (v version) Major() uint8 {
+func (v SemVer) Major() uint8 {
 	return v[0]
 }
 
-func (v version) Minor() uint8 {
+func (v SemVer) Minor() uint8 {
 	return v[1]
 }
 
-func (v version) Patch() uint8 {
+func (v SemVer) Patch() uint8 {
 	return v[2]
 }
 
-func (v version) String() string {
+func (v SemVer) String() string {
 	return fmt.Sprintf("%d.%d.%d", v.Major(), v.Minor(), v.Patch())
 }
 
-// Encodes the version on the lower three bytes of a 32 bits integer.
-func (v version) ToInt32() int32 {
+// Encodes the SemVer on the lower three bytes of a 32 bits integer.
+func (v SemVer) ToInt32() int32 {
 	return (int32(v.Major()) * 65536) + (int32(v.Minor()) * 256) + int32(v.Patch())
 }
 
-func versionFromInt32(encoded int32) version {
+func SemVerFromInt32(encoded int32) SemVer {
 	major := encoded / 65536
 
 	encoded %= 65536
@@ -69,5 +69,5 @@ func versionFromInt32(encoded int32) version {
 
 	patch := encoded % 256
 
-	return version{byte(major), byte(minor), byte(patch)}
+	return SemVer{byte(major), byte(minor), byte(patch)}
 }
