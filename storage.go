@@ -372,7 +372,7 @@ func (s *Storage) Backup() error {
 	s.backup.Lock()
 	defer s.backup.Unlock()
 
-	if older, err := fileOlderThan(s.backup.Path, s.backup.MaxAge); err != nil {
+	if older, err := FileOlderThan(s.backup.Path, s.backup.MaxAge); err != nil {
 		return err
 	} else if !older {
 		return nil

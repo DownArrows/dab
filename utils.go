@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func fileOlderThan(path string, max_age time.Duration) (bool, error) {
+func FileOlderThan(path string, max_age time.Duration) (bool, error) {
 	stat, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
