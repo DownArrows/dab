@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -23,6 +25,17 @@ func fileOlderThan(path string, max_age time.Duration) (bool, error) {
 
 	time_diff := time.Now().Sub(stat.ModTime())
 	return (time_diff > max_age), nil
+}
+
+func ErrorsToError(errs []error, sep string) error {
+	if len(errs) == 0 {
+		return nil
+	}
+	strs := make([]string, 0, len(errs))
+	for _, err := range errs {
+		strs = append(strs, err.Error())
+	}
+	return errors.New(strings.Join(strs, sep))
 }
 
 type version [3]byte

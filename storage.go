@@ -128,6 +128,13 @@ var initQueries = []string{
 			FROM user_archive WHERE deleted = 0`,
 }
 
+type foreignKeyCheck struct {
+	Table        string        `db:"table"`
+	RowID        sql.NullInt64 `db:"rowid"`
+	Parent       string        `db:"parent"`
+	ForeignKeyID int           `db:"fkid"`
+}
+
 type storageBackup struct {
 	sync.Mutex
 	Path   string
@@ -189,6 +196,13 @@ func NewStorage(conf StorageConf) (*Storage, error) {
 		}
 	}
 
+	if errs := s.foreignKeysCheck(); len(errs) > 0 {
+		return nil, fmt.Errorf("foreign key error: \n%v", ErrorsToError(errs, "\n\t"))
+	}
+	if errs := s.quickCheck(); len(errs) > 0 {
+		return nil, fmt.Errorf("integrity check error: \n%v", ErrorsToError(errs, "\n\t"))
+	}
+
 	for _, query := range initQueries {
 		if _, err := s.db.Exec(query); err != nil {
 			return nil, err
@@ -226,6 +240,42 @@ func (s *Storage) Close() error {
 /***********
  Maintenance
 ************/
+
+func (s *Storage) foreignKeysCheck() []error {
+	checks := []foreignKeyCheck{}
+	if err := s.db.Select(&checks, "PRAGMA foreign_key_check"); err == sql.ErrNoRows {
+		return []error{}
+	} else if err != nil {
+		panic(err)
+	}
+
+	errs := make([]error, 0, len(checks))
+	for i, check := range checks {
+		var err error
+		if check.RowID.Valid {
+			err = fmt.Errorf("#%d: row #%d in %s failed to reference key #%v in %s",
+				i, check.RowID.Int64, check.Table, check.ForeignKeyID, check.Parent)
+		} else {
+			err = fmt.Errorf("#%d: a row in %s failed to reference key #%v in %s",
+				i, check.Table, check.ForeignKeyID, check.Parent)
+		}
+		errs = append(errs, err)
+	}
+	return errs
+}
+
+func (s *Storage) quickCheck() []error {
+	var results []string
+	autopanic(s.db.Select(&results, "PRAGMA quick_check"))
+	if results[0] == "ok" {
+		return []error{}
+	}
+	errs := make([]error, 0, len(results))
+	for _, err := range results {
+		errs = append(errs, errors.New(err))
+	}
+	return errs
+}
 
 func (s *Storage) PeriodicCleanup(ctx context.Context) error {
 	for SleepCtx(ctx, s.cleanupInterval) {
