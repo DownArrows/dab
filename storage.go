@@ -185,7 +185,9 @@ func NewStorage(logger LevelLogger, conf StorageConf) (*Storage, error) {
 	if s.path != ":memory:" {
 		if is_new, err := s.isNew(); err != nil {
 			return nil, err
-		} else if !is_new {
+		} else if is_new {
+			s.logger.Info("using new empty database")
+		} else {
 			if err := s.checkApplicationID(); err != nil {
 				return nil, err
 			}
