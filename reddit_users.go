@@ -42,6 +42,7 @@ func NewRedditUsers(
 }
 
 func (ru *RedditUsers) AddUserServer(ctx context.Context, queries chan UserQuery) error {
+	// info
 	ru.logger.Print("starting internal server to register users")
 Loop:
 	for {
@@ -49,8 +50,10 @@ Loop:
 		case <-ctx.Done():
 			break Loop
 		case query := <-queries:
+			// info
 			ru.logger.Printf("received query to add a new user, %s", query)
 			query = ru.AddUser(ctx, query.User.Name, query.User.Hidden, false)
+			// info
 			ru.logger.Printf("replying to query to add a new user, %s", query)
 			queries <- query
 		}
@@ -95,6 +98,7 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 }
 
 func (ru *RedditUsers) AutoUpdateUsersFromCompendium(ctx context.Context) error {
+	// info
 	ru.logger.Printf("updating users from the compendium with interval %s", ru.compendiumUpdateInterval)
 	for SleepCtx(ctx, ru.compendiumUpdateInterval) {
 		if err := ru.UpdateUsersFromCompendium(ctx); err != nil {
@@ -168,6 +172,7 @@ func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
 	}
 
 	if added_counter > 0 {
+		// info
 		ru.logger.Printf("found %d user(s) in the compendium, added %d new one(s)", len(names), added_counter)
 	}
 

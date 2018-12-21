@@ -262,6 +262,7 @@ func (s *Storage) compareVersions() error {
 	found_version := SemVerFromInt32(int_version)
 	if !Version.Equal(found_version) {
 		if Version.After(found_version) {
+			// info
 			s.logger.Printf("database last written by previous version %s", found_version)
 		} else {
 			return fmt.Errorf("database last written by version %s more recent than current version", found_version)

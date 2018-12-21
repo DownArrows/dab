@@ -256,6 +256,7 @@ func (bot *DiscordBot) onReady() {
 
 	if bot.adminID == "" {
 		if bot.guildID == "" {
+			// info
 			bot.logger.Print("no channel and no admin set; disabling privileged commands")
 		} else {
 			guild, err := bot.client.Guild(bot.guildID)
@@ -329,6 +330,7 @@ Loop:
 	for {
 		select {
 		case comment := <-evts:
+			// info
 			bot.logger.Printf("new post on sub %s by %s on %s", comment.Sub, comment.Author, time.Unix(comment.Created, 0))
 			if comment.Author == "DownvoteTrollingBot" || comment.Author == "DownvoteTrollingBot2" {
 				msg := "@everyone https://www.reddit.com" + comment.Permalink
@@ -511,6 +513,7 @@ func (bot *DiscordBot) simpleReply(reply string) func(DiscordMessage) error {
 
 func (bot *DiscordBot) register(msg DiscordMessage) error {
 	names := msg.Args
+	// info
 	bot.logger.Printf("%s wants to register %v", msg.Author.FQN(), names)
 
 	status := &discordgo.MessageEmbed{
@@ -548,6 +551,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 func (bot *DiscordBot) editUsers(action_name string, action func(string) error) func(DiscordMessage) error {
 	return func(msg DiscordMessage) error {
 		names := msg.Args
+		// info
 		bot.logger.Printf("%s wants to %s %v", msg.Author.FQN(), action_name, names)
 
 		status := &discordgo.MessageEmbed{

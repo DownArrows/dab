@@ -54,6 +54,7 @@ func NewDownArrowsBot(log_out io.Writer, logger_opts int, output io.Writer) *Dow
 }
 
 func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
+	// info
 	dab.logger.Printf("running DAB version %s", Version)
 
 	if err := dab.init(args); err != nil {
@@ -64,6 +65,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
+	// info
 	dab.logger.Print("using database ", dab.conf.Database.Path)
 	if storage, err := NewStorage(dab.logger, dab.conf.Database); err != nil {
 		return err
@@ -173,11 +175,13 @@ func (dab *DownArrowsBot) makeRedditAPI(ctx context.Context) (*RedditAPI, error)
 		return nil, err
 	}
 
+	// info
 	dab.logger.Print("attempting to log into reddit")
 	ra, err := NewRedditAPI(ctx, dab.conf.Reddit.RedditAuth, user_agent)
 	if err != nil {
 		return nil, err
 	}
+	// info
 	dab.logger.Print("successfully logged into reddit")
 
 	return ra, nil
@@ -196,11 +200,13 @@ func (dab *DownArrowsBot) connectReddit(ctx context.Context) error {
 }
 
 func (dab *DownArrowsBot) connectDiscord(ctx context.Context) error {
+	// info
 	dab.logger.Print("attempting to log into discord")
 	bot, err := NewDiscordBot(dab.layers.Storage, dab.logger, dab.conf.Discord.DiscordBotConf)
 	if err != nil {
 		return err
 	}
+	// info
 	dab.logger.Print("successfully logged into discord")
 	dab.components.Discord = bot
 	return nil
@@ -242,6 +248,7 @@ func (dab *DownArrowsBot) connectRedditAndDiscord(readers *TaskGroup, writers *T
 }
 
 func (dab *DownArrowsBot) report() error {
+	// info
 	dab.logger.Print("printing report for last week")
 	year, week := dab.layers.Report.LastWeekCoordinates()
 	report := dab.layers.Report.ReportWeek(year, week)
