@@ -102,7 +102,7 @@ func (ru *RedditUsers) AutoUpdateUsersFromCompendium(ctx context.Context) error 
 	ru.logger.Printf("updating users from the compendium with interval %s", ru.compendiumUpdateInterval)
 	for SleepCtx(ctx, ru.compendiumUpdateInterval) {
 		if err := ru.UpdateUsersFromCompendium(ctx); err != nil {
-			return err
+			ru.logger.Printf("user list updater: %v", err)
 		}
 	}
 	return ctx.Err()
