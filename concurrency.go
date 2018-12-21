@@ -100,9 +100,13 @@ func (eg *ErrorGroup) Len() int {
 
 func (eg *ErrorGroup) Error() string {
 	errors := eg.Errors()
+
 	if len(errors) == 0 {
 		return ""
+	} else if len(errors) == 1 {
+		return errors[0].Error()
 	}
+
 	msgs := make([]string, 1, len(errors))
 
 	msgs[0] = fmt.Sprintf("%d error(s):", len(errors))
