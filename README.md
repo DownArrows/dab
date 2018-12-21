@@ -37,16 +37,16 @@ Commands must start with the configured prefix (defaults to `!`), and if they ta
 Some are reserved to the privileged user.
 If they accept Reddit usernames, they accept them as `AGreatUsername`, `/u/AGreatUsername`, and `u/AGreatUsername`.
 
- - `karma` give negative/positive/total karma for the given username
- - `version` post the bot's version
- - `register` try to register a list of usernames; if it starts with the hiding prefix the user will be hidden from reports
- - `unregister` (privileged) unregister one or several user
- - `purge` (privileged) completely remove from the database one or several users
- - `info` information about an user: creation date, registration date, suspension or deletion status, inactive status
  - `hide` hide an user from reports
- - `unhide` don't hide an user from reports
- - `sip` or `sipthebep` quote from sipthebep
+ - `info` information about an user: creation date, registration date, suspension or deletion status, inactive status
+ - `karma` give negative/positive/total karma for the given username
+ - `purge` (privileged) completely remove from the database one or several users
+ - `register` try to register a list of usernames; if it starts with the hiding prefix the user will be hidden from reports
  - `sep` or `separator` or `=` post a separation rule
+ - `sip` or `sipthebep` quote from sipthebep
+ - `unhide` don't hide an user from reports
+ - `unregister` (privileged) unregister one or several user
+ - `version` post the bot's version
 
 If you post a link in the main channel that contains a link to a comment on reddit,
 it will be reposted on the log channel if the administrator of the bot has enabled this feature.
@@ -137,7 +137,8 @@ This can be used in a backup script called by cron, like so:
 
 If after the bot has stopped there are files ending in `-shm`, `-wal` and `-journal` in the folder containing the database file,
 **do not** delete them, they probably contain data and deleting them could leave the database corrupted.
-Instead leave them with the database, then re-run and stop the bot normally, or if you just want to repair the database, run it with the `-initdb` option.
+Instead leave them with the database, then run the bot normally,
+or if you just want to repair the database, run it with the `-initdb` option.
 Those files are also present when the bot is running, which is perfectly normal.
 For more information about them see <https://sqlite.org/tempfiles.html>.
 
@@ -168,7 +169,8 @@ and <http://golang.localhost/pkg/text/template/>.
  - `hide_prefix` *string* (hide/): prefix you can add to usernames to hide them from reports (used by `-useradd` and on Discord)
  - `timezone` *timezone* (UTC): timezone used to format dates and compute weeks and years
  - `database`
-    - `backup_max_age` *duration* (24h): if the backup is older than that when a backup is requested, the backup will be refreshed; must be at least one hour
+    - `backup_max_age` *duration* (24h): if the backup is older than that when a backup is requested,
+      the backup will be refreshed; must be at least one hour
     - `backup_path` *string* (./dab.db.backup): path to the backup of the database
     - `cleanup_interval` *duration* (30m): interval between clean-ups of the database (reduces its size and optimizes queries);
        leave out to disable, else must be at least one minute
@@ -188,13 +190,16 @@ and <http://golang.localhost/pkg/text/template/>.
       `ChannelsID` and `Member`. `ChannelsID` provides `General`, `Log` and `HighScores`, which contains the numeric ID of those channels.
       `Member` provides `ID`, `Name`, and `FQN` (name followed by a discriminator). Disables welcome messages if left empty
  - `reddit`
-    - `compendium_update_interval` *duration* (*none*): interval between each scan of the compendium; leave out to disable, else must be at least an hour
-    - `dvt_interval` *string* (*none*): interval between each check of the downvote sub's new reports; leave out to disable, else must be at least a minute
+    - `compendium_update_interval` *duration* (*none*): interval between each scan of the compendium;
+      leave out to disable, else must be at least an hour
+    - `dvt_interval` *string* (*none*): interval between each check of the downvote sub's new reports;
+      leave out to disable, else must be at least a minute
     - `full_scan_interval` *duration* (6h): interval between each scan of all users, inactive or not
     - `id` *string* (*none*): Reddit application ID for the bot; leave out to disable the Reddit component
-    - `inactivity_threshold` *duration* (2200h): if a user hasn't commented since that long ago, consider them "inactive" and scan them less often;
+    - `inactivity_threshold` *duration* (2200h): if a user hasn't commented since that long ago,
+      consider them "inactive" and scan them less often; must be at least one day
+    - `max_age` *duration* (24h): don't get more batches of an user's comments if the oldest comment found is older than that;
       must be at least one day
-    - `max_age` *duration* (24h): don't get more batches of an user's comments if the oldest comment found is older than that; must be at least one day
     - `max_batches` *int* (5): maximum number of batches of comments to get from Reddit for a single user before moving to the next one
     - `password` *string* (*none*): Reddit password for the bot's account; leave out to disable the Reddit component
     - `secret` *string* (*none*): Reddit application secret for the bot; leave out to disable the Reddit component
@@ -204,10 +209,12 @@ and <http://golang.localhost/pkg/text/template/>.
     - `username` *string* (*none*): Reddit username for the bot's account; leave out to disable the Reddit component
  - `report`
     - `cutoff` *int* (-50): ignore comments whose score is higher than this
-    - `leeway` *duration* (12h): shift back the time window for comments' inclusion in the report to include those that were made late; cannot be negative
+    - `leeway` *duration* (12h): shift back the time window for comments' inclusion in the report
+      to include those that were made late; cannot be negative
     - `nb_top` *int* (5): maximum number of users to include in the list of statistics for the report
  - `web`
-    - `listen` *string* (*none*): `hostname:port` or `ip:port` or `:port` (all interface) specification for the webserver to listen to; leave out to disable
+    - `listen` *string* (*none*): `hostname:port` or `ip:port` or `:port` (all interfaces)
+      specification for the webserver to listen to; leave out to disable
 
 ### Sample configuration
 
