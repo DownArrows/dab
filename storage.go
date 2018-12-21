@@ -183,13 +183,15 @@ func NewStorage(logger LevelLogger, conf StorageConf) (*Storage, error) {
 	}
 
 	if s.path != ":memory:" {
-
-		if err := s.checkApplicationID(); err != nil {
+		if is_new, err := s.isNew(); err != nil {
 			return nil, err
-		}
-
-		if err := s.compareVersions(); err != nil {
-			return nil, err
+		} else if !is_new {
+			if err := s.checkApplicationID(); err != nil {
+				return nil, err
+			}
+			if err := s.compareVersions(); err != nil {
+				return nil, err
+			}
 		}
 
 		if err := s.enableWAL(); err != nil {
@@ -234,6 +236,14 @@ func (s *Storage) connect() error {
 	return nil
 }
 
+func (s *Storage) isNew() (bool, error) {
+	var names []string
+	if err := s.db.Select(&names, "SELECT name FROM sqlite_master WHERE type = 'table'"); err != nil && err != sql.ErrNoRows {
+		return false, err
+	}
+	return (len(names) == 0), nil
+}
+
 func (s *Storage) checkApplicationID() error {
 	var app_id int32
 	if err := s.db.Get(&app_id, "PRAGMA application_id"); err != nil {
@@ -251,13 +261,7 @@ func (s *Storage) compareVersions() error {
 	}
 
 	if int_version == 0 {
-		var names []string
-		if err := s.db.Select(&names, "SELECT name FROM sqlite_master WHERE type = 'table'"); err != nil && err != sql.ErrNoRows {
-			return err
-		} else if len(names) > 0 {
-			return errors.New("database already has tables but no version is set, refusing to continue")
-		}
-		return nil
+		return errors.New("database already has tables but no version is set, refusing to continue")
 	}
 
 	found_version := SemVerFromInt32(int_version)
