@@ -117,6 +117,8 @@ If you want to run it with [systemd](https://en.wikipedia.org/wiki/Systemd), her
 	ExecStart=/usr/local/bin/dab -log Error -config /etc/dab.conf.json
 	Restart=on-failure
 
+If you feel the need to be sure it is actually doing something, run it with `-log Debug`.
+
 ### Maintenance
 
 If the bot has been offline for a while, it will pick everything back up where it left,

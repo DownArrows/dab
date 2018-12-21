@@ -73,9 +73,11 @@ func (rs *RedditScanner) Run(ctx context.Context) error {
 			return ctx.Err()
 		}
 
+		rs.logger.Debugf("scan pass: %d users, full scan: %t", len(users), full_scan)
 		if err := rs.Scan(ctx, users); err != nil {
 			return err
 		}
+		rs.logger.Debug("scan pass done")
 
 		if full_scan {
 			last_full_scan = now
@@ -107,6 +109,8 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 				limit = user.BatchSize + rs.commentsLeeway
 			}
 
+			rs.logger.Debugf("trying to get %d comments from user %s, last scanned %v ago, page position '%s'",
+				limit, user.Name, last_scan, user.Position)
 			comments, user, err = rs.api.UserComments(ctx, user, limit)
 			if IsCancellation(err) {
 				return err
@@ -120,6 +124,7 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 			}
 
 			if user.Suspended || user.NotFound {
+				rs.logger.Debugf("user %s status change: suspended %t, not found: %t", user.Name, user.Suspended, user.NotFound)
 				if rs.suspensions != nil {
 					rs.suspensions <- user
 				}

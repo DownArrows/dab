@@ -224,6 +224,7 @@ func (bot *DiscordBot) myColor(channelID string) int {
 
 // this is executed on each (re)-connection to Discord
 func (bot *DiscordBot) onReady() {
+	bot.logger.Debug("(re-)connected to discord, checking settings")
 	if err := bot.client.UpdateStatus(0, "Downvote Counter"); err != nil {
 		bot.fatal(fmt.Errorf("couldn't set status on discord: %v", err))
 		return
@@ -268,6 +269,7 @@ func (bot *DiscordBot) onReady() {
 		bot.fatal(err)
 		return
 	}
+	bot.logger.Debugf("privileged user has ID %s", bot.adminID)
 }
 
 func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
@@ -280,6 +282,7 @@ func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
 			Discriminator: member.User.Discriminator,
 		},
 	}
+	bot.logger.Debugf("welcoming user %s", data.Member.FQN())
 	if err := bot.welcome.Execute(&msg, data); err != nil {
 		bot.fatal(err)
 	}
@@ -415,6 +418,7 @@ func (bot *DiscordBot) command(msg DiscordMessage) error {
 	if cmd.Command == "" {
 		return nil
 	}
+	bot.logger.Debugf("matched command '%s', args %v, from user %s", cmd.Command, msg.Args, msg.Author.FQN())
 
 	if err := bot.client.ChannelTyping(msg.ChannelID); err != nil {
 		return err

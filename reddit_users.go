@@ -104,6 +104,7 @@ func (ru *RedditUsers) AutoUpdateUsersFromCompendium(ctx context.Context) error 
 }
 
 func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
+	ru.logger.Debug("updating users from compendium")
 	page, err := ru.api.WikiPage(ctx, "downvote_trolls", "compendium")
 	if err != nil {
 		return err
@@ -166,9 +167,7 @@ func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
 
 	}
 
-	if added_counter > 0 {
-		ru.logger.Infof("found %d user(s) in the compendium, added %d new one(s)", len(names), added_counter)
-	}
+	ru.logger.Infof("found %d user(s) in the compendium, added %d new one(s)", len(names), added_counter)
 
 	return nil
 }
@@ -180,8 +179,10 @@ func (ru *RedditUsers) Unsuspensions() <-chan User {
 func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
 	ru.logger.Infof("watching unsuspensions/undeletions with interval %s", ru.unsuspensionInterval)
 	for SleepCtx(ctx, ru.unsuspensionInterval) {
+		ru.logger.Debug("checking uspended/deleted users")
 
 		for _, user := range ru.storage.ListSuspendedAndNotFound() {
+			ru.logger.Debugf("checking suspended/deleted user %s", user.Name)
 
 			res := ru.api.AboutUser(ctx, user.Name)
 			if IsCancellation(res.Error) {

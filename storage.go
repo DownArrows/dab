@@ -200,6 +200,8 @@ func NewStorage(logger LevelLogger, conf StorageConf) (*Storage, error) {
 			return nil, err
 		}
 
+	} else {
+		s.logger.Debug("skipping checks as we are using an in-memory database")
 	}
 
 	if err := s.init(); err != nil {
@@ -357,9 +359,11 @@ func (s *Storage) quickCheck() []error {
 
 func (s *Storage) PeriodicCleanup(ctx context.Context) error {
 	for SleepCtx(ctx, s.cleanupInterval) {
+		s.logger.Debug("performing database vacuum")
 		if _, err := s.db.ExecContext(ctx, "PRAGMA incremental_vacuum"); err != nil {
 			return err
 		}
+		s.logger.Debug("performing database optimization")
 		if _, err := s.db.ExecContext(ctx, "PRAGMA optimize"); err != nil {
 			return err
 		}
@@ -370,13 +374,16 @@ func (s *Storage) PeriodicCleanup(ctx context.Context) error {
 func (s *Storage) Backup() error {
 	s.backup.Lock()
 	defer s.backup.Unlock()
+	s.logger.Debugf("running database backup at %s", s.backup.Path)
 
 	if older, err := FileOlderThan(s.backup.Path, s.backup.MaxAge); err != nil {
 		return err
 	} else if !older {
+		s.logger.Debugf("database backup was not older than %v, nothing was done", s.backup.MaxAge)
 		return nil
 	}
 
+	s.logger.Debugf("opening connection at %s for backup", s.backup.Path)
 	dest_db, err := sql.Open(DatabaseDriverName, "file:"+s.backup.Path)
 	if err != nil {
 		return err
@@ -388,6 +395,7 @@ func (s *Storage) Backup() error {
 		return err
 	}
 	dest_conn := <-connections
+	s.logger.Debugf("backup connection at %s ok", s.backup.Path)
 
 	backup, err := dest_conn.Backup("main", s.conn, "main") // yes, in *that* order!
 	if err != nil {
@@ -396,11 +404,13 @@ func (s *Storage) Backup() error {
 	defer backup.Close()
 
 	for done := false; !done; {
+		s.logger.Debug("trying to backup all pages")
 		done, err = backup.Step(-1) // -1 means to save all remaining pages
 		if err != nil {
 			return err
 		}
 	}
+	s.logger.Debug("backup done")
 	return nil
 }
 

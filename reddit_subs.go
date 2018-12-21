@@ -26,6 +26,7 @@ func (rs *RedditSubs) NewPostsOnSub(ctx context.Context, sub string, ch chan<- C
 	first_time := (rs.storage.NbKnownPostIDs(sub) == 0)
 
 	for SleepCtx(ctx, sleep) {
+		rs.logger.Debugf("checkin sub %s for new posts", sub)
 
 		posts, _, err := rs.api.SubPosts(ctx, sub, "")
 		if IsCancellation(err) {
