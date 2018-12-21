@@ -9,7 +9,7 @@ import (
 	"text/template"
 )
 
-var Version = SemVer{1, 6, 2}
+var Version = SemVer{1, 7, 0}
 
 type DownArrowsBot struct {
 	flagSet *flag.FlagSet
