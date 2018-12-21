@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
-	"log"
 	"time"
 )
 
 type RedditScanner struct {
 	// dependencies
 	api     RedditScannerAPI
-	logger  *log.Logger
+	logger  LevelLogger
 	storage RedditScannerStorage
 
 	// communication with the outside
@@ -26,7 +25,7 @@ type RedditScanner struct {
 }
 
 func NewRedditScanner(
-	logger *log.Logger,
+	logger LevelLogger,
 	storage RedditScannerStorage,
 	api RedditScannerAPI,
 	conf RedditScannerConf,
@@ -62,7 +61,7 @@ func (rs *RedditScanner) HighScores() <-chan Comment {
 func (rs *RedditScanner) Run(ctx context.Context) error {
 	var last_full_scan time.Time
 
-	rs.logger.Printf("starting comments scanner")
+	rs.logger.Info("starting comments scanner")
 
 	for ctx.Err() == nil {
 
@@ -112,12 +111,12 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 			if IsCancellation(err) {
 				return err
 			} else if err != nil {
-				rs.logger.Printf("error while scanning user %s: %v", user.Name, err)
+				rs.logger.Errorf("error while scanning user %s: %v", user.Name, err)
 			}
 
 			user, err = rs.storage.SaveCommentsUpdateUser(comments, user, last_scan+rs.maxAge)
 			if err != nil {
-				rs.logger.Printf("error while registering comments of user %s: %v", user.Name, err)
+				rs.logger.Errorf("error while registering comments of user %s: %v", user.Name, err)
 			}
 
 			if user.Suspended || user.NotFound {
@@ -128,7 +127,7 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 			}
 
 			if err := rs.alertIfHighScore(comments); err != nil {
-				rs.logger.Print(err)
+				rs.logger.Error(err)
 			}
 
 			if user.Position == "" {

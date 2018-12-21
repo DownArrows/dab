@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	"github.com/mattn/go-sqlite3"
-	"log"
 	"sync"
 	"time"
 )
@@ -147,7 +146,7 @@ type Storage struct {
 	cleanupInterval time.Duration
 	conn            *sqlite3.SQLiteConn
 	db              *sqlx.DB
-	logger          *log.Logger
+	logger          LevelLogger
 	path            string
 	cache           struct {
 		KnownObjects   *SyncSet
@@ -158,7 +157,7 @@ type Storage struct {
 	PeriodicCleanupEnabled bool
 }
 
-func NewStorage(logger *log.Logger, conf StorageConf) (*Storage, error) {
+func NewStorage(logger LevelLogger, conf StorageConf) (*Storage, error) {
 	s := &Storage{
 		logger: logger,
 		backup: storageBackup{
@@ -174,7 +173,7 @@ func NewStorage(logger *log.Logger, conf StorageConf) (*Storage, error) {
 	defer func() {
 		if !ok {
 			if err := s.Close(); err != nil {
-				s.logger.Print(err)
+				s.logger.Error(err)
 			}
 		}
 	}()
@@ -262,8 +261,7 @@ func (s *Storage) compareVersions() error {
 	found_version := SemVerFromInt32(int_version)
 	if !Version.Equal(found_version) {
 		if Version.After(found_version) {
-			// info
-			s.logger.Printf("database last written by previous version %s", found_version)
+			s.logger.Infof("database last written by previous version %s", found_version)
 		} else {
 			return fmt.Errorf("database last written by version %s more recent than current version", found_version)
 		}

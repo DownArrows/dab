@@ -3,14 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 )
 
 func main() {
-	dab := NewDownArrowsBot(os.Stderr, log.Lshortfile, os.Stdout)
+	dab := NewDownArrowsBot(os.Stderr, os.Stdout)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error)
@@ -25,8 +24,7 @@ func main() {
 	select {
 	case err = <-done:
 		cancel()
-	case name := <-sig:
-		fmt.Fprintf(os.Stderr, "%s received, shutting down\n", name)
+	case <-sig:
 		cancel()
 		err = <-done
 	}

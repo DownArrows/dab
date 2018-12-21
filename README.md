@@ -114,7 +114,7 @@ If you want to run it with [systemd](https://en.wikipedia.org/wiki/Systemd), her
 	WantedBy=multi-user.target
 
 	[Service]
-	ExecStart=/usr/local/bin/dab -config /etc/dab.conf.json
+	ExecStart=/usr/local/bin/dab -log Error -config /etc/dab.conf.json
 	Restart=on-failure
 
 ### Maintenance
@@ -147,6 +147,7 @@ The command line interface only affects the overall behavior of the program:
  - `-config` Path to the configuration file. Defaults to `./dab.conf.json`
  - `-help` Print the help for the command line interface.
  - `-initdb` Initialize the database and exit.
+ - `-log` Logging level (`Error`, `Info`, `Debug`). Defaults to `Info`.
  - `-report` Print the report for last week on the standard output and exit.
  - `-useradd` Add one or multiple usernames to be tracked and exit.
 

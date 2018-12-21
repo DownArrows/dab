@@ -2,17 +2,16 @@ package main
 
 import (
 	"context"
-	"log"
 	"time"
 )
 
 type RedditSubs struct {
 	api     RedditSubsAPI
-	logger  *log.Logger
+	logger  LevelLogger
 	storage RedditSubsStorage
 }
 
-func NewRedditSubs(logger *log.Logger, storage RedditSubsStorage, api RedditSubsAPI) *RedditSubs {
+func NewRedditSubs(logger LevelLogger, storage RedditSubsStorage, api RedditSubsAPI) *RedditSubs {
 	return &RedditSubs{
 		api:     api,
 		logger:  logger,
@@ -21,7 +20,7 @@ func NewRedditSubs(logger *log.Logger, storage RedditSubsStorage, api RedditSubs
 }
 
 func (rs *RedditSubs) NewPostsOnSub(ctx context.Context, sub string, ch chan<- Comment, sleep time.Duration) error {
-	rs.logger.Printf("watching new posts from %s with interval %s", sub, sleep)
+	rs.logger.Infof("watching new posts from %s with interval %s", sub, sleep)
 
 	// This assumes the sub isn't empty
 	first_time := (rs.storage.NbKnownPostIDs(sub) == 0)
@@ -32,7 +31,7 @@ func (rs *RedditSubs) NewPostsOnSub(ctx context.Context, sub string, ch chan<- C
 		if IsCancellation(err) {
 			return err
 		} else if err != nil {
-			rs.logger.Printf("error when watching sub %s: %v", sub, err)
+			rs.logger.Errorf("error when watching sub %s: %v", sub, err)
 		}
 
 		new_posts := make([]Comment, 0, len(posts))
@@ -43,7 +42,7 @@ func (rs *RedditSubs) NewPostsOnSub(ctx context.Context, sub string, ch chan<- C
 		}
 
 		if err := rs.storage.SaveSubPostIDs(sub, posts); err != nil {
-			rs.logger.Printf("error when watching sub %s: %v", sub, err)
+			rs.logger.Errorf("error when watching sub %s: %v", sub, err)
 		}
 
 		if first_time {

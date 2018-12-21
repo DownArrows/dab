@@ -3,14 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 )
 
 type RedditUsers struct {
 	api     RedditUsersAPI
-	logger  *log.Logger
+	logger  LevelLogger
 	storage RedditUsersStorage
 
 	compendiumUpdateInterval             time.Duration
@@ -22,7 +21,7 @@ type RedditUsers struct {
 }
 
 func NewRedditUsers(
-	logger *log.Logger,
+	logger LevelLogger,
 	storage RedditUsersStorage,
 	api RedditUsersAPI,
 	conf RedditUsersConf,
@@ -42,19 +41,16 @@ func NewRedditUsers(
 }
 
 func (ru *RedditUsers) AddUserServer(ctx context.Context, queries chan UserQuery) error {
-	// info
-	ru.logger.Print("starting internal server to register users")
+	ru.logger.Info("starting internal server to register users")
 Loop:
 	for {
 		select {
 		case <-ctx.Done():
 			break Loop
 		case query := <-queries:
-			// info
-			ru.logger.Printf("received query to add a new user, %s", query)
+			ru.logger.Infof("received query to add a new user, %s", query)
 			query = ru.AddUser(ctx, query.User.Name, query.User.Hidden, false)
-			// info
-			ru.logger.Printf("replying to query to add a new user, %s", query)
+			ru.logger.Infof("replying to query to add a new user, %s", query)
 			queries <- query
 		}
 	}
@@ -69,7 +65,7 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 		return query
 	} else if query.Exists {
 		template := "'%s' already exists"
-		ru.logger.Printf(template, username)
+		ru.logger.Errorf(template, username)
 		query.Error = fmt.Errorf(template, username)
 		return query
 	}
@@ -98,11 +94,10 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 }
 
 func (ru *RedditUsers) AutoUpdateUsersFromCompendium(ctx context.Context) error {
-	// info
-	ru.logger.Printf("updating users from the compendium with interval %s", ru.compendiumUpdateInterval)
+	ru.logger.Infof("updating users from the compendium with interval %s", ru.compendiumUpdateInterval)
 	for SleepCtx(ctx, ru.compendiumUpdateInterval) {
 		if err := ru.UpdateUsersFromCompendium(ctx); err != nil {
-			ru.logger.Printf("user list updater: %v", err)
+			ru.logger.Errorf("user list updater: %v", err)
 		}
 	}
 	return ctx.Err()
@@ -156,8 +151,8 @@ func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
 			return result.Error
 		} else if result.Error != nil {
 			if !result.Exists {
-				msg := "update from compendium: error when adding the new user "
-				ru.logger.Print(msg, result.User.Name, result.Error)
+				msg := "update from compendium: error when adding the new user %s: %v"
+				ru.logger.Errorf(msg, result.User.Name, result.Error)
 			}
 		} else if result.Exists {
 			added_counter += 1
@@ -172,8 +167,7 @@ func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
 	}
 
 	if added_counter > 0 {
-		// info
-		ru.logger.Printf("found %d user(s) in the compendium, added %d new one(s)", len(names), added_counter)
+		ru.logger.Infof("found %d user(s) in the compendium, added %d new one(s)", len(names), added_counter)
 	}
 
 	return nil
@@ -184,7 +178,7 @@ func (ru *RedditUsers) Unsuspensions() <-chan User {
 }
 
 func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
-	ru.logger.Printf("watching unsuspensions/undeletions with interval %s", ru.unsuspensionInterval)
+	ru.logger.Infof("watching unsuspensions/undeletions with interval %s", ru.unsuspensionInterval)
 	for SleepCtx(ctx, ru.unsuspensionInterval) {
 
 		for _, user := range ru.storage.ListSuspendedAndNotFound() {
@@ -194,7 +188,7 @@ func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
 				return res.Error
 			}
 			if res.Error != nil {
-				ru.logger.Print(res.Error)
+				ru.logger.Error(res.Error)
 				continue
 			}
 
@@ -217,24 +211,24 @@ func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
 
 			if user.NotFound && res.Exists { // undeletion
 				if err := ru.storage.FoundUser(user.Name); err != nil {
-					ru.logger.Print(err)
+					ru.logger.Error(err)
 					continue
 				}
 				if res.User.Suspended {
 					if err := ru.storage.SuspendUser(user.Name); err != nil {
-						ru.logger.Print(err)
+						ru.logger.Error(err)
 					}
 					continue // don't signal accounts that went from deleted to suspended
 				}
 			} else if user.Suspended && !res.Exists { // deletion of a suspended account
 				if err := ru.storage.NotFoundUser(user.Name); err != nil {
-					ru.logger.Print(err)
+					ru.logger.Error(err)
 					continue
 				}
 				continue // don't signal it, we only need to keep track of it
 			} else if user.Suspended && !res.User.Suspended { // unsuspension
 				if err := ru.storage.UnSuspendUser(user.Name); err != nil {
-					ru.logger.Print(err)
+					ru.logger.Error(err)
 					continue
 				}
 			} else { // no change

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"io"
-	"log"
 	"strings"
 	"text/template"
 )
@@ -13,19 +12,20 @@ import (
 var Version = SemVer{1, 6, 2}
 
 type DownArrowsBot struct {
-	flagSet    *flag.FlagSet
-	logger     *log.Logger
-	loggerOpts int
-	logOut     io.Writer
-	stdOut     io.Writer
-
-	conf Configuration
+	flagSet *flag.FlagSet
+	logger  LevelLogger
+	logLvl  string
+	logOut  io.Writer
+	stdOut  io.Writer
 
 	runtimeConf struct {
-		InitDB  bool
-		Report  bool
-		UserAdd bool
+		ConfPath string
+		InitDB   bool
+		Report   bool
+		UserAdd  bool
 	}
+
+	conf Configuration
 
 	layers struct {
 		Storage *Storage
@@ -43,30 +43,40 @@ type DownArrowsBot struct {
 	}
 }
 
-func NewDownArrowsBot(log_out io.Writer, logger_opts int, output io.Writer) *DownArrowsBot {
-	return &DownArrowsBot{
-		flagSet:    flag.NewFlagSet("DownArrowsBot", flag.ExitOnError),
-		logger:     log.New(log_out, "", logger_opts),
-		loggerOpts: logger_opts,
-		logOut:     log_out,
-		stdOut:     output,
+func NewDownArrowsBot(log_out io.Writer, output io.Writer) *DownArrowsBot {
+	dab := &DownArrowsBot{
+		flagSet: flag.NewFlagSet("DownArrowsBot", flag.ExitOnError),
+		stdOut:  output,
 	}
+	dab.logOut = log_out
+	return dab
 }
 
 func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
-	// info
-	dab.logger.Printf("running DAB version %s", Version)
-
-	if err := dab.init(args); err != nil {
+	if err := dab.parseFlags(args); err != nil {
 		return err
+	}
+
+	if logger, err := NewLevelLogger(dab.logOut, dab.logLvl); err != nil {
+		return err
+	} else {
+		dab.logger = logger
+	}
+
+	dab.logger.Infof("running DAB version %s", Version)
+
+	if conf, err := NewConfiguration(dab.runtimeConf.ConfPath); err != nil {
+		return err
+	} else {
+		dab.conf = conf
+		dab.components.ConfState = conf.Components()
 	}
 
 	if err := dab.conf.HasSaneValues(); err != nil {
 		return err
 	}
 
-	// info
-	dab.logger.Print("using database ", dab.conf.Database.Path)
+	dab.logger.Infof("using database %s", dab.conf.Database.Path)
 	if storage, err := NewStorage(dab.logger, dab.conf.Database); err != nil {
 		return err
 	} else {
@@ -146,13 +156,14 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		top_level.Spawn(dab.components.Web.Run)
 	}
 
-	dab.logger.Print(dab.components.ConfState)
+	dab.logger.Info(dab.components.ConfState)
 
 	return top_level.Wait().ToError()
 }
 
-func (dab *DownArrowsBot) init(args []string) error {
-	path := dab.flagSet.String("config", "./dab.conf.json", "Path to the configuration file.")
+func (dab *DownArrowsBot) parseFlags(args []string) error {
+	dab.flagSet.StringVar(&dab.logLvl, "log", "Info", "Logging level ("+strings.Join(LevelLoggerLevels, ", ")+").")
+	dab.flagSet.StringVar(&dab.runtimeConf.ConfPath, "config", "./dab.conf.json", "Path to the configuration file.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.InitDB, "initdb", false, "Initialize the database and exit.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.Report, "report", false, "Print the report for the last week and exit.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.UserAdd, "useradd", false, "Add one or multiple usernames to be tracked and exit.")
@@ -162,11 +173,7 @@ func (dab *DownArrowsBot) init(args []string) error {
 		return errors.New("no argument besides usernames when adding users is accepted")
 	}
 
-	conf, err := NewConfiguration(*path)
-	dab.conf = conf
-	dab.components.ConfState = conf.Components()
-
-	return err
+	return nil
 }
 
 func (dab *DownArrowsBot) makeRedditAPI(ctx context.Context) (*RedditAPI, error) {
@@ -175,14 +182,12 @@ func (dab *DownArrowsBot) makeRedditAPI(ctx context.Context) (*RedditAPI, error)
 		return nil, err
 	}
 
-	// info
-	dab.logger.Print("attempting to log into reddit")
+	dab.logger.Info("attempting to log into reddit")
 	ra, err := NewRedditAPI(ctx, dab.conf.Reddit.RedditAuth, user_agent)
 	if err != nil {
 		return nil, err
 	}
-	// info
-	dab.logger.Print("successfully logged into reddit")
+	dab.logger.Info("successfully logged into reddit")
 
 	return ra, nil
 }
@@ -200,14 +205,12 @@ func (dab *DownArrowsBot) connectReddit(ctx context.Context) error {
 }
 
 func (dab *DownArrowsBot) connectDiscord(ctx context.Context) error {
-	// info
-	dab.logger.Print("attempting to log into discord")
+	dab.logger.Info("attempting to log into discord")
 	bot, err := NewDiscordBot(dab.layers.Storage, dab.logger, dab.conf.Discord.DiscordBotConf)
 	if err != nil {
 		return err
 	}
-	// info
-	dab.logger.Print("successfully logged into discord")
+	dab.logger.Info("successfully logged into discord")
 	dab.components.Discord = bot
 	return nil
 }
@@ -248,8 +251,7 @@ func (dab *DownArrowsBot) connectRedditAndDiscord(readers *TaskGroup, writers *T
 }
 
 func (dab *DownArrowsBot) report() error {
-	// info
-	dab.logger.Print("printing report for last week")
+	dab.logger.Info("printing report for last week")
 	year, week := dab.layers.Report.LastWeekCoordinates()
 	report := dab.layers.Report.ReportWeek(year, week)
 	if report.Len() == 0 {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
-	"log"
 	"math/rand"
 	"reflect"
 	"regexp"
@@ -118,7 +117,7 @@ type DiscordBotChannelsID struct {
 type DiscordBot struct {
 	// dependencies
 	client  *discordgo.Session
-	logger  *log.Logger
+	logger  LevelLogger
 	storage DiscordBotStorage
 
 	// configuration
@@ -137,7 +136,7 @@ type DiscordBot struct {
 	redditLink *regexp.Regexp
 }
 
-func NewDiscordBot(storage DiscordBotStorage, logger *log.Logger, conf DiscordBotConf) (*DiscordBot, error) {
+func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, conf DiscordBotConf) (*DiscordBot, error) {
 	session, err := discordgo.New("Bot " + conf.Token)
 	if err != nil {
 		return nil, err
@@ -197,7 +196,7 @@ func (bot *DiscordBot) Run(ctx context.Context) error {
 }
 
 func (bot *DiscordBot) fatal(err error) {
-	bot.logger.Printf("fatal: %v", err)
+	bot.logger.Errorf("fatal: %v", err)
 	bot.done <- err
 }
 
@@ -256,8 +255,7 @@ func (bot *DiscordBot) onReady() {
 
 	if bot.adminID == "" {
 		if bot.guildID == "" {
-			// info
-			bot.logger.Print("no channel and no admin set; disabling privileged commands")
+			bot.logger.Info("no channel and no admin set; disabling privileged commands")
 		} else {
 			guild, err := bot.client.Guild(bot.guildID)
 			if err != nil {
@@ -286,7 +284,7 @@ func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
 		bot.fatal(err)
 	}
 	if err := bot.channelMessageSend(bot.channelsID.General, msg.String()); err != nil {
-		bot.logger.Print(err)
+		bot.logger.Error(err)
 	}
 }
 
@@ -299,7 +297,7 @@ func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
 
 	is_dm, err := bot.isDMChannel(dg_msg.ChannelID)
 	if err != nil {
-		bot.logger.Print(err)
+		bot.logger.Error(err)
 	}
 
 	msg := DiscordMessage{
@@ -321,7 +319,7 @@ func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
 	}
 
 	if err != nil {
-		bot.logger.Print(err)
+		bot.logger.Error(err)
 	}
 }
 
@@ -330,12 +328,11 @@ Loop:
 	for {
 		select {
 		case comment := <-evts:
-			// info
-			bot.logger.Printf("new post on sub %s by %s on %s", comment.Sub, comment.Author, time.Unix(comment.Created, 0))
+			bot.logger.Infof("new post on sub %s by %s on %s", comment.Sub, comment.Author, time.Unix(comment.Created, 0))
 			if comment.Author == "DownvoteTrollingBot" || comment.Author == "DownvoteTrollingBot2" {
 				msg := "@everyone https://www.reddit.com" + comment.Permalink
 				if err := bot.channelMessageSend(bot.channelsID.General, msg); err != nil {
-					bot.logger.Printf("error when signaling new post on reddit: %v", err)
+					bot.logger.Errorf("error when signaling new post on reddit: %v", err)
 				}
 			}
 		case <-ctx.Done():
@@ -356,7 +353,7 @@ Loop:
 			}
 			msg := fmt.Sprintf("RIP /u/%s %s (%s)", user.Name, EmojiPrayingHands, state)
 			if err := bot.channelMessageSend(bot.channelsID.General, msg); err != nil {
-				bot.logger.Printf("error when signaling a suspension or deletion: %v", err)
+				bot.logger.Errorf("error when signaling a suspension or deletion: %v", err)
 			}
 		case <-ctx.Done():
 			break Loop
@@ -372,7 +369,7 @@ Loop:
 		case user := <-ch:
 			msg := fmt.Sprintf("%s /u/%s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
 			if err := bot.channelMessageSend(bot.channelsID.General, msg); err != nil {
-				bot.logger.Printf("error when signaling an unsuspensions: %v", err)
+				bot.logger.Errorf("error when signaling an unsuspensions: %v", err)
 			}
 		case <-ctx.Done():
 			break Loop
@@ -390,7 +387,7 @@ Loop:
 			tmpl := "a comment by /u/%s has reached %d: %s"
 			msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
 			if err := bot.channelMessageSend(bot.channelsID.HighScores, msg); err != nil {
-				bot.logger.Printf("error when signaling high-score: %v", err)
+				bot.logger.Errorf("error when signaling high-score: %v", err)
 			}
 		case <-ctx.Done():
 			break Loop
@@ -513,8 +510,7 @@ func (bot *DiscordBot) simpleReply(reply string) func(DiscordMessage) error {
 
 func (bot *DiscordBot) register(msg DiscordMessage) error {
 	names := msg.Args
-	// info
-	bot.logger.Printf("%s wants to register %v", msg.Author.FQN(), names)
+	bot.logger.Infof("%s wants to register %v", msg.Author.FQN(), names)
 
 	status := &discordgo.MessageEmbed{
 		Title:       "Registration",
@@ -551,8 +547,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 func (bot *DiscordBot) editUsers(action_name string, action func(string) error) func(DiscordMessage) error {
 	return func(msg DiscordMessage) error {
 		names := msg.Args
-		// info
-		bot.logger.Printf("%s wants to %s %v", msg.Author.FQN(), action_name, names)
+		bot.logger.Infof("%s wants to %s %v", msg.Author.FQN(), action_name, names)
 
 		status := &discordgo.MessageEmbed{
 			Title:       strings.Title(action_name),
