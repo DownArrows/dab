@@ -137,6 +137,12 @@ type DiscordBot struct {
 }
 
 func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, conf DiscordBotConf) (*DiscordBot, error) {
+	discordgo.Logger = func(msgL, caller int, format string, dg_args ...interface{}) {
+		args := []interface{}{msgL, caller}
+		args = append(args, dg_args...)
+		logger.Debugf("discordgo library (log level %d, goroutine %d): "+format, args...)
+	}
+
 	session, err := discordgo.New("Bot " + conf.Token)
 	if err != nil {
 		return nil, err
