@@ -9,6 +9,8 @@ import (
 )
 
 func main() {
+	// Go read dab.go and the definition of DownArrowsBot to
+	// understand the structure of the whole application.
 	dab := NewDownArrowsBot(os.Stderr, os.Stdout)
 
 	ctx, cancel := context.WithCancel(context.Background())

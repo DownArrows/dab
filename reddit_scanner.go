@@ -118,6 +118,9 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 				rs.logger.Errorf("error while scanning user %s: %v", user.Name, err)
 			}
 
+			// This method contains logic that returns an User datastructure whose metadata
+			// has been updated; in other words, it indirectly controls the behavior of the
+			// current loop.
 			user, err = rs.storage.SaveCommentsUpdateUser(comments, user, last_scan+rs.maxAge)
 			if err != nil {
 				rs.logger.Errorf("error while registering comments of user %s: %v", user.Name, err)
@@ -135,6 +138,8 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 				rs.logger.Error(err)
 			}
 
+			// There are no more pages to scan, either because that's what the Reddit API returned,
+			// or because the logic we called previously decided no more pages should be scanned.
 			if user.Position == "" {
 				break
 			}

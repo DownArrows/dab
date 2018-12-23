@@ -543,7 +543,12 @@ func (s *Storage) UpdateInactiveStatus(max_age time.Duration) error {
  Comments
 *********/
 
-// Make sure the comments are all from the same user and the user struct is up to date
+// This method saves comments of a single user, and updates the user's metadata according
+// to the properties of the list of comments. It returns the updated User datastructure to
+// avoid having to do another request to get the update.
+// What happens here controls how the scanner will behave next.
+//
+// Make sure the comments are all from the same user and the user struct is up to date.
 // This method may seem to have a lot of logic for something in the storage layer,
 // but most of it used to be in the scanner for reddit and outside of a transaction;
 // putting the data-consistency related logic here simplifies greatly the overall code.
@@ -575,6 +580,8 @@ func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, max_age 
 	// Frow now on we don't need to check for an error because if the user doesn't exist,
 	// then the constraints would have made the previous statement fail.
 
+	// We need to know how many relevant we got, and save it in the user's metadata.
+	// This way, the scanner can avoid fetching superfluous comments.
 	now := time.Now().Round(0)
 	user.BatchSize = 0
 	for _, comment := range comments {
@@ -591,6 +598,7 @@ func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, max_age 
 		user.Position = ""
 	}
 
+	// All comments are younger than max_age, there may be more.
 	if user.BatchSize == uint(len(comments)) {
 		user.BatchSize = MaxRedditListingLength
 	}

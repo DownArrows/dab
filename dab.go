@@ -11,6 +11,10 @@ import (
 
 var Version = SemVer{1, 7, 0}
 
+// This data structure and its methods contain very little logic.
+// All it does is pass dependencies around and connect components
+// together according to what is already decided in the configuration
+// data structure. It offers a clear view of how everything is organized.
 type DownArrowsBot struct {
 	flagSet *flag.FlagSet
 	logger  LevelLogger
@@ -65,6 +69,8 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 	dab.logger.Infof("running DAB version %s", Version)
 
+	// Most of the decisions about what parts of the code
+	// should be enabled is done there.
 	if conf, err := NewConfiguration(dab.runtimeConf.ConfPath); err != nil {
 		return err
 	} else {
@@ -117,6 +123,17 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return nil
 	}
 
+	// We want to have distinct groups for tasks dependant on others.
+	// Readers read what writers send, so writers need to be shut down first,
+	// else writers could block while waiting for the other side.
+	// This could be avoided by cancelling everything at the same time and by using
+	// in writers the select statement to read from the context's cancellation channel
+	// while trying to write to channels connected to readers, but it would make
+	// their code even more complicated and could hide subtle concurrency bugs.
+	// Forcing everything to shut down in a clear order makes concurrency bugs more obvious,
+	// since then the process hangs and you have to SIGKILL it.
+	// This happened very often while the code was being refactored
+	// for proper shutdown instead of crashing.
 	top_level := NewTaskGroup(ctx)
 	readers := NewTaskGroup(context.Background())
 	writers := NewTaskGroup(context.Background())

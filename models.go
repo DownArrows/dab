@@ -16,6 +16,8 @@ type Comment struct {
 	Body       string  `json:"body" db:"body"`
 }
 
+// Used after JSON decoding in RedditAPI.
+// Using the built-in way to do that would have been much more code.
 func (c Comment) FinishDecoding() Comment {
 	c.Created = int64(c.RawCreated)
 	return c
@@ -52,16 +54,13 @@ func (u User) LastScanTime() time.Time {
 	return time.Unix(u.LastScan, 0)
 }
 
-func (u *User) Username(username string) bool {
-	return strings.ToLower(u.Name) == strings.ToLower(username)
-}
-
 type UserQuery struct {
 	User   User
 	Exists bool
 	Error  error
 }
 
+// Helper for logging queries.
 func (uq UserQuery) String() string {
 	status := []string{"name: " + uq.User.Name}
 	if uq.Exists {

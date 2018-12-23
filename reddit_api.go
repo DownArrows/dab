@@ -77,6 +77,7 @@ type redditResponse struct {
 	Error  error
 }
 
+// Note that all exported methods automatically retry once if they got a 403 response.
 type RedditAPI struct {
 	sync.Mutex
 	auth      RedditAuth
@@ -111,6 +112,7 @@ func NewRedditAPI(ctx context.Context, auth RedditAuth, userAgent *template.Temp
 	return ra, nil
 }
 
+// Gets a token from Reddit's API which will be used for all requests.
 func (ra *RedditAPI) connect(ctx context.Context) error {
 	auth_conf := url.Values{
 		"grant_type": {"password"},
@@ -119,6 +121,9 @@ func (ra *RedditAPI) connect(ctx context.Context) error {
 	}
 	auth_form := strings.NewReader(auth_conf.Encode())
 
+	// This might be called from RedditAPI.rawRequest,
+	// so we can't use it to make our request (deadlock),
+	// and we have different needs here anyway.
 	req, _ := http.NewRequest("POST", accessTokenRawURL, auth_form)
 
 	req.Header.Set("User-Agent", ra.userAgent)
@@ -137,6 +142,8 @@ func (ra *RedditAPI) connect(ctx context.Context) error {
 
 	ra.Lock()
 	defer ra.Unlock()
+	// There's no need for locking because calls are already made sequential
+	// by RedditAPI.rawRequest, and otherwise it's used just once in NewRedditAPI.
 	return json.Unmarshal(body, &ra.oAuth)
 }
 
@@ -259,6 +266,7 @@ func (ra *RedditAPI) getListing(ctx context.Context, path, position string, nb u
 	return comments, new_position, res.Status, nil
 }
 
+// Never pass nil as the URL, it can't deal with it. The data argument can be nil though.
 func (ra *RedditAPI) request(ctx context.Context, verb string, relative_url *url.URL, data io.Reader) redditResponse {
 	make_req := func() (*http.Request, error) {
 		query, err := url.ParseQuery(relative_url.RawQuery)
@@ -273,6 +281,9 @@ func (ra *RedditAPI) request(ctx context.Context, verb string, relative_url *url
 	return ra.rawRequest(ctx, make_req)
 }
 
+// Why take a closure instead of a request object directly?
+// Request objects are single use, and this method will automatically retry if
+// we are not authenticated anymore.
 func (ra *RedditAPI) rawRequest(ctx context.Context, makeReq func() (*http.Request, error)) redditResponse {
 	select {
 	case <-ra.ticker.C:

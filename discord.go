@@ -48,6 +48,8 @@ func embedAddField(embed *discordgo.MessageEmbed, name, value string, inline boo
 	embed.Fields = append(embed.Fields, embedField(name, value, inline))
 }
 
+// discordgo's data structures aren't well adapted to our needs,
+// and typing "*discordgo.DataStructure" all the time gets tiring.
 type DiscordMessage struct {
 	Args      []string
 	Author    DiscordMember
@@ -67,6 +69,7 @@ func (member DiscordMember) FQN() string {
 	return member.Name + "#" + member.Discriminator
 }
 
+// This is used in DiscordBot.getCommandsDescriptors.
 type DiscordCommand struct {
 	Command   string
 	Aliases   []string
@@ -106,12 +109,6 @@ func (cmd DiscordCommand) SingleMatch(name, prefix, content string) (bool, strin
 type DiscordWelcomeData struct {
 	ChannelsID DiscordBotChannelsID
 	Member     DiscordMember
-}
-
-type DiscordBotChannelsID struct {
-	General    string `json:"general"`
-	Log        string `json:"log"`
-	HighScores string `json:"highscores"`
 }
 
 type DiscordBot struct {

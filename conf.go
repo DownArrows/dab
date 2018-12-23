@@ -84,6 +84,12 @@ type DiscordBotConf struct {
 	Timezone   Timezone `json:"-"`
 }
 
+type DiscordBotChannelsID struct {
+	General    string `json:"general"`
+	Log        string `json:"log"`
+	HighScores string `json:"highscores"`
+}
+
 type WebConf struct {
 	Listen string `json:"listen"`
 }
@@ -236,10 +242,12 @@ func (c ComponentsConf) String() string {
 	return fmt.Sprintf("%s; %s; %s", c.Discord, c.Reddit, c.Web)
 }
 
+// Needed to decode JSON strings to time.Duration.
 type Duration struct {
 	Value time.Duration
 }
 
+// Called by the JSON decoder.
 func (d *Duration) UnmarshalJSON(raw []byte) error {
 	var value string
 	err := json.Unmarshal(raw, &value)
@@ -250,10 +258,12 @@ func (d *Duration) UnmarshalJSON(raw []byte) error {
 	return err
 }
 
+// Needed to decode JSON strings to *time.Location.
 type Timezone struct {
 	Value *time.Location
 }
 
+// Called by the JSON decoder.
 func (tz *Timezone) UnmarshalJSON(raw []byte) error {
 	var value string
 	err := json.Unmarshal(raw, &value)
