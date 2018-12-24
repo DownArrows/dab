@@ -142,8 +142,6 @@ func (ra *RedditAPI) connect(ctx context.Context) error {
 
 	ra.Lock()
 	defer ra.Unlock()
-	// There's no need for locking because calls are already made sequential
-	// by RedditAPI.rawRequest, and otherwise it's used just once in NewRedditAPI.
 	return json.Unmarshal(body, &ra.oAuth)
 }
 
