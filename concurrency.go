@@ -21,6 +21,8 @@ func SleepCtx(ctx context.Context, duration time.Duration) bool {
 	}
 }
 
+type Task func(context.Context) error
+
 // Launches and shuts down a group of goroutine which take a context and return an error.
 // Use TaskGroup.Spawn to launch functions asynchronously,
 // and once you're done use TaskGroup.Wait to wait on them.
@@ -45,7 +47,7 @@ func NewTaskGroup(parent context.Context) *TaskGroup {
 	}
 }
 
-func (tg *TaskGroup) Spawn(cb func(context.Context) error) {
+func (tg *TaskGroup) Spawn(cb Task) {
 	tg.wait.Add(1)
 	go func() {
 		if err := cb(tg.context); err != nil && !IsCancellation(err) {

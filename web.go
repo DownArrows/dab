@@ -49,6 +49,7 @@ type HTMLReportComment struct {
 	HTMLBody template.HTML
 }
 
+// Component
 type WebServer struct {
 	backupStorage   BackupStorage
 	done            chan error

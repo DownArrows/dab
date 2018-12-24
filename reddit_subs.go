@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// Component
 type RedditSubs struct {
 	api     RedditSubsAPI
 	logger  LevelLogger

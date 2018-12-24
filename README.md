@@ -327,27 +327,28 @@ This readme is written in markdown and is compatible with github-flavored markdo
 
 ### Architecture
 
-This application has several components that run independently and communicate either through the database layer or through channels.
-They are managed by the `DownArrowsBot` data structure in `dab.go`;
-it checks what the user wants to do, what components can be launched according to the configuration file,
-propagates the root context for proper cancellation, and waits for each component to shut down and returns errors.
-It also logs what components are enabled and why some are disabled.
-Its main tool to achieve that is the `TaskGroup` data structure (in `concurrency.go`),
-which allows to manage groups of functions launched as goroutines.
-Those functions must have the following type signature: `func (context.Context) error`.
-If the function you want to manage with a task group has a different type signature, wrap it in an anonymous function.
+*(NB: The architecture is mostly inspired by Erlang/OTP and the Trio asynchronous framework for python.)*
 
-A component is a data structure which has one or several methods that take at least a context and return an error.
-See the `DownArrowsBot` data structure definition in `dab.go` for the list of components.
-Since goroutines that write to channels would block if the goroutines reading the channels were to be stopped before them,
-a task group only for writers is used and stopped before the task group for readers, allowing for proper and orderly shutdown.
-Make sure that any function spawned by a task group properly returns if it receives a cancellation signal at any point
-(it may or may not return the cancellation error, it doesn't matter).
+The main problem is coordinating multiple long-running goroutines with methods acting on shared state,
+while keeping coupling low and using injection of dependencies.
+The wiring up of the "layers" and "components" is done by `DownArrowsBot` in `dab.go`;
+this the data structure and methods you want to read if you want to understand the architecture.
 
-`Storage` is not a component, it is a layer, and is passed by reference to other data structures.
-Since its methods panic on most errors (because most errors would mean a serious issue with the database, requiring to immediately stop),
-it must be closed last, after all components have been stopped.
-Its instantiation shouldn't panic though, it needs to properly report errors and close the database.
+A "layer" is a data structure with a collelction of methods that can be called from any goroutine at any time.
+That means they have to be thread-safe, and if at all possible, be passed by value rather by reference.
+They don't communicate via channels, they are simply passed around to the layer or component that uses them (ie their client).
+For clarity and decoupling, we may define per-client interfaces containing only the methods that are used by each client.
+Where components communicate via channels, layers communicate via interfaces.
+
+A "component" is a data structure with one or several methods that are also "tasks" (see next paragraph).
+By extension, we call a component (or "main component") several components and layers related to the same topic (eg. communicating with Reddit),
+especially in the context of configuration where they all depend on the same set of settings.
+
+We call a `Task` (see definition in `concurrency.go`) a function that can be managed by a `TaskGroup`.
+The goal of a task group is to launch a function as a goroutine with a [context](https://golang.org/pkg/context/)
+and wait for it to return normally or with an error (this was inspired by Trio's nurseries).
+By extension, we call a task any function that can be turned into a proper task with a trivial wrapping function.
+They communicate together through channels that are passed either via a closure or via the data structure they are attached to.
 
 ### Database schema
 

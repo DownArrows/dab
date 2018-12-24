@@ -111,6 +111,7 @@ type DiscordWelcomeData struct {
 	Member     DiscordMember
 }
 
+// Component
 type DiscordBot struct {
 	// dependencies
 	client  *discordgo.Session

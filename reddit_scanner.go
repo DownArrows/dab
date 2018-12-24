@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// Component
 type RedditScanner struct {
 	// dependencies
 	api     RedditScannerAPI
