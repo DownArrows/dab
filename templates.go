@@ -155,6 +155,13 @@ var HTMLReportPage = autoHTMLTemplate("HTMLReportPage", `
 			padding-left: calc(2 * var(--spacing));
 		}
 
+		.comment > blockquote pre {
+			overflow-x: scroll;
+			padding: var(--spacing);
+			border-radius: var(--spacing);
+			background: #eee;
+		}
+
 		main {
 			margin-bottom: 1em;
 		}
