@@ -9,11 +9,11 @@ import (
 )
 
 type ReportFactory struct {
-	cutOff   int64
-	leeway   time.Duration
-	nbTop    uint
+	cutOff   int64         // Max acceptable comment score for inclusion in the report
+	leeway   time.Duration // Shift of the report's start and end date
+	nbTop    uint          // Number of items to summarize the weeks with statistics
 	storage  ReportFactoryStorage
-	timezone *time.Location
+	timezone *time.Location // Timezone used to compute weeks, years and corresponding start/end dates
 }
 
 func NewReportFactory(storage ReportFactoryStorage, conf ReportConf) ReportFactory {
@@ -79,15 +79,15 @@ func (rf ReportFactory) Now() time.Time {
 // Report data structures
 
 type Report struct {
-	RawComments       []Comment
-	Week              uint8
-	Year              int
-	Start             time.Time
-	End               time.Time
-	Stats             UserStatsMap
-	MaxStatsSummaries uint
-	Timezone          *time.Location
-	CutOff            int64
+	RawComments       []Comment      // Comments as taken from the database
+	Week              uint8          // Week ISO number of the report
+	Year              int            // Year of the report
+	Start             time.Time      // Start date of the report including any "leeway"
+	End               time.Time      // End date of the report including any "leeway"
+	Stats             UserStatsMap   // Statistics for all users
+	MaxStatsSummaries uint           // Max number of statistics to put in the report's headers to summarize the week
+	Timezone          *time.Location // Timezone of dates
+	CutOff            int64          // Max score of the comments included in the report
 }
 
 func (r Report) Head() ReportHead {
@@ -140,23 +140,23 @@ func (r Report) Len() int {
 }
 
 type ReportHead struct {
-	Number  int
-	Average StatsSummaries
-	Delta   StatsSummaries
-	Start   time.Time
-	End     time.Time
-	CutOff  int64
+	Number  int            // Number of comments in the report
+	Average StatsSummaries // List of users with the lowest average karma
+	Delta   StatsSummaries // List of users with the biggest loss of karma
+	Start   time.Time      // Sart date of the report
+	End     time.Time      // End date of the report
+	CutOff  int64          // Maximum comment score for inclusion in the report
 }
 
 type ReportComment struct {
-	Number    int
-	Average   int64
-	Author    string
-	Created   time.Time
-	Score     int64
-	Sub       string
-	Permalink string
-	Body      string
+	Number    int       // Position of the comment in the report
+	Average   int64     // Average karma for that user
+	Author    string    // User name
+	Created   time.Time // Date of creation of the comment
+	Score     int64     // Score of the comment
+	Sub       string    // Subreddit in which the comment was posted
+	Permalink string    // Path on reddit to the comment
+	Body      string    // Body of the comment as it was typed (in reddit-flavored markdown)
 }
 
 func (rc ReportComment) BodyLines() []string {
