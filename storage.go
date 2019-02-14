@@ -87,15 +87,15 @@ var initQueries = []string{
 		CREATE TABLE IF NOT EXISTS user_archive (
 			name TEXT PRIMARY KEY,
 			created INTEGER NOT NULL,
-			not_found BOOLEAN DEFAULT 0 NOT NULL,
-			suspended BOOLEAN DEFAULT 0 NOT NULL,
+			not_found BOOLEAN DEFAULT FALSE NOT NULL,
+			suspended BOOLEAN DEFAULT FALSE NOT NULL,
 			added INTEGER NOT NULL,
 			batch_size INTEGER DEFAULT %d NOT NULL,
-			deleted BOOLEAN DEFAULT 0 NOT NULL,
+			deleted BOOLEAN DEFAULT FALSE NOT NULL,
 			hidden BOOLEAN NOT NULL,
-			inactive BOOLEAN DEFAULT 0 NOT NULL,
-			last_scan INTEGER DEFAULT 0 NOT NULL,
-			new BOOLEAN DEFAULT 1 NOT NULL,
+			inactive BOOLEAN DEFAULT FALSE NOT NULL,
+			last_scan INTEGER DEFAULT FALSE NOT NULL,
+			new BOOLEAN DEFAULT TRUE NOT NULL,
 			position TEXT DEFAULT "" NOT NULL
 		) WITHOUT ROWID`, MaxRedditListingLength),
 	`CREATE INDEX IF NOT EXISTS user_archive_idx
@@ -125,7 +125,7 @@ var initQueries = []string{
 			users(name, created, not_found, suspended, added, batch_size, hidden, inactive, last_scan, new, position)
 		AS
 			SELECT name, created, not_found, suspended, added, batch_size, hidden, inactive, last_scan, new, position
-			FROM user_archive WHERE deleted = 0`,
+			FROM user_archive WHERE deleted IS FALSE`,
 }
 
 type foreignKeyCheck struct {
@@ -461,31 +461,31 @@ func (s *Storage) simpleEditUser(query, username string) error {
 }
 
 func (s *Storage) DelUser(username string) error {
-	return s.simpleEditUser("UPDATE user_archive SET deleted = 1 WHERE name = ? COLLATE NOCASE", username)
+	return s.simpleEditUser("UPDATE user_archive SET deleted = TRUE WHERE name = ? COLLATE NOCASE", username)
 }
 
 func (s *Storage) HideUser(username string) error {
-	return s.simpleEditUser("UPDATE user_archive SET hidden = 1 WHERE name = ? COLLATE NOCASE", username)
+	return s.simpleEditUser("UPDATE user_archive SET hidden = TRUE WHERE name = ? COLLATE NOCASE", username)
 }
 
 func (s *Storage) UnHideUser(username string) error {
-	return s.simpleEditUser("UPDATE user_archive SET hidden = 0 WHERE name = ? COLLATE NOCASE", username)
+	return s.simpleEditUser("UPDATE user_archive SET hidden = FALSE WHERE name = ? COLLATE NOCASE", username)
 }
 
 func (s *Storage) SuspendUser(username string) error {
-	return s.simpleEditUser("UPDATE user_archive SET suspended = 1 WHERE name = ?", username)
+	return s.simpleEditUser("UPDATE user_archive SET suspended = TRUE WHERE name = ?", username)
 }
 
 func (s *Storage) UnSuspendUser(username string) error {
-	return s.simpleEditUser("UPDATE user_archive SET suspended = 0 WHERE name = ?", username)
+	return s.simpleEditUser("UPDATE user_archive SET suspended = FALSE WHERE name = ?", username)
 }
 
 func (s *Storage) NotFoundUser(username string) error {
-	return s.simpleEditUser("UPDATE user_archive SET not_found = 1 WHERE name = ?", username)
+	return s.simpleEditUser("UPDATE user_archive SET not_found = TRUE WHERE name = ?", username)
 }
 
 func (s *Storage) FoundUser(username string) error {
-	return s.simpleEditUser("UPDATE user_archive SET not_found = 0 WHERE name = ?", username)
+	return s.simpleEditUser("UPDATE user_archive SET not_found = FALSE WHERE name = ?", username)
 }
 
 func (s *Storage) PurgeUser(username string) error {
@@ -510,15 +510,15 @@ func (s *Storage) anyListUsers(q string) []User {
 }
 
 func (s *Storage) ListUsers() []User {
-	return s.anyListUsers("SELECT * FROM users WHERE suspended = 0 AND not_found = 0 ORDER BY last_scan")
+	return s.anyListUsers("SELECT * FROM users WHERE suspended IS FALSE AND not_found IS FALSE ORDER BY last_scan")
 }
 
 func (s *Storage) ListSuspendedAndNotFound() []User {
-	return s.anyListUsers("SELECT * FROM users WHERE suspended = 1 OR not_found = 1 ORDER BY last_scan")
+	return s.anyListUsers("SELECT * FROM users WHERE suspended IS TRUE OR not_found IS TRUE ORDER BY last_scan")
 }
 
 func (s *Storage) ListActiveUsers() []User {
-	return s.anyListUsers("SELECT * FROM users WHERE inactive = 0 AND suspended = 0 AND not_found = 0 ORDER BY last_scan")
+	return s.anyListUsers("SELECT * FROM users WHERE inactive IS FALSE AND suspended IS FALSE AND not_found IS FALSE ORDER BY last_scan")
 }
 
 func (s *Storage) UpdateInactiveStatus(max_age time.Duration) error {
@@ -591,7 +591,7 @@ func (s *Storage) SaveCommentsUpdateUser(comments []Comment, user User, max_age 
 	}
 
 	if user.New && user.Position == "" { // end of the listing reached
-		tx.MustExec("UPDATE user_archive SET new = 0 WHERE name = ?", user.Name)
+		tx.MustExec("UPDATE user_archive SET new = FALSE WHERE name = ?", user.Name)
 	}
 
 	if !user.New && user.BatchSize < uint(len(comments)) { // position resetting doesn't apply to new users
@@ -619,7 +619,7 @@ func (s *Storage) GetCommentsBelowBetween(score int64, since, until time.Time) [
 		ON comments.author = users.name
 		WHERE
 			comments.score <= ?
-			AND users.hidden = 0
+			AND users.hidden IS FALSE
 			AND comments.created BETWEEN ? AND ?
 		ORDER BY comments.score ASC`
 	var comments []Comment
@@ -664,7 +664,7 @@ func (s *Storage) StatsBetween(since, until time.Time) UserStatsMap {
 		ON comments.author = users.name
 		WHERE
 			comments.score < 0
-			AND users.hidden = 0
+			AND users.hidden IS FALSE
 			AND comments.created BETWEEN ? AND ?
 		GROUP BY comments.author`)
 	s.autofatal(err)
