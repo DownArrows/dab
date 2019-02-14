@@ -166,13 +166,13 @@ func (rc ReportComment) BodyLines() []string {
 // Statistics data structures
 
 type UserStats struct {
-	Name    string
-	Average float64
-	Delta   int64
-	Count   uint64
+	Name    string  // User name
+	Average float64 // Average karma for the time span considered
+	Delta   int64   // Karma loss for the time span considered
+	Count   uint64  // Number of comments made by that user
 }
 
-type UserStatsMap map[string]UserStats
+type UserStatsMap map[string]UserStats // Maps user names to corresponding stats for faster lookup
 
 func (usc UserStatsMap) DeltasToSummaries() StatsSummaries {
 	stats := make([]StatsSummary, 0, len(usc))
@@ -198,10 +198,12 @@ func (usc UserStatsMap) AveragesToSummaries() StatsSummaries {
 	return stats
 }
 
+// Abstract representation of a value corresponding to a statistical summary
+// of a collection of things related to an user.
 type StatsSummary struct {
-	Name    string
-	Count   uint64
-	Summary int64
+	Name    string // User name
+	Count   uint64 // Number of things considered
+	Summary int64  // Summary number for the things considered
 }
 
 type StatsSummaries []StatsSummary
