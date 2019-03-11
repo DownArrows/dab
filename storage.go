@@ -82,7 +82,6 @@ func init() {
 var initQueries = []string{
 	"PRAGMA auto_vacuum = 'incremental'",
 	fmt.Sprintf("PRAGMA application_id = %d", ApplicationFileID),
-	fmt.Sprintf("PRAGMA user_version = %d", Version.ToInt32()),
 	fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS user_archive (
 			name TEXT PRIMARY KEY,
@@ -191,9 +190,18 @@ func NewStorage(logger LevelLogger, conf StorageConf) (*Storage, error) {
 			if err := s.checkApplicationID(); err != nil {
 				return nil, err
 			}
-			if err := s.compareVersions(); err != nil {
+
+			found_version := s.getVersion()
+			if err := s.checkVersion(found_version); err != nil {
 				return nil, err
 			}
+			if err := s.migrate(found_version, storageMigrations); err != nil {
+				return nil, err
+			}
+		}
+
+		if err := s.setVersion(Version); err != nil {
+			return nil, err
 		}
 
 		if err := s.enableWAL(); err != nil {
@@ -238,6 +246,15 @@ func (s *Storage) connect() error {
 	return nil
 }
 
+func (s *Storage) runQueryList(queries []string) error {
+	for _, query := range queries {
+		if _, err := s.db.Exec(query); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Storage) isNew() (bool, error) {
 	var names []string
 	if err := s.db.Select(&names, "SELECT name FROM sqlite_master WHERE type = 'table'"); err != nil && err != sql.ErrNoRows {
@@ -256,22 +273,48 @@ func (s *Storage) checkApplicationID() error {
 	return nil
 }
 
-func (s *Storage) compareVersions() error {
+func (s *Storage) getVersion() SemVer {
 	var int_version int32
-	if err := s.db.Get(&int_version, "PRAGMA user_version"); err != nil {
-		return err
-	}
+	s.autofatal(s.db.Get(&int_version, "PRAGMA user_version"))
+	return SemVerFromInt32(int_version)
+}
 
-	if int_version == 0 {
+func (s *Storage) setVersion(version SemVer) error {
+	// String interpolation is needed because the driver for SQLite doesn't manage this case
+	_, err := s.db.Exec(fmt.Sprintf("PRAGMA user_version = %d", version.ToInt32()))
+	return err
+}
+
+func (s *Storage) checkVersion(found_version SemVer) error {
+	if found_version.Equal(SemVer{0, 0, 0}) {
 		return errors.New("database already has tables but no version is set, refusing to continue")
 	}
 
-	found_version := SemVerFromInt32(int_version)
 	if !Version.Equal(found_version) {
 		if Version.After(found_version) {
 			s.logger.Infof("database last written by previous version %s", found_version)
 		} else {
 			return fmt.Errorf("database last written by version %s more recent than current version", found_version)
+		}
+	}
+	return nil
+}
+
+func (s *Storage) migrate(from SemVer, migrations []storageMigration) error {
+	for _, migration := range migrations {
+		// The migrations are supposed to be sorted from lowest to highest version,
+		// so there's no point in having a stop condition.
+		if migration.From.Equal(from) || migration.From.After(from) {
+			s.logger.Infof("migrating database from version %s to %s", migration.From, migration.To)
+			if err := migration.Do(s); err != nil {
+				return err
+			}
+			s.logger.Infof("migration from version %s to %s successful", migration.From, migration.To)
+			// Set new version in case there's an error in the next loop,
+			// so that the user can easily retry the migration.
+			if err := s.setVersion(migration.To); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -299,10 +342,8 @@ func (s *Storage) startupChecks() error {
 }
 
 func (s *Storage) init() error {
-	for _, query := range initQueries {
-		if _, err := s.db.Exec(query); err != nil {
-			return err
-		}
+	if err := s.runQueryList(initQueries); err != nil {
+		return err
 	}
 
 	s.cache.KnownObjects = NewSyncSet()
