@@ -123,6 +123,7 @@ type DiscordBot struct {
 	channelsID DiscordBotChannelsID
 	guildID    string
 	hidePrefix string
+	noLog      string
 	prefix     string
 	timezone   *time.Location
 	welcome    *template.Template
@@ -159,6 +160,7 @@ func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, conf DiscordBo
 		adminID:    conf.Admin,
 		channelsID: conf.DiscordBotChannelsID,
 		hidePrefix: conf.HidePrefix,
+		noLog:      conf.Prefix + "nolog",
 		prefix:     conf.Prefix,
 		timezone:   conf.Timezone.Value,
 		welcome:    welcome,
@@ -441,7 +443,7 @@ func (bot *DiscordBot) command(msg DiscordMessage) error {
 func (bot *DiscordBot) isLoggableRedditLink(msg DiscordMessage) bool {
 	return (msg.ChannelID == bot.channelsID.General && // won't be true if General is not set (ie left empty)
 		bot.redditLink.MatchString(msg.Content) &&
-		!strings.Contains(strings.ToLower(msg.Content), "!nolog"))
+		!strings.Contains(strings.ToLower(msg.Content), bot.noLog))
 }
 
 func (bot *DiscordBot) processRedditLink(msg DiscordMessage) error {
