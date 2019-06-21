@@ -199,7 +199,7 @@ func (usc UserStatsMap) AveragesToSummaries() StatsSummaries {
 }
 
 // Abstract representation of a value corresponding to a statistical summary
-// of a collection of things related to an user.
+// of a collection of things related to a user.
 type StatsSummary struct {
 	Name    string // User name
 	Count   uint64 // Number of things considered

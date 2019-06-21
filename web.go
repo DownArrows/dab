@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// Simple hack to get compression without having to create a whole type implemeting http.ResponseWriter
+// Simple hack to get compression without having to create a whole type implementing http.ResponseWriter
 type webResponse struct {
 	Actual http.ResponseWriter
 	Gzip   *gzip.Writer

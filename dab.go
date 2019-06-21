@@ -127,7 +127,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	// Readers read what writers send, so writers need to be shut down first,
 	// else writers could block while waiting for the other side.
 	// This could be avoided by cancelling everything at the same time and by using
-	// in writers the select statement to read from the context's cancellation channel
+	// inside writers the select statement to read from the context's cancellation channel
 	// while trying to write to channels connected to readers, but it would make
 	// their code even more complicated and could hide subtle concurrency bugs.
 	// Forcing everything to shut down in a clear order makes concurrency bugs more obvious,

@@ -24,7 +24,7 @@ const (
 	EmojiPrayingHands  = "\U0001f64f"
 	EmojiRainbow       = "\U0001f308"
 	EmojiThumbDown     = "\U0001f44e"
-	EmojiThumbsUp      = "\U0001f44d"
+	EmojiThumbUp       = "\U0001f44d"
 	EmojiWheelOfDharma = "\u2638"
 	EmojiWhiteFlower   = "\U0001f4ae"
 )
@@ -33,7 +33,7 @@ const DiscordMessageLengthLimit = 2000
 
 var linkReactions = []string{
 	EmojiCrossBones, EmojiFire, EmojiGrowingHeart, EmojiHighVoltage,
-	EmojiOkHand, EmojiOneHundred, EmojiThumbsUp, EmojiWhiteFlower,
+	EmojiOkHand, EmojiOneHundred, EmojiThumbUp, EmojiWhiteFlower,
 }
 
 func embedField(name, value string, inline bool) *discordgo.MessageEmbedField {

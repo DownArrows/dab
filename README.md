@@ -37,14 +37,14 @@ Commands must start with the configured prefix (defaults to `!`), and if they ta
 Some are reserved to the privileged user.
 If they accept Reddit usernames, they accept them as `AGreatUsername`, `/u/AGreatUsername`, and `u/AGreatUsername`.
 
- - `hide` hide an user from reports
- - `info` information about an user: creation date, registration date, suspension or deletion status, inactive status
+ - `hide` hide a user from reports
+ - `info` information about a user: creation date, registration date, suspension or deletion status, inactive status
  - `karma` give negative/positive/total karma for the given username
  - `purge` (privileged) completely remove from the database one or several users
  - `register` try to register a list of usernames; if it starts with the hiding prefix the user will be hidden from reports
  - `sep` or `separator` or `=` post a separation rule
  - `sip` or `sipthebep` quote from sipthebep
- - `unhide` don't hide an user from reports
+ - `unhide` don't hide a user from reports
  - `unregister` (privileged) unregister one or several user
  - `version` post the bot's version
 
@@ -198,7 +198,7 @@ and <http://golang.localhost/pkg/text/template/>.
     - `id` *string* (*none*): Reddit application ID for the bot; leave out to disable the Reddit component
     - `inactivity_threshold` *duration* (2200h): if a user hasn't commented since that long ago,
       consider them "inactive" and scan them less often; must be at least one day
-    - `max_age` *duration* (24h): don't get more batches of an user's comments if the oldest comment found is older than that;
+    - `max_age` *duration* (24h): don't get more batches of a user's comments if the oldest comment found is older than that;
       must be at least one day
     - `max_batches` *int* (5): maximum number of batches of comments to get from Reddit for a single user before moving to the next one
     - `password` *string* (*none*): Reddit password for the bot's account; leave out to disable the Reddit component
@@ -334,7 +334,7 @@ while keeping coupling low and using injection of dependencies.
 The wiring up of the "layers" and "components" is done by `DownArrowsBot` in `dab.go`;
 this the data structure and methods you want to read if you want to understand the architecture.
 
-A "layer" is a data structure with a collelction of methods that can be called from any goroutine at any time.
+A "layer" is a data structure with a collection of methods that can be called from any goroutine at any time.
 That means they have to be thread-safe, and if at all possible, be passed by value rather by reference.
 They don't communicate via channels, they are simply passed around to the layer or component that uses them (ie their client).
 For clarity and decoupling, we may define per-client interfaces containing only the methods that are used by each client.
