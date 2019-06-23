@@ -49,7 +49,7 @@ type DiscordBotStorage interface {
 
 type ReportFactoryStorage interface {
 	GetCommentsBelowBetween(int64, time.Time, time.Time) []Comment
-	StatsBetween(time.Time, time.Time) UserStatsMap
+	StatsBetween(int64, time.Time, time.Time) UserStatsMap
 }
 
 type BackupStorage interface {
@@ -694,7 +694,7 @@ func (s *Storage) getKarma(q, username string) (int64, error) {
 	return score.Int64, nil
 }
 
-func (s *Storage) StatsBetween(since, until time.Time) UserStatsMap {
+func (s *Storage) StatsBetween(score int64, since, until time.Time) UserStatsMap {
 	stmt, err := s.db.Prepare(`
 		SELECT
 			comments.author AS author,
@@ -707,11 +707,12 @@ func (s *Storage) StatsBetween(since, until time.Time) UserStatsMap {
 			comments.score < 0
 			AND users.hidden IS FALSE
 			AND comments.created BETWEEN ? AND ?
-		GROUP BY comments.author`)
+		GROUP BY comments.author
+		HAVING MIN(comments.score) <= ?`)
 	s.autofatal(err)
 	defer stmt.Close()
 
-	rows, err := stmt.Query(since.Unix(), until.Unix())
+	rows, err := stmt.Query(since.Unix(), until.Unix(), score)
 	s.autofatal(err)
 	defer rows.Close()
 

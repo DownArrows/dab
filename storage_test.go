@@ -163,7 +163,7 @@ func TestCRUDComments(t *testing.T) {
 	})
 
 	t.Run("statistics only include negative comments", func(t *testing.T) {
-		stats := s.StatsBetween(start, end)
+		stats := s.StatsBetween(0, start, end)
 		if !(len(stats) == 2 && stats[author1.Name].Count == 1 && stats[author1.Name].Average == -100 &&
 			stats[author2.Name].Average == -70 && stats[author2.Name].Count == 1) {
 			t.Errorf("expected two users with average -70 and -100, not %v", stats)

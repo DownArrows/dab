@@ -37,7 +37,7 @@ func (rf ReportFactory) ReportWeek(week_num uint8, year int) Report {
 func (rf ReportFactory) Report(start, end time.Time) Report {
 	return Report{
 		RawComments:       rf.storage.GetCommentsBelowBetween(rf.cutOff, start, end),
-		Stats:             rf.storage.StatsBetween(start, end),
+		Stats:             rf.storage.StatsBetween(rf.cutOff, start, end),
 		Start:             start,
 		End:               end,
 		MaxStatsSummaries: rf.nbTop,
@@ -91,20 +91,10 @@ type Report struct {
 }
 
 func (r Report) Head() ReportHead {
-	deltas := r.Stats.DeltasToSummaries().Sort()
-	if uint(len(deltas)) > r.MaxStatsSummaries {
-		deltas = deltas[:r.MaxStatsSummaries]
-	}
-
-	averages := r.Stats.AveragesToSummaries().Sort()
-	if uint(len(averages)) > r.MaxStatsSummaries {
-		averages = averages[:r.MaxStatsSummaries]
-	}
-
 	return ReportHead{
 		Number:  len(r.RawComments),
-		Average: averages,
-		Delta:   deltas,
+		Average: r.Stats.DeltasToSummaries().Sort().Limit(r.MaxStatsSummaries),
+		Delta:   r.Stats.AveragesToSummaries().Sort().Limit(r.MaxStatsSummaries),
 		Start:   r.Start,
 		End:     r.End,
 		CutOff:  r.CutOff,
@@ -174,25 +164,21 @@ type UserStats struct {
 
 type UserStatsMap map[string]UserStats // Maps user names to corresponding stats for faster lookup
 
-func (usc UserStatsMap) DeltasToSummaries() StatsSummaries {
-	stats := make([]StatsSummary, 0, len(usc))
-	for name, data := range usc {
-		stats = append(stats, StatsSummary{
-			Name:    name,
-			Count:   data.Count,
-			Summary: data.Delta,
-		})
-	}
-	return stats
+func (usm UserStatsMap) DeltasToSummaries() StatsSummaries {
+	return usm.toSummaries(func(us UserStats) int64 { return us.Delta })
 }
 
-func (usc UserStatsMap) AveragesToSummaries() StatsSummaries {
-	stats := make([]StatsSummary, 0, len(usc))
-	for name, data := range usc {
+func (usm UserStatsMap) AveragesToSummaries() StatsSummaries {
+	return usm.toSummaries(func(us UserStats) int64 { return int64(math.Round(us.Average)) })
+}
+
+func (usm UserStatsMap) toSummaries(summary func(UserStats) int64) StatsSummaries {
+	stats := make([]StatsSummary, 0, len(usm))
+	for name, data := range usm {
 		stats = append(stats, StatsSummary{
 			Name:    name,
 			Count:   data.Count,
-			Summary: int64(math.Round(data.Average)),
+			Summary: summary(data),
 		})
 	}
 	return stats
@@ -207,6 +193,16 @@ type StatsSummary struct {
 }
 
 type StatsSummaries []StatsSummary
+
+func (s StatsSummaries) Limit(limit uint) StatsSummaries {
+	length := uint(len(s))
+	if length > limit {
+		length = limit
+	}
+	result := make([]StatsSummary, length)
+	copy(result, s)
+	return result
+}
 
 func (s StatsSummaries) Len() int {
 	return len(s)
