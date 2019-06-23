@@ -9,10 +9,11 @@ import (
 	"strconv"
 )
 
-var LevelLoggerLevels = []string{"Error", "Info", "Debug"}
+var LevelLoggerLevels = []string{"Fatal", "Error", "Info", "Debug"}
 
 const (
-	levelLoggerError = iota
+	levelLoggerFatal = iota
+	levelLoggerError
 	levelLoggerInfo
 	levelLoggerDebug
 )
@@ -33,6 +34,7 @@ func NewLevelLogger(out io.Writer, level string) (LevelLogger, error) {
 	ll := LevelLogger{out: out}
 
 	int_map := map[string]int{
+		"Fatal": levelLoggerFatal,
 		"Error": levelLoggerError,
 		"Info":  levelLoggerInfo,
 		"Debug": levelLoggerDebug,
@@ -62,12 +64,12 @@ func (ll LevelLogger) logf(level int, template string, opts ...interface{}) {
 }
 
 func (ll LevelLogger) Fatal(err error) {
-	ll.log(-1, err)
+	ll.log(levelLoggerFatal, err)
 	os.Exit(1)
 }
 
 func (ll LevelLogger) Fatalf(template string, opts ...interface{}) {
-	ll.logf(-1, template, opts...)
+	ll.logf(levelLoggerFatal, template, opts...)
 	os.Exit(1)
 }
 
