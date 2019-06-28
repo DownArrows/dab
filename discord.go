@@ -107,6 +107,7 @@ func (cmd DiscordCommand) SingleMatch(name, prefix, content string) (bool, strin
 }
 
 type DiscordWelcomeData struct {
+	BotID      string
 	ChannelsID DiscordBotChannelsID
 	Member     DiscordMember
 }
@@ -117,6 +118,9 @@ type DiscordBot struct {
 	client  *discordgo.Session
 	logger  LevelLogger
 	storage DiscordBotStorage
+
+	// state information
+	ID string
 
 	// configuration
 	adminID    string
@@ -179,7 +183,7 @@ func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, conf DiscordBo
 	}
 
 	session.AddHandler(func(s *discordgo.Session, msg *discordgo.MessageCreate) { bot.onMessage(msg) })
-	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) { bot.onReady() })
+	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) { bot.onReady(r) })
 
 	return bot, nil
 }
@@ -229,12 +233,14 @@ func (bot *DiscordBot) myColor(channelID string) int {
 }
 
 // this is executed on each (re)-connection to Discord
-func (bot *DiscordBot) onReady() {
+func (bot *DiscordBot) onReady(r *discordgo.Ready) {
 	bot.logger.Debug("(re-)connected to discord, checking settings")
 	if err := bot.client.UpdateStatus(0, "Downvote Counter"); err != nil {
 		bot.fatal(fmt.Errorf("couldn't set status on discord: %v", err))
 		return
 	}
+
+	bot.ID = r.User.ID
 
 	// Check the channels exist and are all in the same server
 	channels := reflect.ValueOf(bot.channelsID)
@@ -281,6 +287,7 @@ func (bot *DiscordBot) onReady() {
 func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
 	var msg strings.Builder
 	data := DiscordWelcomeData{
+		BotID:      bot.ID,
 		ChannelsID: bot.channelsID,
 		Member: DiscordMember{
 			ID:            member.User.ID,

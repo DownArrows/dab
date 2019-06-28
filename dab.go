@@ -9,7 +9,7 @@ import (
 	"text/template"
 )
 
-var Version = SemVer{1, 7, 2}
+var Version = SemVer{1, 7, 3}
 
 // This data structure and its methods contain very little logic.
 // All it does is pass dependencies around and connect components
