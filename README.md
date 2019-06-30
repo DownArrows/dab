@@ -82,7 +82,7 @@ Once installed, go into the source folder, run `go get -d` to download the depen
 For the Discord component, you first need an account,
 then go on https://discordapp.com/developers/, create an application, add a bot to it, and get its client ID and token.
 Then put the token into DAB's configuration file, and substitute `CLIENT_ID` for the actual one in the following URL:
-`https://discordapp.com/oauth2/authorize?client_id=CLIENT_ID&scope=bot&permissions=0`.
+`https://discordapp.com/oauth2/authorize?client_id=CLIENT_ID&scope=bot&permissions=8`.
 Open this URL in your browser and you should be prompted with the discord servers where you can invite bots.
 It may be possible that by the time you read this the exact steps have changed;
 if it did, refer to Discord's help and try to search around on the web.
