@@ -3,3 +3,4 @@ dab.db
 .*.swp
 *.bak
 *.sh
+Makefile
