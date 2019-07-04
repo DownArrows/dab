@@ -75,7 +75,6 @@ type DiscordCommand struct {
 	Aliases    []string
 	Callback   func(DiscordMessage) error
 	Privileged bool
-	NoCleanUp  bool
 	HasArgs    bool
 }
 
@@ -473,7 +472,7 @@ func (bot *DiscordBot) command(msg DiscordMessage) error {
 
 	err := cmd.Callback(msg)
 
-	if err == nil && !cmd.NoCleanUp && !msg.IsDM {
+	if err == nil && !msg.IsDM {
 		time.Sleep(5 * time.Second)
 		err = bot.client.ChannelMessageDelete(msg.ChannelID, msg.ID)
 	}
