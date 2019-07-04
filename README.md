@@ -34,7 +34,7 @@ The special addresses `/reports/current` and `/reports/lastweek` are also provid
 ### Discord commands
 
 Commands must start with the configured prefix (defaults to `!`), and if they take arguments, must be separated from them by a single white space.
-Some are reserved to the privileged user.
+Some are reserved to privileged users (the server's owner and a specific role).
 If they accept Reddit usernames, they accept them as `AGreatUsername`, `/u/AGreatUsername`, and `u/AGreatUsername`.
 
  - `hide` hide a user from reports
@@ -177,7 +177,8 @@ and <http://golang.localhost/pkg/text/template/>.
     - `path` *string* (./dab.db): path to the database file
  - `discord`
     - `admin` *string* (*none*): Discord ID of the privileged user (use Discord's developer mode to get them);
-      if empty will use the owner of the channels' server, and if no channel is enabled, will disable privileged commands
+      if empty will use the owner of the channels' server, and if no channel is enabled, will disable privileged commands.
+      **Deprecated**: starting with version 1.8.0 this option has no effect.
     - `general` *string* (*none*): Discord ID of the main channel where loggable links are taken from and welcome messages are posted;
       required to have welcome messages and logged links, disabled if left empty
     - `hide_prefix` *string* (*none*): Discord-specific hide prefix when registering users (overrides the global hide prefix)
@@ -185,6 +186,7 @@ and <http://golang.localhost/pkg/text/template/>.
     - `highscore_threshold` *int* (-1000): score at and below which a comment will be linked to in the highscore channel
     - `log` *string* (*none*): Discord ID of the channel where links to comments on reddit are reposted; disabled if left empty
     - `prefix` *string* (!): prefix for commands
+    - `privileged_role` *string* (*none*): Discord ID of the role that can use privileged commands, along with the server's owner
     - `token` *string* (*none*): token to connect to Discord; leave out to disable the Discord component
     - `welcome` *template* (*none*): template of the welcome message; it is provided with two top-level keys,
       `ChannelsID` and `Member`. `ChannelsID` provides `General`, `Log` and `HighScores`, which contains the numeric ID of those channels.

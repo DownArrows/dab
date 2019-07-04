@@ -71,12 +71,12 @@ func (member DiscordMember) FQN() string {
 
 // This is used in DiscordBot.getCommandsDescriptors.
 type DiscordCommand struct {
-	Command   string
-	Aliases   []string
-	Callback  func(DiscordMessage) error
-	Admin     bool
-	NoCleanUp bool
-	HasArgs   bool
+	Command    string
+	Aliases    []string
+	Callback   func(DiscordMessage) error
+	Privileged bool
+	NoCleanUp  bool
+	HasArgs    bool
 }
 
 func (cmd DiscordCommand) Match(prefix, content string) (bool, string) {
@@ -123,14 +123,15 @@ type DiscordBot struct {
 	ID string
 
 	// configuration
-	adminID    string
-	channelsID DiscordBotChannelsID
-	guildID    string
-	hidePrefix string
-	noLog      string
-	prefix     string
-	timezone   *time.Location
-	welcome    *template.Template
+	adminID        string
+	channelsID     DiscordBotChannelsID
+	guildID        string
+	hidePrefix     string
+	noLog          string
+	prefix         string
+	privilegedRole string
+	timezone       *time.Location
+	welcome        *template.Template
 
 	// miscellaneous
 	AddUser    chan UserQuery
@@ -161,13 +162,13 @@ func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, conf DiscordBo
 		logger:  logger,
 		storage: storage,
 
-		adminID:    conf.Admin,
-		channelsID: conf.DiscordBotChannelsID,
-		hidePrefix: conf.HidePrefix,
-		noLog:      conf.Prefix + "nolog",
-		prefix:     conf.Prefix,
-		timezone:   conf.Timezone.Value,
-		welcome:    welcome,
+		channelsID:     conf.DiscordBotChannelsID,
+		hidePrefix:     conf.HidePrefix,
+		noLog:          conf.Prefix + "nolog",
+		prefix:         conf.Prefix,
+		privilegedRole: conf.PrivilegedRole,
+		timezone:       conf.Timezone.Value,
+		welcome:        welcome,
 
 		AddUser:    make(chan UserQuery),
 		done:       make(chan error),
@@ -235,14 +236,36 @@ func (bot *DiscordBot) myColor(channelID string) int {
 // this is executed on each (re)-connection to Discord
 func (bot *DiscordBot) onReady(r *discordgo.Ready) {
 	bot.logger.Debug("(re-)connected to discord, checking settings")
+
+	// set status
 	if err := bot.client.UpdateStatus(0, "Downvote Counter"); err != nil {
 		bot.fatal(fmt.Errorf("couldn't set status on discord: %v", err))
 		return
 	}
 
-	bot.ID = r.User.ID
+	// guild-related information and checks
+	if nb := len(r.Guilds); nb != 1 {
+		bot.fatal(fmt.Errorf("the bot needs to be in one and only one discord server (found in %d server(s))", nb))
+	}
 
-	// Check the channels exist and are all in the same server
+	guild := r.Guilds[0]
+
+	bot.guildID = guild.ID
+
+	bot.adminID = guild.OwnerID
+
+	roles, err := bot.client.GuildRoles(guild.ID)
+	if err != nil {
+		bot.fatal(fmt.Errorf("error when getting roles on the discord server: %v", err))
+	}
+
+	if bot.privilegedRole == "" {
+		bot.logger.Info("no privileged discord role has been set, only the server's owner can use privileged commands")
+	} else if !rolesHaveRoleID(roles, bot.privilegedRole) {
+		bot.fatal(fmt.Errorf("the discord server doesn't have a role with ID %s", bot.privilegedRole))
+	}
+
+	// check the channels
 	channels := reflect.ValueOf(bot.channelsID)
 	for i := 0; i < channels.NumField(); i++ {
 		channelID := channels.Field(i).String()
@@ -252,36 +275,15 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) {
 			continue
 		}
 
-		channel, err := bot.client.Channel(channelID)
-		if err != nil {
+		if _, err := bot.client.Channel(channelID); err != nil {
 			bot.fatal(fmt.Errorf("channel %s: %v", name, err))
 			return
 		}
-
-		if bot.guildID == "" {
-			bot.guildID = channel.GuildID
-		} else if bot.guildID != channel.GuildID {
-			bot.fatal(fmt.Errorf("all channels must be in the same server: channel %s is not in server %s", name, bot.guildID))
-			return
-		}
 	}
 
-	if bot.adminID == "" {
-		if bot.guildID == "" {
-			bot.logger.Info("no channel and no admin set; disabling privileged commands")
-		} else {
-			guild, err := bot.client.Guild(bot.guildID)
-			if err != nil {
-				bot.fatal(err)
-				return
-			}
-			bot.adminID = guild.OwnerID
-		}
-	} else if _, err := bot.client.User(bot.adminID); err != nil {
-		bot.fatal(err)
-		return
-	}
-	bot.logger.Debugf("privileged user has ID %s", bot.adminID)
+	// other
+
+	bot.ID = r.User.ID
 }
 
 func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
@@ -414,15 +416,36 @@ Loop:
 
 func (bot *DiscordBot) matchCommand(msg DiscordMessage) (DiscordCommand, DiscordMessage) {
 	for _, cmd := range bot.commands {
-		if cmd.Admin && msg.Author.ID != bot.adminID {
-			continue
-		}
+
 		if matches, content_rest := cmd.Match(bot.prefix, msg.Content); matches {
+
+			// if the command was issued by someone who is not the admin, check role
+			if cmd.Privileged && msg.Author.ID != bot.adminID {
+				if bot.privilegedRole == "" {
+					continue
+				}
+
+				member, err := bot.client.GuildMember(bot.guildID, msg.Author.ID)
+				if err != nil {
+					bot.logger.Error(err)
+					continue
+				}
+				if !SliceHasString(member.Roles, bot.privilegedRole) {
+					reply := fmt.Sprintf("<@%s> you are not allowed to use this command", msg.Author.ID)
+					if err := bot.channelMessageSend(msg.ChannelID, reply); err != nil {
+						bot.logger.Error(err)
+					}
+					continue
+				}
+			}
+
 			msg.Content = content_rest
 			msg.Args = strings.Split(msg.Content, " ")
 			return cmd, msg
 		}
+
 	}
+
 	return DiscordCommand{}, msg
 }
 
@@ -477,23 +500,23 @@ func (bot *DiscordBot) getCommandsDescriptors() []DiscordCommand {
 		Callback: bot.karma,
 		HasArgs:  true,
 	}, {
-		Command:  "version",
-		Callback: bot.simpleReply(Version.String()),
-		Admin:    true,
+		Command:    "version",
+		Callback:   bot.simpleReply(Version.String()),
+		Privileged: true,
 	}, {
 		Command:  "register",
 		Callback: bot.register,
 		HasArgs:  true,
 	}, {
-		Command:  "unregister",
-		Callback: bot.editUsers("unregister", bot.storage.DelUser),
-		HasArgs:  true,
-		Admin:    true,
+		Command:    "unregister",
+		Callback:   bot.editUsers("unregister", bot.storage.DelUser),
+		HasArgs:    true,
+		Privileged: true,
 	}, {
-		Command:  "purge",
-		Callback: bot.editUsers("purge", bot.storage.PurgeUser),
-		HasArgs:  true,
-		Admin:    true,
+		Command:    "purge",
+		Callback:   bot.editUsers("purge", bot.storage.PurgeUser),
+		HasArgs:    true,
+		Privileged: true,
 	}, {
 		Command:  "info",
 		Callback: bot.userInfo,
@@ -665,4 +688,13 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 func TrimUsername(username string) string {
 	return strings.TrimPrefix(strings.TrimPrefix(username, "/u/"), "u/")
+}
+
+func rolesHaveRoleID(roles []*discordgo.Role, role_id string) bool {
+	for _, role := range roles {
+		if role.ID == role_id {
+			return true
+		}
+	}
+	return false
 }

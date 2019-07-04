@@ -75,3 +75,12 @@ func SemVerFromInt32(encoded int32) SemVer {
 
 	return SemVer{byte(major), byte(minor), byte(patch)}
 }
+
+func SliceHasString(slice []string, str string) bool {
+	for _, el := range slice {
+		if el == str {
+			return true
+		}
+	}
+	return false
+}

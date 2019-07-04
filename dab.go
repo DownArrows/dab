@@ -82,6 +82,10 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
+	if dab.conf.Discord.Admin != "" {
+		dab.logger.Info("discord.admin is deprecated, use discord.privileged_role instead")
+	}
+
 	dab.logger.Infof("using database %s", dab.conf.Database.Path)
 	if storage, err := NewStorage(dab.logger, dab.conf.Database); err != nil {
 		return err

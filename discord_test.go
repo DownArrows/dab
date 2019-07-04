@@ -81,7 +81,7 @@ func TestCommandFind(t *testing.T) {
 	bot := DiscordBot{
 		commands: []DiscordCommand{
 			DiscordCommand{Command: "simple"},
-			DiscordCommand{Command: "admin", Admin: true},
+			DiscordCommand{Command: "admin", Privileged: true},
 			DiscordCommand{Command: "args", HasArgs: true},
 		},
 		adminID: admin_id,

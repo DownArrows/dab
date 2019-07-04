@@ -76,12 +76,12 @@ type ReportConf struct {
 
 type DiscordBotConf struct {
 	DiscordBotChannelsID
-	Admin      string   `json:"admin"`
-	HidePrefix string   `json:"hide_prefix"`
-	Prefix     string   `json:"prefix"`
-	Token      string   `json:"token"`
-	Welcome    string   `json:"welcome"`
-	Timezone   Timezone `json:"-"`
+	HidePrefix     string   `json:"hide_prefix"`
+	Prefix         string   `json:"prefix"`
+	PrivilegedRole string   `json:"privileged_role"`
+	Timezone       Timezone `json:"-"`
+	Token          string   `json:"token"`
+	Welcome        string   `json:"welcome"`
 }
 
 type DiscordBotChannelsID struct {
@@ -112,7 +112,8 @@ type Configuration struct {
 
 	Discord struct {
 		DiscordBotConf
-		HighScoreThreshold int64 `json:"highscore_threshold"`
+		Admin              string `json:"admin"` // Deprecated
+		HighScoreThreshold int64  `json:"highscore_threshold"`
 	}
 
 	Web WebConf
