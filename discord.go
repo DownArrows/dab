@@ -231,6 +231,16 @@ func (bot *DiscordBot) channelEmbedSend(channelID string, embed *discordgo.Messa
 	return err
 }
 
+func (bot *DiscordBot) channelErrorSend(channelID, userID, content string) error {
+	reply := fmt.Sprintf("%s %s%s%s", userID, EmojiCrossMark, content, EmojiCrossMark)
+	msg, err := bot.client.ChannelMessageSend(channelID, reply)
+	if err != nil {
+		return err
+	}
+	time.Sleep(15 * time.Second)
+	return bot.client.ChannelMessageDelete(channelID, msg.ID)
+}
+
 func (bot *DiscordBot) myColor(channelID string) int {
 	return bot.client.State.UserColor(bot.client.State.User.ID, channelID)
 }
@@ -433,8 +443,7 @@ func (bot *DiscordBot) matchCommand(msg DiscordMessage) (DiscordCommand, Discord
 					continue
 				}
 				if !SliceHasString(member.Roles, bot.privilegedRole) {
-					reply := fmt.Sprintf("<@%s> you are not allowed to use this command", msg.Author.ID)
-					if err := bot.channelMessageSend(msg.ChannelID, reply); err != nil {
+					if err := bot.channelErrorSend(msg.ChannelID, msg.Author.ID, "You are not allowed to use this command."); err != nil {
 						bot.logger.Error(err)
 					}
 					continue
@@ -622,8 +631,8 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 	query := bot.storage.GetUser(username)
 
 	if !query.Exists {
-		response := fmt.Sprintf("<@%s> user '%s' not found in the database.", msg.Author.ID, username)
-		return bot.channelMessageSend(msg.ChannelID, response)
+		response := fmt.Sprintf("user '%s' not found in the database.", username)
+		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, response)
 	}
 
 	user := query.User
@@ -657,8 +666,8 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 	}
 
 	if !res.Exists {
-		reply := fmt.Sprintf("<@%s> user %s not found.", msg.Author.ID, username)
-		return bot.channelMessageSend(msg.ChannelID, reply)
+		reply := fmt.Sprintf("user %s not found.", username)
+		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, reply)
 	}
 
 	embed := &discordgo.MessageEmbed{
@@ -695,14 +704,14 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 func (bot *DiscordBot) ban(msg DiscordMessage) error {
 	if len(msg.Args) == 0 {
-		if err := bot.channelMessageSend(msg.ChannelID, "A mention of the user to ban is required."); err != nil {
+		if err := bot.channelErrorSend(msg.ChannelID, msg.Author.ID, "A mention of the user to ban is required."); err != nil {
 			return err
 		}
 	}
 
 	matches := bot.mention.FindStringSubmatch(msg.Args[0])
 	if len(matches) == 0 {
-		if err := bot.channelMessageSend(msg.ChannelID, "Invalid user mention."); err != nil {
+		if err := bot.channelErrorSend(msg.ChannelID, msg.Author.ID, "Invalid user mention."); err != nil {
 			return err
 		}
 	}
