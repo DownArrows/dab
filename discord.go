@@ -138,6 +138,7 @@ type DiscordBot struct {
 	commands   []DiscordCommand
 	done       chan error
 	redditLink *regexp.Regexp
+	mention    *regexp.Regexp
 }
 
 func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, conf DiscordBotConf) (*DiscordBot, error) {
@@ -173,6 +174,7 @@ func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, conf DiscordBo
 		AddUser:    make(chan UserQuery),
 		done:       make(chan error),
 		redditLink: regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
+		mention:    regexp.MustCompile(`<@([0-9]{1,21})>`),
 	}
 
 	bot.commands = bot.getCommandsDescriptors()
@@ -539,6 +541,11 @@ func (bot *DiscordBot) getCommandsDescriptors() []DiscordCommand {
 		Command:  "separator",
 		Aliases:  []string{"sep", "="},
 		Callback: bot.simpleReply("══════════════════"),
+	}, {
+		Command:    "ban",
+		Callback:   bot.ban,
+		HasArgs:    true,
+		Privileged: true,
 	}}
 }
 
@@ -684,6 +691,36 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 	embedAddField(embed, "Total", fmt.Sprintf("%d", positive+negative), true)
 	return bot.channelEmbedSend(msg.ChannelID, embed)
+}
+
+func (bot *DiscordBot) ban(msg DiscordMessage) error {
+	if len(msg.Args) == 0 {
+		if err := bot.channelMessageSend(msg.ChannelID, "A mention of the user to ban is required."); err != nil {
+			return err
+		}
+	}
+
+	matches := bot.mention.FindStringSubmatch(msg.Args[0])
+	if len(matches) == 0 {
+		if err := bot.channelMessageSend(msg.ChannelID, "Invalid user mention."); err != nil {
+			return err
+		}
+	}
+
+	id := matches[1]
+
+	reason := strings.Join(msg.Args[1:], " ")
+	if reason == "" {
+		if err := bot.client.GuildBanCreate(bot.guildID, id, 0); err != nil {
+			return err
+		}
+	} else {
+		if err := bot.client.GuildBanCreateWithReason(bot.guildID, id, reason, 0); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func TrimUsername(username string) string {

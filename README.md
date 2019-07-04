@@ -37,6 +37,7 @@ Commands must start with the configured prefix (defaults to `!`), and if they ta
 Some are reserved to privileged users (the server's owner and a specific role).
 If they accept Reddit usernames, they accept them as `AGreatUsername`, `/u/AGreatUsername`, and `u/AGreatUsername`.
 
+ - `ban` (privileged) ban the mentioned user with an optional reason
  - `hide` hide a user from reports
  - `info` information about a user: creation date, registration date, suspension or deletion status, inactive status
  - `karma` give negative/positive/total karma for the given username
