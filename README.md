@@ -174,7 +174,7 @@ and <http://golang.localhost/pkg/text/template/>.
       the backup will be refreshed; must be at least one hour
     - `backup_path` *string* (./dab.db.backup): path to the backup of the database
     - `cleanup_interval` *duration* (30m): interval between clean-ups of the database (reduces its size and optimizes queries);
-       leave out to disable, else must be at least one minute
+       put at `0s` to disable, else must be at least one minute
     - `path` *string* (./dab.db): path to the database file
  - `discord`
     - `admin` *string* (*none*): Discord ID of the privileged user (use Discord's developer mode to get them);
