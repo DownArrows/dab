@@ -29,7 +29,11 @@ const (
 	EmojiWhiteFlower   = "\U0001f4ae"
 )
 
-const DiscordMessageLengthLimit = 2000
+// Knowledge about Discord
+const (
+	DiscordMessageLengthLimit = 2000
+	DiscordDefaultRoleColor   = 0
+)
 
 var linkReactions = []string{
 	EmojiCrossBones, EmojiFire, EmojiGrowingHeart, EmojiHighVoltage,
@@ -241,7 +245,10 @@ func (bot *DiscordBot) channelErrorSend(channelID, userID, content string) error
 }
 
 func (bot *DiscordBot) myColor(channelID string) int {
-	return bot.client.State.UserColor(bot.client.State.User.ID, channelID)
+	if bot.client.StateEnabled {
+		return bot.client.State.UserColor(bot.ID, channelID)
+	}
+	return DiscordDefaultRoleColor
 }
 
 // this is executed on each (re)-connection to Discord
@@ -320,7 +327,7 @@ func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
 func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
 	var err error
 
-	if dg_msg.Author.ID == bot.client.State.User.ID {
+	if dg_msg.Author.ID == bot.ID {
 		return
 	}
 
@@ -671,7 +678,7 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 	embed := &discordgo.MessageEmbed{
 		Title:  "Karma for /u/" + res.User.Name,
-		Color:  bot.client.State.UserColor(bot.client.State.User.ID, msg.ChannelID),
+		Color:  bot.myColor(msg.ChannelID),
 		Fields: []*discordgo.MessageEmbedField{},
 	}
 
