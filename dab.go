@@ -138,20 +138,11 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	// since then the process hangs and you have to SIGKILL it.
 	// This happened very often while the code was being refactored
 	// for proper shutdown instead of crashing.
+	//
+	// See end of this method for the rest of the logic.
 	top_level := NewTaskGroup(ctx)
 	readers := NewTaskGroup(context.Background())
 	writers := NewTaskGroup(context.Background())
-
-	top_level.Spawn(func(ctx context.Context) error {
-		<-ctx.Done()
-		writers.Cancel()
-		if err := writers.Wait().ToError(); err != nil {
-			readers.Cancel() // Readers might never return due to the error, so don't wait
-			return err
-		}
-		readers.Cancel()
-		return readers.Wait().ToError()
-	})
 
 	if dab.layers.Storage.PeriodicCleanupEnabled {
 		top_level.Spawn(dab.layers.Storage.PeriodicCleanup)
@@ -178,6 +169,27 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	}
 
 	dab.logger.Info(dab.components.ConfState)
+
+	// Rest of the logic for readers and writers.
+
+	top_level.Spawn(func(_ context.Context) error { return writers.Wait().ToError() })
+
+	// readers might never return due to an error in writers, so don't put them in a task group
+	go func() {
+		if err := readers.Wait().ToError(); err != nil {
+			if !IsCancellation(err) {
+				dab.logger.Errorf("error in reader task group: %v", err)
+			}
+			top_level.Cancel()
+		}
+	}()
+
+	top_level.Spawn(func(ctx context.Context) error {
+		<-ctx.Done()
+		writers.Cancel()
+		readers.Cancel()
+		return ctx.Err()
+	})
 
 	return top_level.Wait().ToError()
 }
