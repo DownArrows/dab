@@ -44,6 +44,7 @@ type oAuthResponse struct {
 	Type    string `json:"token_type"`
 	Timeout int    `json:"expires_in"`
 	Scope   string `json:"scope"`
+	Error   string `json:"error"`
 }
 
 type wikiPage struct {
@@ -124,14 +125,20 @@ func (ra *RedditAPI) connect(ctx context.Context) error {
 	// This might be called from RedditAPI.rawRequest,
 	// so we can't use it to make our request (deadlock),
 	// and we have different needs here anyway.
-	req, _ := http.NewRequest("POST", accessTokenRawURL, auth_form)
+	req, err := http.NewRequest("POST", accessTokenRawURL, auth_form)
+	if err != nil {
+		return err
+	}
 
 	req.Header.Set("User-Agent", ra.userAgent)
 	req.SetBasicAuth(ra.auth.Id, ra.auth.Secret)
-	req.WithContext(ctx)
+	req = req.WithContext(ctx)
 
 	res, err := ra.do(req)
 	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return err
 	}
 
@@ -142,7 +149,15 @@ func (ra *RedditAPI) connect(ctx context.Context) error {
 
 	ra.Lock()
 	defer ra.Unlock()
-	return json.Unmarshal(body, &ra.oAuth)
+	if err := json.Unmarshal(body, &ra.oAuth); err != nil {
+		return err
+	}
+
+	if ra.oAuth.Error != "" {
+		return fmt.Errorf("error when logging into Reddit: %q", ra.oAuth.Error)
+	}
+
+	return nil
 }
 
 func (ra *RedditAPI) UserComments(ctx context.Context, user User, nb uint) ([]Comment, User, error) {
