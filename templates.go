@@ -10,8 +10,7 @@ import (
 var MarkdownReportHead = autoTemplate("MarkdownHead", `
 From {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}.
 
-Top {{.Delta | len}} negative **Δk** for this week:
-^([**Δk** or "delta k" refers to the total change in karma])
+Top {{.Delta | len}} total negative karma change for this week:
 {{range .Delta}}
 - **{{.Summary}}** with {{.Count}} posts,
 by [/u/{{.Name}}](https://reddit.com/user/{{.Name}})
@@ -28,13 +27,15 @@ by [/u/{{.Name}}](https://reddit.com/user/{{.Name}})
 var MarkdownReportComment = autoTemplate("MarkdownComment", `
 # \#{{.Number}}
 
-Author: [/u/{{.Author}}](https://reddit.com/user/{{.Author}})^(Avg. this week = {{.Average}} per comment)
+Author: [/u/{{.Author}}](https://reddit.com/user/{{.Author}}) ({{.Average}} week average)
 
 Date: {{.Created.Format "Monday 02 January 15:04 PM"}}
 
 Score: **{{.Score}}**
 
 Subreddit: [/r/{{.Sub}}](https://reddit.com/r/{{.Sub}})
+
+Link: [{{.Permalink}}](https://reddit.com{{.Permalink}})
 
 Post text:
 
@@ -121,10 +122,6 @@ var HTMLReportPage = autoHTMLTemplate("HTMLReportPage", `
 			list-style-type: none;
 		}
 
-		#report-head .detail {
-			font-size: smaller;
-		}
-
 		.comment .score {
 			color: var(--main-color);
 			font-weight: bold;
@@ -166,11 +163,6 @@ var HTMLReportPage = autoHTMLTemplate("HTMLReportPage", `
 			margin-bottom: 1em;
 		}
 
-		dd, a {
-			overflow-wrap: break-word;
-			word-break: break-all;
-		}
-
 		a {
 			color: var(--sec-color);
 			text-decoration: none;
@@ -200,8 +192,7 @@ var HTMLReportPage = autoHTMLTemplate("HTMLReportPage", `
 {{with .Head}}
 	<h1>{{.Number}} comments under {{.CutOff}} from {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}</h1>
 
-	<h2>Top {{.Delta | len}} negative <strong>Δk</strong> for this week</h2>
-	<p class="detail">[<strong>Δk</strong> or "delta k" refers to the total change in karma]</p>
+	<h2>Top {{.Delta | len}} total negative karma change for this week</h2>
 	<ol>
 	{{range .Delta}}
 	<li><strong>{{.Summary}}</strong> with {{.Count}} posts, by <a href="https://reddit.com/user/{{.Name}}">/u/{{.Name}}</a></li>
@@ -227,7 +218,7 @@ var HTMLReportPage = autoHTMLTemplate("HTMLReportPage", `
 
 	<div class="ditem">
 	<dt>Author</dt>
-	<dd><a href="https://reddit.com/user/{{.Author}}">/u/{{.Author}}</a><sup>(Avg. this week = {{.Average}} per comment)</sup></dd>
+	<dd><a href="https://reddit.com/user/{{.Author}}">/u/{{.Author}}</a> ({{.Average}} week average)</dd>
 	</div>
 
 	<div class="ditem">
