@@ -188,6 +188,9 @@ and <http://golang.localhost/pkg/text/template/>.
     - `log` *string* (*none*): Discord ID of the channel where links to comments on reddit are reposted; disabled if left empty
     - `prefix` *string* (!): prefix for commands
     - `privileged_role` *string* (*none*): Discord ID of the role that can use privileged commands, along with the server's owner
+    - `retry_connection`:
+       - `times` *int* (5): maximum number of times to try to connect to Discord; use -1 for infinite retries
+       - `max_interval` *duration* (2m): maximum wait between connection retries
     - `token` *string* (*none*): token to connect to Discord; leave out to disable the Discord component
     - `welcome` *template* (*none*): template of the welcome message; it is provided with two top-level keys,
       `ChannelsID` and `Member`. `ChannelsID` provides `General`, `Log` and `HighScores`, which contains the numeric ID of those channels.
@@ -205,6 +208,9 @@ and <http://golang.localhost/pkg/text/template/>.
       must be at least one day
     - `max_batches` *int* (5): maximum number of batches of comments to get from Reddit for a single user before moving to the next one
     - `password` *string* (*none*): Reddit password for the bot's account; leave out to disable the Reddit component
+	 - `retry_connection`:
+       - `times` *int* (10): maximum number of times to try to connect to Reddit; use -1 for infinite retries
+       - `max_interval` *duration* (5m): maximum wait between connection retries
     - `secret` *string* (*none*): Reddit application secret for the bot; leave out to disable the Reddit component
     - `unsuspension_interval` *duration* (*none*): interval between each batch of checks for suspended or deleted users;
       leave out to disable, else must be at least one minute
@@ -387,7 +393,6 @@ They communicate together through channels that are passed either via a closure 
 
 ### TODO
 
- - retry connecting to reddit and discord
  - auto post reports to a specific sub and maintain its wiki
  - better browsability of the web reports
  - replace blackfriday with snudown

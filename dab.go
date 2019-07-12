@@ -135,11 +135,11 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		dab.components.RedditUsers = NewRedditUsers(dab.logger, dab.layers.Storage, reddit_api, dab.conf.Reddit.RedditUsersConf)
 		dab.components.RedditSubs = NewRedditSubs(dab.logger, dab.layers.Storage, reddit_api)
 
-		tasks.SpawnCtx(func(ctx context.Context) error {
+		tasks.SpawnCtx(Retry(dab.conf.Reddit.Retry, func(ctx context.Context) error {
 			dab.logger.Info("attempting to log into reddit")
 			if err := reddit_api.Connect(ctx); err != nil {
 				if !IsCancellation(err) {
-					dab.logger.Infof("failed to log into reddit: %v", err)
+					dab.logger.Errorf("failed to log into reddit: %v", err)
 				}
 				return err
 			}
@@ -152,20 +152,24 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 			}
 
 			return nil
-		})
-	}
-
-	var err error
-	dab.components.Discord, err = NewDiscordBot(dab.layers.Storage, dab.logger, dab.conf.Discord.DiscordBotConf)
-	if err != nil {
-		return err
+		}))
 	}
 
 	if dab.components.ConfState.Discord.Enabled {
-		tasks.SpawnCtx(func(ctx context.Context) error {
+		var err error
+		dab.components.Discord, err = NewDiscordBot(dab.layers.Storage, dab.logger, dab.conf.Discord.DiscordBotConf)
+		if err != nil {
+			return err
+		}
+
+		tasks.SpawnCtx(Retry(dab.conf.Discord.Retry, func(ctx context.Context) error {
 			dab.logger.Info("attempting to log into discord")
-			return dab.components.Discord.Run(ctx)
-		})
+			err := dab.components.Discord.Run(ctx)
+			if err != nil && !IsCancellation(err) {
+				dab.logger.Errorf("failed to log into discord: %v", err)
+			}
+			return err
+		}))
 	}
 
 	if dab.components.ConfState.Reddit.Enabled && dab.components.ConfState.Discord.Enabled {

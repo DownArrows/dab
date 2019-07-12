@@ -22,11 +22,19 @@ const Defaults string = `{
 	},
 
 	"discord": {
+		"retry_connection": {
+			"times": 5,
+			"max_interval": "2m"
+		},
 		"highscore_threshold": -1000,
 		"prefix": "!"
 	},
 
 	"reddit": {
+		"retry_connection": {
+			"times": 10,
+			"max_interval": "5m"
+		},
 		"full_scan_interval": "6h",
 		"inactivity_threshold": "2200h",
 		"max_age": "24h",
@@ -104,16 +112,18 @@ type Configuration struct {
 		RedditAuth
 		RedditScannerConf
 		RedditUsersConf
-		DVTInterval Duration `json:"dvt_interval"`
-		UserAgent   string   `json:"user_agent"`
+		DVTInterval Duration     `json:"dvt_interval"`
+		Retry       RetryOptions `json:"retry_connection"`
+		UserAgent   string       `json:"user_agent"`
 	}
 
 	Report ReportConf
 
 	Discord struct {
 		DiscordBotConf
-		Admin              string `json:"admin"` // Deprecated
-		HighScoreThreshold int64  `json:"highscore_threshold"`
+		Admin              string       `json:"admin"` // Deprecated
+		HighScoreThreshold int64        `json:"highscore_threshold"`
+		Retry              RetryOptions `json:"retry_connection"`
 	}
 
 	Web WebConf

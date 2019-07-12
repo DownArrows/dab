@@ -199,6 +199,9 @@ func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, conf DiscordBo
 func (bot *DiscordBot) Run(ctx context.Context) error {
 	go func() {
 		if err := bot.client.Open(); err != nil {
+			if !IsCancellation(err) {
+				err = fmt.Errorf("discord bot: %v", err)
+			}
 			bot.done <- err
 		}
 	}()
@@ -314,7 +317,7 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) {
 		}
 
 		if _, err := bot.client.Channel(channelID); err != nil {
-			bot.fatal(fmt.Errorf("channel %s: %v", name, err))
+			bot.fatal(fmt.Errorf("discord channel %s: %v", name, err))
 			return
 		}
 	}
@@ -335,7 +338,7 @@ func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
 			Discriminator: member.User.Discriminator,
 		},
 	}
-	bot.logger.Debugf("welcoming user %s", data.Member.FQN())
+	bot.logger.Debugf("welcoming discord user %s", data.Member.FQN())
 	if err := bot.welcome.Execute(&msg, data); err != nil {
 		bot.fatal(err)
 	}

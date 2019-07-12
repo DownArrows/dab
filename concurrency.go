@@ -23,6 +23,36 @@ func SleepCtx(ctx context.Context, duration time.Duration) bool {
 
 type Task func(context.Context) error
 
+type RetryOptions struct {
+	Times       int      `json:"times"`
+	MaxInterval Duration `json:"max_interval"`
+}
+
+func Retry(opts RetryOptions, task Task) Task {
+	backoff := time.Second
+	retries := 0
+	return func(ctx context.Context) error {
+		for {
+			if err := task(ctx); err != nil {
+				if !IsCancellation(err) && (retries < opts.Times || opts.Times == -1) {
+					if opts.MaxInterval.Value-backoff > 0*time.Second {
+						SleepCtx(ctx, backoff)
+						backoff *= 2
+					} else {
+						SleepCtx(ctx, opts.MaxInterval.Value)
+					}
+					retries += 1
+				} else {
+					return err
+				}
+			} else {
+				break
+			}
+		}
+		return nil
+	}
+}
+
 // Launches and shuts down a group of goroutine which take a context and return an error.
 // Use TaskGroup.Spawn to launch functions asynchronously,
 // and once you're done use TaskGroup.Wait to wait on them.
