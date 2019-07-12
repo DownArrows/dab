@@ -11,6 +11,8 @@ import (
 
 var Version = SemVer{1, 8, 0}
 
+const DefaultChannelSize = 100
+
 // This data structure and its methods contain very little logic.
 // All it does is pass dependencies around and connect components
 // together according to what is already decided in the configuration
@@ -110,88 +112,98 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return dab.userAdd(ctx)
 	}
 
-	connectors := NewTaskGroup(ctx)
-
-	if dab.components.ConfState.Reddit.Enabled {
-		connectors.Spawn(dab.connectReddit)
-	}
-
-	if dab.components.ConfState.Discord.Enabled {
-		connectors.Spawn(dab.connectDiscord)
-	}
-
-	if err := connectors.Wait().ToError(); err != nil {
-		return err
-	}
-	if IsCancellation(ctx.Err()) {
-		return nil
-	}
-
-	// We want to have distinct groups for tasks dependant on others.
-	// Readers read what writers send, so writers need to be shut down first,
-	// else writers could block while waiting for the other side.
-	// This could be avoided by cancelling everything at the same time and by using
-	// inside writers the select statement to read from the context's cancellation channel
-	// while trying to write to channels connected to readers, but it would make
-	// their code even more complicated and could hide subtle concurrency bugs.
-	// Forcing everything to shut down in a clear order makes concurrency bugs more obvious,
-	// since then the process hangs and you have to SIGKILL it.
-	// This happened very often while the code was being refactored
-	// for proper shutdown instead of crashing.
-	//
-	// See end of this method for the rest of the logic.
-	top_level := NewTaskGroup(ctx)
-	readers := NewTaskGroup(context.Background())
-	writers := NewTaskGroup(context.Background())
-
-	if dab.layers.Storage.PeriodicCleanupEnabled {
-		top_level.Spawn(dab.layers.Storage.PeriodicCleanup)
-	}
-
-	if dab.components.ConfState.Reddit.Enabled {
-		writers.Spawn(dab.components.RedditScanner.Run)
-		if dab.components.RedditUsers.AutoUpdateUsersFromCompendiumEnabled {
-			writers.Spawn(dab.components.RedditUsers.AutoUpdateUsersFromCompendium)
-		}
-	}
-
-	if dab.components.ConfState.Discord.Enabled {
-		writers.Spawn(dab.components.Discord.Run)
-	}
-
-	if dab.components.ConfState.Reddit.Enabled && dab.components.ConfState.Discord.Enabled {
-		dab.connectRedditAndDiscord(readers, writers)
-	}
-
-	if dab.components.ConfState.Web.Enabled {
-		dab.components.Web = NewWebServer(dab.conf.Web, dab.layers.Report, dab.layers.Storage)
-		top_level.Spawn(dab.components.Web.Run)
-	}
+	tasks := NewTaskGroup(ctx)
 
 	dab.logger.Info(dab.components.ConfState)
 
-	// Rest of the logic for readers and writers.
+	if dab.components.ConfState.Web.Enabled {
+		dab.components.Web = NewWebServer(dab.conf.Web, dab.layers.Report, dab.layers.Storage)
+		tasks.SpawnCtx(dab.components.Web.Run)
+	}
 
-	top_level.Spawn(func(_ context.Context) error { return writers.Wait().ToError() })
+	if dab.layers.Storage.PeriodicCleanupEnabled {
+		tasks.SpawnCtx(dab.layers.Storage.PeriodicCleanup)
+	}
 
-	// readers might never return due to an error in writers, so don't put them in a task group
-	go func() {
-		if err := readers.Wait().ToError(); err != nil {
-			if !IsCancellation(err) {
-				dab.logger.Errorf("error in reader task group: %v", err)
-			}
-			top_level.Cancel()
+	if dab.components.ConfState.Reddit.Enabled {
+		reddit_api, err := dab.makeRedditAPI(ctx)
+		if err != nil {
+			return err
 		}
-	}()
 
-	top_level.Spawn(func(ctx context.Context) error {
-		<-ctx.Done()
-		writers.Cancel()
-		readers.Cancel()
-		return ctx.Err()
-	})
+		dab.components.RedditScanner = NewRedditScanner(dab.logger, dab.layers.Storage, reddit_api, dab.conf.Reddit.RedditScannerConf)
+		dab.components.RedditUsers = NewRedditUsers(dab.logger, dab.layers.Storage, reddit_api, dab.conf.Reddit.RedditUsersConf)
+		dab.components.RedditSubs = NewRedditSubs(dab.logger, dab.layers.Storage, reddit_api)
 
-	return top_level.Wait().ToError()
+		tasks.SpawnCtx(func(ctx context.Context) error {
+			dab.logger.Info("attempting to log into reddit")
+			if err := reddit_api.Connect(ctx); err != nil {
+				if !IsCancellation(err) {
+					dab.logger.Infof("failed to log into reddit: %v", err)
+				}
+				return err
+			}
+			dab.logger.Info("successfully logged into reddit")
+
+			tasks.SpawnCtx(dab.components.RedditScanner.Run)
+
+			if dab.components.RedditUsers.AutoUpdateUsersFromCompendiumEnabled {
+				tasks.SpawnCtx(dab.components.RedditUsers.AutoUpdateUsersFromCompendium)
+			}
+
+			return nil
+		})
+	}
+
+	var err error
+	dab.components.Discord, err = NewDiscordBot(dab.layers.Storage, dab.logger, dab.conf.Discord.DiscordBotConf)
+	if err != nil {
+		return err
+	}
+
+	if dab.components.ConfState.Discord.Enabled {
+		tasks.SpawnCtx(func(ctx context.Context) error {
+			dab.logger.Info("attempting to log into discord")
+			return dab.components.Discord.Run(ctx)
+		})
+	}
+
+	if dab.components.ConfState.Reddit.Enabled && dab.components.ConfState.Discord.Enabled {
+
+		tasks.SpawnCtx(func(ctx context.Context) error {
+			defer dab.components.Discord.CloseAddUser()
+			return dab.components.RedditUsers.AddUserServer(ctx, dab.components.Discord.OpenAddUser())
+		})
+
+		if dab.conf.Reddit.DVTInterval.Value > 0 {
+			reddit_evts := make(chan Comment)
+			tasks.Spawn(func() { dab.components.Discord.SignalNewRedditPosts(reddit_evts) })
+			tasks.SpawnCtx(func(ctx context.Context) error {
+				defer close(reddit_evts)
+				return dab.components.RedditSubs.NewPostsOnSub(ctx, "downvote_trolls", reddit_evts, dab.conf.Reddit.DVTInterval.Value)
+			})
+		}
+
+		tasks.Spawn(func() { dab.components.Discord.SignalSuspensions(dab.components.RedditScanner.OpenSuspensions()) })
+
+		if dab.components.RedditUsers.UnsuspensionWatcherEnabled {
+			tasks.SpawnCtx(dab.components.RedditUsers.UnsuspensionWatcher)
+			tasks.Spawn(func() { dab.components.Discord.SignalUnsuspensions(dab.components.RedditUsers.Unsuspensions()) })
+		}
+
+		if dab.conf.Discord.HighScores != "" {
+			tasks.Spawn(func() { dab.components.Discord.SignalHighScores(dab.components.RedditScanner.OpenHighScores()) })
+		}
+
+		tasks.SpawnCtx(func(ctx context.Context) error {
+			<-ctx.Done()
+			dab.components.RedditScanner.CloseSuspensions()
+			dab.components.RedditScanner.CloseHighScores()
+			return ctx.Err()
+		})
+	}
+
+	return tasks.Wait().ToError()
 }
 
 func (dab *DownArrowsBot) parseFlags(args []string) error {
@@ -215,72 +227,12 @@ func (dab *DownArrowsBot) makeRedditAPI(ctx context.Context) (*RedditAPI, error)
 		return nil, err
 	}
 
-	dab.logger.Info("attempting to log into reddit")
 	ra, err := NewRedditAPI(ctx, dab.conf.Reddit.RedditAuth, user_agent)
 	if err != nil {
 		return nil, err
 	}
-	dab.logger.Info("successfully logged into reddit")
 
 	return ra, nil
-}
-
-func (dab *DownArrowsBot) connectReddit(ctx context.Context) error {
-	ra, err := dab.makeRedditAPI(ctx)
-	if err != nil {
-		return err
-	}
-	dab.components.RedditScanner = NewRedditScanner(dab.logger, dab.layers.Storage, ra, dab.conf.Reddit.RedditScannerConf)
-	dab.components.RedditUsers = NewRedditUsers(dab.logger, dab.layers.Storage, ra, dab.conf.Reddit.RedditUsersConf)
-	dab.components.RedditSubs = NewRedditSubs(dab.logger, dab.layers.Storage, ra)
-
-	return nil
-}
-
-func (dab *DownArrowsBot) connectDiscord(ctx context.Context) error {
-	dab.logger.Info("attempting to log into discord")
-	bot, err := NewDiscordBot(dab.layers.Storage, dab.logger, dab.conf.Discord.DiscordBotConf)
-	if err != nil {
-		return err
-	}
-	dab.logger.Info("successfully logged into discord")
-	dab.components.Discord = bot
-	return nil
-}
-
-func (dab *DownArrowsBot) connectRedditAndDiscord(readers *TaskGroup, writers *TaskGroup) {
-	writers.Spawn(func(ctx context.Context) error {
-		return dab.components.RedditUsers.AddUserServer(ctx, dab.components.Discord.AddUser)
-	})
-
-	if dab.conf.Reddit.DVTInterval.Value > 0 {
-		reddit_evts := make(chan Comment)
-		readers.Spawn(func(ctx context.Context) error {
-			return dab.components.Discord.SignalNewRedditPosts(ctx, reddit_evts)
-		})
-		writers.Spawn(func(ctx context.Context) error {
-			return dab.components.RedditSubs.NewPostsOnSub(ctx, "downvote_trolls", reddit_evts, dab.conf.Reddit.DVTInterval.Value)
-		})
-	}
-
-	suspensions := dab.components.RedditScanner.Suspensions()
-	readers.Spawn(func(ctx context.Context) error {
-		return dab.components.Discord.SignalSuspensions(ctx, suspensions)
-	})
-
-	if dab.components.RedditUsers.UnsuspensionWatcherEnabled {
-		writers.Spawn(dab.components.RedditUsers.UnsuspensionWatcher)
-		readers.Spawn(func(ctx context.Context) error {
-			return dab.components.Discord.SignalUnsuspensions(ctx, dab.components.RedditUsers.Unsuspensions())
-		})
-	}
-
-	if dab.conf.Discord.HighScores != "" {
-		highscores := dab.components.RedditScanner.HighScores()
-		readers.Spawn(func(ctx context.Context) error {
-			return dab.components.Discord.SignalHighScores(ctx, highscores)
-		})
-	}
 }
 
 func (dab *DownArrowsBot) report() error {

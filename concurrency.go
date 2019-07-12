@@ -47,7 +47,7 @@ func NewTaskGroup(parent context.Context) *TaskGroup {
 	}
 }
 
-func (tg *TaskGroup) Spawn(cb Task) {
+func (tg *TaskGroup) SpawnCtx(cb Task) {
 	tg.wait.Add(1)
 	go func() {
 		if err := cb(tg.context); err != nil && !IsCancellation(err) {
@@ -58,8 +58,20 @@ func (tg *TaskGroup) Spawn(cb Task) {
 	}()
 }
 
+func (tg *TaskGroup) Spawn(cb func()) {
+	tg.wait.Add(1)
+	go func() {
+		cb()
+		tg.wait.Done()
+	}()
+}
+
 func (tg *TaskGroup) Cancel() {
 	tg.cancel()
+}
+
+func (tg *TaskGroup) Errors() *ErrorGroup {
+	return tg.errors
 }
 
 func (tg *TaskGroup) Wait() *ErrorGroup {

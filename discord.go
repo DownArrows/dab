@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 )
@@ -117,6 +118,8 @@ type DiscordWelcomeData struct {
 
 // Component
 type DiscordBot struct {
+	sync.Mutex
+
 	// dependencies
 	client  *discordgo.Session
 	logger  LevelLogger
@@ -137,7 +140,7 @@ type DiscordBot struct {
 	welcome        *template.Template
 
 	// miscellaneous
-	AddUser    chan UserQuery
+	addUser    chan UserQuery
 	commands   []DiscordCommand
 	done       chan error
 	redditLink *regexp.Regexp
@@ -174,7 +177,6 @@ func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, conf DiscordBo
 		timezone:       conf.Timezone.Value,
 		welcome:        welcome,
 
-		AddUser:    make(chan UserQuery),
 		done:       make(chan error),
 		redditLink: regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
 		mention:    regexp.MustCompile(`<@([0-9]{1,21})>`),
@@ -214,6 +216,24 @@ func (bot *DiscordBot) Run(ctx context.Context) error {
 func (bot *DiscordBot) fatal(err error) {
 	bot.logger.Errorf("fatal: %v", err)
 	bot.done <- err
+}
+
+func (bot *DiscordBot) OpenAddUser() chan UserQuery {
+	bot.Lock()
+	defer bot.Unlock()
+	if bot.addUser == nil {
+		bot.addUser = make(chan UserQuery, DefaultChannelSize)
+	}
+	return bot.addUser
+}
+
+func (bot *DiscordBot) CloseAddUser() {
+	bot.Lock()
+	defer bot.Unlock()
+	if bot.addUser != nil {
+		close(bot.addUser)
+		bot.addUser = nil
+	}
 }
 
 func (bot *DiscordBot) isDMChannel(channelID string) (bool, error) {
@@ -359,77 +379,49 @@ func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
 	}
 }
 
-func (bot *DiscordBot) SignalNewRedditPosts(ctx context.Context, evts <-chan Comment) error {
-Loop:
-	for {
-		select {
-		case comment := <-evts:
-			bot.logger.Infof("new post on sub %s by %s on %s", comment.Sub, comment.Author, time.Unix(comment.Created, 0))
-			if comment.Author == "DownvoteTrollingBot" || comment.Author == "DownvoteTrollingBot2" {
-				msg := "@everyone https://www.reddit.com" + comment.Permalink
-				if err := bot.channelMessageSend(bot.channelsID.General, msg); err != nil {
-					bot.logger.Errorf("error when signaling new post on reddit: %v", err)
-				}
-			}
-		case <-ctx.Done():
-			break Loop
-		}
-	}
-	return ctx.Err()
-}
-
-func (bot *DiscordBot) SignalSuspensions(ctx context.Context, suspensions <-chan User) error {
-Loop:
-	for {
-		select {
-		case user := <-suspensions:
-			state := "suspended"
-			if user.NotFound {
-				state = "deleted"
-			}
-			msg := fmt.Sprintf("RIP /u/%s %s (%s)", user.Name, EmojiPrayingHands, state)
+func (bot *DiscordBot) SignalNewRedditPosts(evts <-chan Comment) {
+	for comment := range evts {
+		bot.logger.Infof("new post on sub %s by %s on %s", comment.Sub, comment.Author, time.Unix(comment.Created, 0))
+		if comment.Author == "DownvoteTrollingBot" || comment.Author == "DownvoteTrollingBot2" {
+			msg := "@everyone https://www.reddit.com" + comment.Permalink
 			if err := bot.channelMessageSend(bot.channelsID.General, msg); err != nil {
-				bot.logger.Errorf("error when signaling a suspension or deletion: %v", err)
+				bot.logger.Errorf("error when signaling new post on reddit: %v", err)
 			}
-		case <-ctx.Done():
-			break Loop
 		}
 	}
-	return ctx.Err()
 }
 
-func (bot *DiscordBot) SignalUnsuspensions(ctx context.Context, ch <-chan User) error {
-Loop:
-	for {
-		select {
-		case user := <-ch:
-			msg := fmt.Sprintf("%s /u/%s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
-			if err := bot.channelMessageSend(bot.channelsID.General, msg); err != nil {
-				bot.logger.Errorf("error when signaling an unsuspensions: %v", err)
-			}
-		case <-ctx.Done():
-			break Loop
+func (bot *DiscordBot) SignalSuspensions(suspensions <-chan User) {
+	for user := range suspensions {
+		state := "suspended"
+		if user.NotFound {
+			state = "deleted"
+		}
+		msg := fmt.Sprintf("RIP /u/%s %s (%s)", user.Name, EmojiPrayingHands, state)
+		if err := bot.channelMessageSend(bot.channelsID.General, msg); err != nil {
+			bot.logger.Errorf("error when signaling a suspension or deletion: %v", err)
 		}
 	}
-	return ctx.Err()
 }
 
-func (bot *DiscordBot) SignalHighScores(ctx context.Context, ch <-chan Comment) error {
-Loop:
-	for {
-		select {
-		case comment := <-ch:
-			link := "https://www.reddit.com" + comment.Permalink
-			tmpl := "a comment by /u/%s has reached %d: %s"
-			msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
-			if err := bot.channelMessageSend(bot.channelsID.HighScores, msg); err != nil {
-				bot.logger.Errorf("error when signaling high-score: %v", err)
-			}
-		case <-ctx.Done():
-			break Loop
+func (bot *DiscordBot) SignalUnsuspensions(ch <-chan User) {
+	for user := range ch {
+		msg := fmt.Sprintf("%s /u/%s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
+		if err := bot.channelMessageSend(bot.channelsID.General, msg); err != nil {
+			bot.logger.Errorf("error when signaling an unsuspensions: %v", err)
 		}
 	}
-	return ctx.Err()
+}
+
+func (bot *DiscordBot) SignalHighScores(ch <-chan Comment) {
+	for comment := range ch {
+		link := "https://www.reddit.com" + comment.Permalink
+		tmpl := "a comment by /u/%s has reached %d: %s"
+		msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
+		if err := bot.channelMessageSend(bot.channelsID.HighScores, msg); err != nil {
+			bot.logger.Errorf("error when signaling high-score: %v", err)
+		}
+	}
 }
 
 func (bot *DiscordBot) matchCommand(msg DiscordMessage) (DiscordCommand, DiscordMessage) {
@@ -589,8 +581,15 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 		hidden := strings.HasPrefix(name, bot.hidePrefix)
 		name = TrimUsername(strings.TrimPrefix(name, bot.hidePrefix))
 
-		bot.AddUser <- UserQuery{User: User{Name: name, Hidden: hidden}}
-		reply := <-bot.AddUser
+		bot.Lock()
+		if bot.addUser == nil {
+			bot.Unlock()
+			embedAddField(status, name, EmojiCrossMark+" registration service unavailable", false)
+			continue
+		}
+		bot.addUser <- UserQuery{User: User{Name: name, Hidden: hidden}}
+		reply := <-bot.addUser
+		bot.Unlock()
 
 		if IsCancellation(reply.Error) {
 			continue

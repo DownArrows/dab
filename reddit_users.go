@@ -35,7 +35,7 @@ func NewRedditUsers(
 		compendiumUpdateInterval:             conf.CompendiumUpdateInterval.Value,
 		AutoUpdateUsersFromCompendiumEnabled: conf.CompendiumUpdateInterval.Value > 0,
 
-		unsuspensions:              make(chan User),
+		unsuspensions:              make(chan User, DefaultChannelSize),
 		unsuspensionInterval:       conf.UnsuspensionInterval.Value,
 		UnsuspensionWatcherEnabled: conf.UnsuspensionInterval.Value > 0,
 	}
@@ -43,16 +43,23 @@ func NewRedditUsers(
 
 func (ru *RedditUsers) AddUserServer(ctx context.Context, queries chan UserQuery) error {
 	ru.logger.Info("starting internal server to register users")
+	var query UserQuery
 Loop:
 	for {
 		select {
+		case query = <-queries:
+			break
 		case <-ctx.Done():
 			break Loop
-		case query := <-queries:
-			ru.logger.Infof("received query to add a new user, %s", query)
-			query = ru.AddUser(ctx, query.User.Name, query.User.Hidden, false)
-			ru.logger.Infof("replying to query to add a new user, %s", query)
-			queries <- query
+		}
+		ru.logger.Infof("received query to add a new user, %s", query)
+		query = ru.AddUser(ctx, query.User.Name, query.User.Hidden, false)
+		ru.logger.Infof("replying to query to add a new user, %s", query)
+		select {
+		case queries <- query:
+			break
+		case <-ctx.Done():
+			break Loop
 		}
 	}
 	return ctx.Err()
@@ -244,5 +251,6 @@ func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
 		}
 
 	}
+	close(ru.unsuspensions)
 	return ctx.Err()
 }

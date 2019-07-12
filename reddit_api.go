@@ -106,15 +106,11 @@ func NewRedditAPI(ctx context.Context, auth RedditAuth, userAgent *template.Temp
 		userAgent: user_agent.String(),
 	}
 
-	if err := ra.connect(ctx); err != nil {
-		return nil, err
-	}
-
 	return ra, nil
 }
 
 // Gets a token from Reddit's API which will be used for all requests.
-func (ra *RedditAPI) connect(ctx context.Context) error {
+func (ra *RedditAPI) Connect(ctx context.Context) error {
 	auth_conf := url.Values{
 		"grant_type": {"password"},
 		"username":   {ra.auth.Username},
@@ -327,7 +323,7 @@ func (ra *RedditAPI) rawRequest(ctx context.Context, makeReq func() (*http.Reque
 	}
 
 	if res.Status == 401 {
-		if err := ra.connect(ctx); err != nil {
+		if err := ra.Connect(ctx); err != nil {
 			res.Error = err
 			return res
 		}

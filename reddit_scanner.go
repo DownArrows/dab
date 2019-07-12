@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
@@ -13,6 +14,7 @@ type RedditScanner struct {
 	storage RedditScannerStorage
 
 	// communication with the outside
+	sync.Mutex
 	suspensions chan User
 	highScores  chan Comment
 
@@ -45,20 +47,6 @@ func NewRedditScanner(
 	}
 }
 
-func (rs *RedditScanner) Suspensions() <-chan User {
-	if rs.suspensions == nil {
-		rs.suspensions = make(chan User)
-	}
-	return rs.suspensions
-}
-
-func (rs *RedditScanner) HighScores() <-chan Comment {
-	if rs.highScores == nil {
-		rs.highScores = make(chan Comment)
-	}
-	return rs.highScores
-}
-
 func (rs *RedditScanner) Run(ctx context.Context) error {
 	var last_full_scan time.Time
 
@@ -89,7 +77,45 @@ func (rs *RedditScanner) Run(ctx context.Context) error {
 
 	}
 
+	rs.logger.Debug("scanner run done")
+
 	return ctx.Err()
+}
+
+func (rs *RedditScanner) OpenSuspensions() <-chan User {
+	rs.Lock()
+	defer rs.Unlock()
+	if rs.suspensions == nil {
+		rs.suspensions = make(chan User, DefaultChannelSize)
+	}
+	return rs.suspensions
+}
+
+func (rs *RedditScanner) CloseSuspensions() {
+	rs.Lock()
+	defer rs.Unlock()
+	if rs.suspensions != nil {
+		close(rs.suspensions)
+		rs.suspensions = nil
+	}
+}
+
+func (rs *RedditScanner) OpenHighScores() <-chan Comment {
+	rs.Lock()
+	defer rs.Unlock()
+	if rs.highScores == nil {
+		rs.highScores = make(chan Comment, DefaultChannelSize)
+	}
+	return rs.highScores
+}
+
+func (rs *RedditScanner) CloseHighScores() {
+	rs.Lock()
+	defer rs.Unlock()
+	if rs.highScores != nil {
+		close(rs.highScores)
+		rs.highScores = nil
+	}
 }
 
 func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
@@ -129,9 +155,11 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 
 			if user.Suspended || user.NotFound {
 				rs.logger.Debugf("user %s status change: suspended %t, not found: %t", user.Name, user.Suspended, user.NotFound)
+				rs.Lock()
 				if rs.suspensions != nil {
 					rs.suspensions <- user
 				}
+				rs.Unlock()
 				break
 			}
 
@@ -169,6 +197,9 @@ func (rs *RedditScanner) getUsersOrWait(ctx context.Context, full_scan bool) []U
 }
 
 func (rs *RedditScanner) alertIfHighScore(comments []Comment) error {
+	rs.Lock()
+	defer rs.Unlock()
+
 	if rs.highScores == nil {
 		return nil
 	}

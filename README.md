@@ -387,7 +387,6 @@ They communicate together through channels that are passed either via a closure 
 
 ### TODO
 
- - launch the web server while connecting to reddit and discord
  - retry connecting to reddit and discord
  - auto post reports to a specific sub and maintain its wiki
  - better browsability of the web reports
