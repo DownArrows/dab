@@ -36,6 +36,8 @@ const (
 	DiscordDefaultRoleColor   = 0
 )
 
+const messageDeletionWait = 15 * time.Second
+
 var linkReactions = []string{
 	EmojiCrossBones, EmojiFire, EmojiGrowingHeart, EmojiHighVoltage,
 	EmojiOkHand, EmojiOneHundred, EmojiThumbUp, EmojiWhiteFlower,
@@ -258,12 +260,12 @@ func (bot *DiscordBot) channelEmbedSend(channelID string, embed *discordgo.Messa
 }
 
 func (bot *DiscordBot) channelErrorSend(channelID, userID, content string) error {
-	reply := fmt.Sprintf("%s %s%s%s", userID, EmojiCrossMark, content, EmojiCrossMark)
+	reply := fmt.Sprintf("<@%s>%s%s%s", userID, EmojiCrossMark, content, EmojiCrossMark)
 	msg, err := bot.client.ChannelMessageSend(channelID, reply)
 	if err != nil {
 		return err
 	}
-	time.Sleep(15 * time.Second)
+	time.Sleep(messageDeletionWait)
 	return bot.client.ChannelMessageDelete(channelID, msg.ID)
 }
 
@@ -475,7 +477,7 @@ func (bot *DiscordBot) command(msg DiscordMessage) error {
 	err := cmd.Callback(msg)
 
 	if err == nil && !msg.IsDM {
-		time.Sleep(5 * time.Second)
+		time.Sleep(messageDeletionWait)
 		err = bot.client.ChannelMessageDelete(msg.ChannelID, msg.ID)
 	}
 
