@@ -16,7 +16,10 @@ import (
 	"time"
 )
 
-const MaxRedditListingLength = 100
+const (
+	MaxRedditListingLength = 100
+	RedditAPIRequestWait   = time.Second
+)
 
 type RedditScannerAPI interface {
 	UserComments(context.Context, User, uint) ([]Comment, User, error)
@@ -102,7 +105,7 @@ func NewRedditAPI(ctx context.Context, auth RedditAuth, userAgent *template.Temp
 	ra := &RedditAPI{
 		auth:      auth,
 		client:    client,
-		ticker:    time.NewTicker(time.Second),
+		ticker:    time.NewTicker(RedditAPIRequestWait),
 		userAgent: user_agent.String(),
 	}
 
