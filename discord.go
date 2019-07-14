@@ -186,7 +186,7 @@ func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, conf DiscordBo
 
 	bot.commands = bot.getCommandsDescriptors()
 
-	if conf.Welcome != "" || conf.General != "" {
+	if conf.Welcome != "" && conf.General != "" {
 		session.AddHandler(func(s *discordgo.Session, event *discordgo.GuildMemberAdd) {
 			bot.welcomeNewMember(event.Member)
 		})
