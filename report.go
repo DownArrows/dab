@@ -93,8 +93,8 @@ type Report struct {
 func (r Report) Head() ReportHead {
 	return ReportHead{
 		Number:  len(r.RawComments),
-		Average: r.Stats.DeltasToSummaries().Sort().Limit(r.MaxStatsSummaries),
-		Delta:   r.Stats.AveragesToSummaries().Sort().Limit(r.MaxStatsSummaries),
+		Average: r.Stats.AveragesToSummaries().Sort().Limit(r.MaxStatsSummaries),
+		Delta:   r.Stats.DeltasToSummaries().Sort().Limit(r.MaxStatsSummaries),
 		Start:   r.Start,
 		End:     r.End,
 		CutOff:  r.CutOff,
