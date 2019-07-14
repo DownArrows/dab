@@ -36,27 +36,15 @@ const (
 	DiscordDefaultRoleColor   = 0
 )
 
-const messageDeletionWait = 15 * time.Second
+const discordMessageDeletionWait = 15 * time.Second
 
 var linkReactions = []string{
 	EmojiCrossBones, EmojiFire, EmojiGrowingHeart, EmojiHighVoltage,
 	EmojiOkHand, EmojiOneHundred, EmojiThumbUp, EmojiWhiteFlower,
 }
 
-func embedField(name, value string, inline bool) *discordgo.MessageEmbedField {
-	return &discordgo.MessageEmbedField{
-		Name:   name,
-		Value:  value,
-		Inline: inline,
-	}
-}
-
-func embedAddField(embed *discordgo.MessageEmbed, name, value string, inline bool) {
-	embed.Fields = append(embed.Fields, embedField(name, value, inline))
-}
-
 // discordgo's data structures aren't well adapted to our needs,
-// and typing "*discordgo.DataStructure" all the time gets tiring.
+// and typing "*discordgo.<DataStructure>" all the time gets tiring.
 type DiscordMessage struct {
 	Args      []string
 	Author    DiscordMember
@@ -66,6 +54,20 @@ type DiscordMessage struct {
 	ID        string
 }
 
+func NewDiscordMessage(dg_msg *discordgo.MessageCreate) DiscordMessage {
+	return DiscordMessage{
+		ID:        dg_msg.ID,
+		Content:   dg_msg.Content,
+		ChannelID: dg_msg.ChannelID,
+		Author: DiscordMember{
+			ID:            dg_msg.Author.ID,
+			Name:          dg_msg.Author.Username,
+			Discriminator: dg_msg.Author.Discriminator,
+		},
+	}
+}
+
+// This usefully subsumes discordgo.Member and discordgo.User
 type DiscordMember struct {
 	ID            string
 	Name          string
@@ -74,6 +76,44 @@ type DiscordMember struct {
 
 func (member DiscordMember) FQN() string {
 	return member.Name + "#" + member.Discriminator
+}
+
+type DiscordEmbed struct {
+	Title       string
+	Description string
+	Fields      []DiscordEmbedField
+	Color       int
+}
+
+func (embed *DiscordEmbed) AddField(field DiscordEmbedField) {
+	embed.Fields = append(embed.Fields, field)
+}
+
+func (embed *DiscordEmbed) Convert() *discordgo.MessageEmbed {
+	dg_embed := &discordgo.MessageEmbed{
+		Title:       embed.Title,
+		Description: embed.Description,
+		Color:       embed.Color,
+		Fields:      []*discordgo.MessageEmbedField{},
+	}
+	for _, field := range embed.Fields {
+		dg_embed.Fields = append(dg_embed.Fields, field.Convert())
+	}
+	return dg_embed
+}
+
+type DiscordEmbedField struct {
+	Name   string
+	Value  string
+	Inline bool
+}
+
+func (field DiscordEmbedField) Convert() *discordgo.MessageEmbedField {
+	return &discordgo.MessageEmbedField{
+		Name:   field.Name,
+		Value:  field.Value,
+		Inline: field.Inline,
+	}
 }
 
 // This is used in DiscordBot.getCommandsDescriptors.
@@ -254,8 +294,9 @@ func (bot *DiscordBot) channelMessageSend(channelID, content string) error {
 	return err
 }
 
-func (bot *DiscordBot) channelEmbedSend(channelID string, embed *discordgo.MessageEmbed) error {
-	_, err := bot.client.ChannelMessageSendEmbed(channelID, embed)
+func (bot *DiscordBot) channelEmbedSend(channelID string, embed *DiscordEmbed) error {
+	embed.Color = bot.myColor(channelID)
+	_, err := bot.client.ChannelMessageSendEmbed(channelID, embed.Convert())
 	return err
 }
 
@@ -265,7 +306,7 @@ func (bot *DiscordBot) channelErrorSend(channelID, userID, content string) error
 	if err != nil {
 		return err
 	}
-	time.Sleep(messageDeletionWait)
+	time.Sleep(discordMessageDeletionWait)
 	return bot.client.ChannelMessageDelete(channelID, msg.ID)
 }
 
@@ -361,17 +402,8 @@ func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
 		bot.logger.Error(err)
 	}
 
-	msg := DiscordMessage{
-		ID:        dg_msg.ID,
-		IsDM:      is_dm,
-		Content:   dg_msg.Content,
-		ChannelID: dg_msg.ChannelID,
-		Author: DiscordMember{
-			ID:            dg_msg.Author.ID,
-			Name:          dg_msg.Author.Username,
-			Discriminator: dg_msg.Author.Discriminator,
-		},
-	}
+	msg := NewDiscordMessage(dg_msg)
+	msg.IsDM = is_dm
 
 	if bot.isLoggableRedditLink(msg) {
 		err = bot.processRedditLink(msg)
@@ -477,7 +509,7 @@ func (bot *DiscordBot) command(msg DiscordMessage) error {
 	err := cmd.Callback(msg)
 
 	if err == nil && !msg.IsDM {
-		time.Sleep(messageDeletionWait)
+		time.Sleep(discordMessageDeletionWait)
 		err = bot.client.ChannelMessageDelete(msg.ChannelID, msg.ID)
 	}
 
@@ -571,11 +603,9 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 	names := msg.Args
 	bot.logger.Infof("%s wants to register %v", msg.Author.FQN(), names)
 
-	status := &discordgo.MessageEmbed{
+	status := &DiscordEmbed{
 		Title:       "Registration",
 		Description: fmt.Sprintf("request from <@%s>", msg.Author.ID),
-		Color:       bot.myColor(msg.ChannelID),
-		Fields:      []*discordgo.MessageEmbedField{},
 	}
 
 	for _, name := range names {
@@ -589,7 +619,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 		bot.Lock()
 		if bot.addUser == nil {
 			bot.Unlock()
-			embedAddField(status, name, EmojiCrossMark+" registration service unavailable", false)
+			status.AddField(DiscordEmbedField{Name: name, Value: EmojiCrossMark + " registration service unavailable"})
 			continue
 		}
 		bot.addUser <- UserQuery{User: User{Name: name, Hidden: hidden}}
@@ -599,11 +629,11 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 		if IsCancellation(reply.Error) {
 			continue
 		} else if reply.Error != nil {
-			embedAddField(status, reply.User.Name, fmt.Sprintf("%s %s", EmojiCrossMark, reply.Error), false)
+			status.AddField(DiscordEmbedField{Name: reply.User.Name, Value: fmt.Sprintf("%s %s", EmojiCrossMark, reply.Error)})
 		} else if !reply.Exists {
-			embedAddField(status, reply.User.Name, EmojiCrossMark+" not found", false)
+			status.AddField(DiscordEmbedField{Name: reply.User.Name, Value: EmojiCrossMark + " not found"})
 		} else {
-			embedAddField(status, reply.User.Name, EmojiCheckMark, false)
+			status.AddField(DiscordEmbedField{Name: reply.User.Name, Value: EmojiCheckMark})
 		}
 	}
 
@@ -615,19 +645,17 @@ func (bot *DiscordBot) editUsers(action_name string, action func(string) error) 
 		names := msg.Args
 		bot.logger.Infof("%s wants to %s %v", msg.Author.FQN(), action_name, names)
 
-		status := &discordgo.MessageEmbed{
+		status := &DiscordEmbed{
 			Title:       strings.Title(action_name),
 			Description: fmt.Sprintf("request from <@%s>", msg.Author.ID),
-			Color:       bot.myColor(msg.ChannelID),
-			Fields:      []*discordgo.MessageEmbedField{},
 		}
 
 		for _, name := range names {
 			name = TrimUsername(name)
 			if err := action(name); err != nil {
-				embedAddField(status, name, fmt.Sprintf("%s %s", EmojiCrossMark, err), false)
+				status.AddField(DiscordEmbedField{Name: name, Value: fmt.Sprintf("%s %s", EmojiCrossMark, err)})
 			} else {
-				embedAddField(status, name, EmojiCheckMark, false)
+				status.AddField(DiscordEmbedField{Name: name, Value: EmojiCheckMark})
 			}
 		}
 
@@ -646,21 +674,43 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 	}
 
 	user := query.User
-	embed := &discordgo.MessageEmbed{
+
+	embed := &DiscordEmbed{
 		Title: "Information about /u/" + user.Name,
 		Color: bot.myColor(msg.ChannelID),
-		Fields: []*discordgo.MessageEmbedField{
-			embedField("Created", user.CreatedTime().In(bot.timezone).Format(time.RFC850), true),
-			embedField("Added", user.AddedTime().In(bot.timezone).Format(time.RFC850), true),
-		},
+		Fields: []DiscordEmbedField{{
+			Name:   "Created",
+			Value:  user.CreatedTime().In(bot.timezone).Format(time.RFC850),
+			Inline: true,
+		}, {
+			Name:   "Added",
+			Value:  user.AddedTime().In(bot.timezone).Format(time.RFC850),
+			Inline: true,
+		}, {
+			Name:   "Hidden from reports",
+			Value:  fmt.Sprintf("%t", user.Hidden),
+			Inline: true,
+		}, {
+			Name:   "Suspended",
+			Value:  fmt.Sprintf("%t", user.Suspended),
+			Inline: true,
+		}, {
+			Name:   "Deleted",
+			Value:  fmt.Sprintf("%t", user.NotFound),
+			Inline: true,
+		}, {
+			Name:   "Active",
+			Value:  fmt.Sprintf("%t", !user.Inactive),
+			Inline: true,
+		}},
 	}
 
-	embedAddField(embed, "Hidden from reports", fmt.Sprintf("%t", user.Hidden), true)
-	embedAddField(embed, "Suspended", fmt.Sprintf("%t", user.Suspended), true)
-	embedAddField(embed, "Deleted", fmt.Sprintf("%t", user.NotFound), true)
-	embedAddField(embed, "Active", fmt.Sprintf("%t", !user.Inactive), true)
 	if user.LastScan > 0 {
-		embedAddField(embed, "Last scan", user.LastScanTime().In(bot.timezone).Format(time.RFC850), true)
+		embed.AddField(DiscordEmbedField{
+			Name:   "Last scan",
+			Value:  user.LastScanTime().In(bot.timezone).Format(time.RFC850),
+			Inline: true,
+		})
 	}
 
 	return bot.channelEmbedSend(msg.ChannelID, embed)
@@ -680,11 +730,7 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, reply)
 	}
 
-	embed := &discordgo.MessageEmbed{
-		Title:  "Karma for /u/" + res.User.Name,
-		Color:  bot.myColor(msg.ChannelID),
-		Fields: []*discordgo.MessageEmbedField{},
-	}
+	embed := &DiscordEmbed{Title: "Karma for /u/" + res.User.Name}
 
 	var positive int64
 	var negative int64
@@ -692,23 +738,24 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 	positive, err = bot.storage.GetPositiveKarma(username)
 	if err == ErrNoComment {
-		embedAddField(embed, "Positive", "no comment with a positive score", true)
+		embed.AddField(DiscordEmbedField{Name: "Positive", Value: "no comment with a positive score", Inline: true})
 	} else if err != nil {
 		return err
 	} else {
-		embedAddField(embed, "Positive", fmt.Sprintf("%d", positive), true)
+		embed.AddField(DiscordEmbedField{Name: "Positive", Value: fmt.Sprintf("%d", positive), Inline: true})
 	}
 
 	negative, err = bot.storage.GetNegativeKarma(username)
 	if err == ErrNoComment {
-		embedAddField(embed, "Negative", "no comment with negative score", true)
+		embed.AddField(DiscordEmbedField{Name: "Negative", Value: "no comment with negative score", Inline: true})
 	} else if err != nil {
 		return err
 	} else {
-		embedAddField(embed, "Negative", fmt.Sprintf("%d", negative), true)
+		embed.AddField(DiscordEmbedField{Name: "Negative", Value: fmt.Sprintf("%d", negative), Inline: true})
 	}
 
-	embedAddField(embed, "Total", fmt.Sprintf("%d", positive+negative), true)
+	embed.AddField(DiscordEmbedField{Name: "Total", Value: fmt.Sprintf("%d", positive+negative), Inline: true})
+
 	return bot.channelEmbedSend(msg.ChannelID, embed)
 }
 
