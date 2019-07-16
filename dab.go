@@ -180,7 +180,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		})
 
 		if dab.conf.Reddit.DVTInterval.Value > 0 {
-			reddit_evts := make(chan Comment)
+			reddit_evts := make(chan Comment, DefaultChannelSize)
 			tasks.Spawn(func() { dab.components.Discord.SignalNewRedditPosts(reddit_evts) })
 			tasks.SpawnCtx(func(ctx context.Context) error {
 				defer close(reddit_evts)
