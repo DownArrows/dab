@@ -20,7 +20,7 @@ func main() {
 	}()
 
 	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
+	signal.Notify(sig, syscall.SIGTERM, os.Interrupt, os.Kill)
 
 	var err error
 	select {
@@ -28,7 +28,12 @@ func main() {
 		cancel()
 	case <-sig:
 		cancel()
-		err = <-done
+		select {
+		case err = <-done:
+			break
+		case s := <-sig:
+			err = fmt.Errorf("forced shutdown with signal %s", s)
+		}
 	}
 
 	if err != nil {

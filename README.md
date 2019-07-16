@@ -120,6 +120,10 @@ If you want to run it with [systemd](https://en.wikipedia.org/wiki/Systemd), her
 
 If you feel the need to be sure it is actually doing something, run it with `-log Debug`.
 
+The bot shuts down on the following UNIX signals: SIGINT, SIGTERM, and SIGKILL.
+On Windows it will not respond to Crtl+C.
+If the bot hangs when you try to stop it, sending it once again a shutdown signal will force its shutdown.
+
 ### Maintenance
 
 If the bot has been offline for a while, it will pick everything back up where it left,
