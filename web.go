@@ -12,36 +12,65 @@ import (
 	"strings"
 )
 
-// Simple hack to get compression without having to create a whole type implementing http.ResponseWriter
-type webResponse struct {
-	Actual http.ResponseWriter
-	Gzip   *gzip.Writer
+// http.ResponseWriter wrapper with basic GZip compression support
+type ResponseWriter struct {
+	actual http.ResponseWriter
+	gzip   *gzip.Writer
 }
 
-func newWebResponse(w http.ResponseWriter, r *http.Request) webResponse {
+func NewResponseWriter(w http.ResponseWriter, r *http.Request) *ResponseWriter {
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		w.Header().Set("Content-Encoding", "gzip")
 		gw, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
 		if err != nil {
 			panic(err)
 		}
-		return webResponse{Actual: w, Gzip: gw}
+		return &ResponseWriter{actual: w, gzip: gw}
 	}
-	return webResponse{Actual: w}
+	return &ResponseWriter{actual: w}
 }
 
-func (r webResponse) Write(data []byte) (int, error) {
-	if r.Gzip == nil {
-		return r.Actual.Write(data)
-	}
-	return r.Gzip.Write(data)
-}
-
-func (r webResponse) Close() error {
-	if r.Gzip == nil {
+func (w *ResponseWriter) Close() error {
+	if w.gzip == nil {
 		return nil
 	}
-	return r.Gzip.Close()
+	return w.gzip.Close()
+}
+
+func (w *ResponseWriter) Header() http.Header {
+	return w.actual.Header()
+}
+
+func (w *ResponseWriter) Write(data []byte) (int, error) {
+	if w.gzip == nil {
+		return w.actual.Write(data)
+	}
+	return w.gzip.Write(data)
+}
+
+func (w *ResponseWriter) WriteHeader(statusCode int) {
+	w.actual.WriteHeader(statusCode)
+}
+
+// http.ServeMux minimal wrapper that uses our ResponseWriter
+type ServeMux struct {
+	actual *http.ServeMux
+}
+
+func NewServeMux() *ServeMux {
+	return &ServeMux{actual: http.NewServeMux()}
+}
+
+func (mux *ServeMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	mux.actual.HandleFunc(pattern, handler)
+}
+
+func (mux *ServeMux) ServeHTTP(base_w http.ResponseWriter, r *http.Request) {
+	w := NewResponseWriter(base_w, r)
+	mux.actual.ServeHTTP(w, r)
+	if err := w.Close(); err != nil {
+		panic(err)
+	}
 }
 
 // Component
@@ -63,7 +92,7 @@ func NewWebServer(conf WebConf, reports ReportFactory, bs BackupStorage) *WebSer
 		done:            make(chan error),
 	}
 
-	mux := http.NewServeMux()
+	mux := NewServeMux()
 	mux.HandleFunc("/reports", wsrv.ReportIndex)
 	mux.HandleFunc("/reports/", wsrv.Report)
 	mux.HandleFunc("/reports/current", wsrv.ReportCurrent)
@@ -116,9 +145,7 @@ func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	output := newWebResponse(w, r)
-	defer output.Close()
-	if err := MarkdownReport.Execute(output, report); err != nil {
+	if err := MarkdownReport.Execute(w, report); err != nil {
 		wsrv.fatal(err)
 	}
 }
@@ -139,10 +166,9 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 		html := blackfriday.Run([]byte(src.Body), wsrv.markdownOptions)
 		return template.HTML(html), nil
 	}
+
 	w.Header().Set("Content-Type", "text/html")
-	output := newWebResponse(w, r)
-	defer output.Close()
-	if err := HTMLReportPage.Execute(output, report); err != nil {
+	if err := HTMLReportPage.Execute(w, report); err != nil {
 		wsrv.fatal(err)
 	}
 }
