@@ -50,139 +50,8 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 	<meta charset="utf-8"/>
 	<meta name="viewport" content="initial-scale=1"/>
 	<title>Report of year {{.Year}} week {{.Week}}</title>
-	<style>
-		:root {
-			--main-color: #6a6;
-			--sec-color: #5af;
-			--bg: #eee;
-			--fg: #555;
-			--spacing: 0.2em;
-		}
-
-		body {
-			max-width: 63rem;
-			margin: 1rem auto;
-			color: var(--fg);
-			font-size: 0.75em;
-		}
-
-		@media (min-width: 40rem) {
-			body { font-size: 1em }
-		}
-
-		body > h1, article > h1 {
-			color: var(--main-color)
-		}
-
-		#title {
-			text-align: center;
-			font-size: 1.5em;
-		}
-
-		@media (min-width: 40rem) {
-			#title {
-				font-size: 2em;
-				margin-bottom: 2em;
-			}
-		}
-
-		aside.md-link {
-			font-weight: bold;
-			margin-right: 1em;
-		}
-
-		@media (min-width: 40rem) {
-			aside.md-link { float: right }
-		}
-
-		aside.md-link a::after {
-			content: "M↓";
-			color: var(--bg);
-			background: var(--fg);
-			border-radius: var(--spacing);
-			font-weight: bold;
-			padding: calc(var(--spacing)/2);
-			margin: calc(var(--spacing)/2);
-			font-size: smaller;
-		}
-
-		#report-head {
-			margin: var(--spacing);
-		}
-
-		#report-head h1, #report-head h2 {
-			font-size: 1em;
-		}
-
-		@media (min-width: 30em) {
-			#report-head h1 { font-size: 1.5em }
-			#report-head h2 { font-size: 1.25em }
-		}
-
-		#report-head ol {
-			list-style-type: none;
-		}
-
-		.comment .score {
-			color: var(--main-color);
-			font-weight: bold;
-		}
-
-		.comment > dl {
-			display: table;
-			border-spacing: calc(2 * var(--spacing));
-		}
-
-		.comment > dl > .ditem {
-			display: table-row;
-		}
-
-		.ditem > dt, .ditem > dd {
-			display: table-cell;
-		}
-
-		.comment > blockquote {
-			overflow-wrap: break-word;
-		}
-
-		.comment > blockquote blockquote {
-			background: var(--bg);
-			border-left: solid var(--spacing) var(--main-color);
-			margin-left: 0;
-			padding: var(--spacing);
-			padding-left: calc(2 * var(--spacing));
-		}
-
-		.comment > blockquote pre {
-			overflow-x: scroll;
-			padding: var(--spacing);
-			border-radius: var(--spacing);
-			background: #eee;
-		}
-
-		main {
-			margin-bottom: 1em;
-		}
-
-		a {
-			color: var(--sec-color);
-			text-decoration: none;
-		}
-
-		a:hover {
-			text-decoration: underline;
-		}
-
-		a:visited {
-			color: #9bd;
-			text-decoration: none;
-		}
-
-		footer a {
-			display: block;
-			text-align: center;
-		}
-	</style>
+	<link rel="stylesheet" href="/css/main?version={{.Version}}">
+	<link rel="stylesheet" href="/css/reports?version={{.Version}}">
 </head>
 <body>
 <h1 id="title">Report of year {{.Year}} week {{.Week}}</h1>
@@ -251,3 +120,138 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 <footer><a href="#title">back to top</a></footer>
 
 </body>`))
+
+const CSSMain = `:root {
+	--main-color: #6a6;
+	--sec-color: #5af;
+	--bg: #eee;
+	--fg: #555;
+	--spacing: 0.2em;
+}
+
+body {
+	color: var(--fg);
+	font-size: 0.75em;
+}
+
+@media (min-width: 40rem) {
+	body { font-size: 1em }
+}
+
+body > h1, article > h1 {
+	color: var(--main-color)
+}
+
+.ditem > dt, .ditem > dd {
+	display: table-cell;
+}
+
+a {
+	color: var(--sec-color);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:visited {
+	color: #9bd;
+	text-decoration: none;
+}`
+
+const CSSReports = `body {
+	max-width: 63rem;
+	margin: 1rem auto;
+}
+
+#title {
+	text-align: center;
+	font-size: 1.5em;
+}
+
+@media (min-width: 40rem) {
+	#title {
+		font-size: 2em;
+		margin-bottom: 2em;
+	}
+}
+
+aside.md-link {
+	font-weight: bold;
+	margin-right: 1em;
+}
+
+@media (min-width: 40rem) {
+	aside.md-link { float: right }
+}
+
+aside.md-link a::after {
+	content: "M↓";
+	color: var(--bg);
+	background: var(--fg);
+	border-radius: var(--spacing);
+	font-weight: bold;
+	padding: calc(var(--spacing)/2);
+	margin: calc(var(--spacing)/2);
+	font-size: smaller;
+}
+
+#report-head {
+	margin: var(--spacing);
+}
+
+#report-head h1, #report-head h2 {
+	font-size: 1em;
+}
+
+@media (min-width: 30em) {
+	#report-head h1 { font-size: 1.5em }
+	#report-head h2 { font-size: 1.25em }
+}
+
+#report-head ol {
+	list-style-type: none;
+}
+
+.comment .score {
+	color: var(--main-color);
+	font-weight: bold;
+}
+
+.comment > dl {
+	display: table;
+	border-spacing: calc(2 * var(--spacing));
+}
+
+.comment > dl > .ditem {
+	display: table-row;
+}
+
+.comment > blockquote {
+	overflow-wrap: break-word;
+}
+
+.comment > blockquote blockquote {
+	background: var(--bg);
+	border-left: solid var(--spacing) var(--main-color);
+	margin-left: 0;
+	padding: var(--spacing);
+	padding-left: calc(2 * var(--spacing));
+}
+
+.comment > blockquote pre {
+	overflow-x: scroll;
+	padding: var(--spacing);
+	border-radius: var(--spacing);
+	background: #eee;
+}
+
+main {
+	margin-bottom: 1em;
+}
+
+footer a {
+	display: block;
+	text-align: center;
+}`

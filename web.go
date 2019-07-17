@@ -12,6 +12,8 @@ import (
 	"strings"
 )
 
+const HTTPCacheMaxAge = 31536000
+
 // http.ResponseWriter wrapper with basic GZip compression support
 type ResponseWriter struct {
 	actual http.ResponseWriter
@@ -73,6 +75,24 @@ func (mux *ServeMux) ServeHTTP(base_w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func immutableCache(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("version") != Version.String() {
+			http.NotFound(w, r)
+			return
+		}
+
+		if r.Header.Get("If-Modified-Since") != "" {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+
+		w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", HTTPCacheMaxAge))
+
+		handler(w, r)
+	}
+}
+
 // Component
 type WebServer struct {
 	backupStorage   BackupStorage
@@ -93,6 +113,7 @@ func NewWebServer(conf WebConf, reports ReportFactory, bs BackupStorage) *WebSer
 	}
 
 	mux := NewServeMux()
+	mux.HandleFunc("/css/", immutableCache(wsrv.CSS))
 	mux.HandleFunc("/reports", wsrv.ReportIndex)
 	mux.HandleFunc("/reports/", wsrv.Report)
 	mux.HandleFunc("/reports/current", wsrv.ReportCurrent)
@@ -125,6 +146,21 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 		return nil
 	}
 	return err
+}
+
+func (wsrv *WebServer) CSS(w http.ResponseWriter, r *http.Request) {
+	var css string
+	switch r.URL.Path {
+	case "/css/main":
+		css = CSSMain
+	case "/css/reports":
+		css = CSSReports
+	default:
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/css")
+	w.Write([]byte(css))
 }
 
 func (wsrv *WebServer) ReportIndex(w http.ResponseWriter, r *http.Request) {

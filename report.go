@@ -43,6 +43,7 @@ func (rf ReportFactory) Report(start, end time.Time) Report {
 		MaxStatsSummaries: rf.nbTop,
 		Timezone:          rf.timezone,
 		CutOff:            rf.cutOff,
+		Version:           Version,
 	}
 }
 
@@ -88,6 +89,7 @@ type Report struct {
 	MaxStatsSummaries uint           // Max number of statistics to put in the report's headers to summarize the week
 	Timezone          *time.Location // Timezone of dates
 	CutOff            int64          // Max score of the comments included in the report
+	Version           SemVer         // Version of the software with which the report was made
 
 	CommentBodyConverter func(ReportComment) (interface{}, error) // Optionnal function to convert comments' body to anything
 }
