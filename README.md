@@ -121,7 +121,7 @@ If you want to run it with [systemd](https://en.wikipedia.org/wiki/Systemd), her
 If you feel the need to be sure it is actually doing something, run it with `-log Debug`.
 
 The bot shuts down on the following UNIX signals: SIGINT, SIGTERM, and SIGKILL.
-On Windows it will not respond to Crtl+C.
+On Windows it will not respond to Ctrl+C.
 If the bot hangs when you try to stop it, sending it once again a shutdown signal will force its shutdown.
 
 ### Maintenance
@@ -196,9 +196,11 @@ and <http://golang.localhost/pkg/text/template/>.
        - `times` *int* (5): maximum number of times to try to connect to Discord; use -1 for infinite retries
        - `max_interval` *duration* (2m): maximum wait between connection retries
     - `token` *string* (*none*): token to connect to Discord; leave out to disable the Discord component
-    - `welcome` *template* (*none*): template of the welcome message; it is provided with two top-level keys,
-      `ChannelsID` and `Member`. `ChannelsID` provides `General`, `Log` and `HighScores`, which contains the numeric ID of those channels.
-      `Member` provides `ID`, `Name`, and `FQN` (name followed by a discriminator). Disables welcome messages if left empty
+    - `welcome` *template* (*none*): template of the welcome message; it is provided with three top-level keys,
+      `ChannelsID`, `Member`, and `BotID`. `ChannelsID` provides `General`, `Log` and `HighScores`, which contains the numeric ID of those channels.
+      `Member` provides `ID`, `Name`, and `FQN` (name followed by a discriminator).
+		`BotID` is the ID of the bot so that you can mention it with `<@{{.BotID}}>`.
+		Welcome messages are disabled if the template is empty or not set
  - `reddit`
     - `compendium_update_interval` *duration* (*none*): interval between each scan of the compendium;
       leave out to disable, else must be at least an hour
@@ -259,6 +261,7 @@ Note how the last value of a dictionary must not be followed by a comma:
 			"general":    "508169151894056221",
 			"log":        "508869940013213344",
 			"highscores": "508263683211452578",
+			"privileged_role": "653243081214462080",
 			"welcome":    "Hello <@{{.Member.ID}}>!"
 		},
 
@@ -397,6 +400,5 @@ They communicate together through channels that are passed either via a closure 
 
 ### TODO
 
- - auto post reports to a specific sub and maintain its wiki
  - better browsability of the web reports
  - replace blackfriday with snudown
