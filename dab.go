@@ -246,7 +246,7 @@ func (dab *DownArrowsBot) report() error {
 	if report.Len() == 0 {
 		return errors.New("empty report")
 	}
-	return WriteMarkdownReport(report, dab.stdOut)
+	return MarkdownReport.Execute(dab.stdOut, report)
 }
 
 func (dab *DownArrowsBot) userAdd(ctx context.Context) error {

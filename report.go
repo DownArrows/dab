@@ -88,6 +88,8 @@ type Report struct {
 	MaxStatsSummaries uint           // Max number of statistics to put in the report's headers to summarize the week
 	Timezone          *time.Location // Timezone of dates
 	CutOff            int64          // Max score of the comments included in the report
+
+	CommentBodyConverter func(ReportComment) (interface{}, error) // Optionnal function to convert comments' body to anything
 }
 
 func (r Report) Head() ReportHead {
@@ -105,7 +107,9 @@ func (r Report) Comments() []ReportComment {
 	n := r.Len()
 	comments := make([]ReportComment, 0, n)
 	for i := 0; i < n; i++ {
-		comments = append(comments, r.Comment(i))
+		comment := r.Comment(i)
+		comment.BodyConverter = r.CommentBodyConverter
+		comments = append(comments, comment)
 	}
 	return comments
 }
@@ -147,10 +151,19 @@ type ReportComment struct {
 	Sub       string    // Subreddit in which the comment was posted
 	Permalink string    // Path on reddit to the comment
 	Body      string    // Body of the comment as it was typed (in reddit-flavored markdown)
+
+	BodyConverter func(ReportComment) (interface{}, error)
 }
 
 func (rc ReportComment) BodyLines() []string {
 	return strings.Split(rc.Body, "\n")
+}
+
+func (rc ReportComment) BodyConvert() (interface{}, error) {
+	if rc.BodyConverter != nil {
+		return rc.BodyConverter(rc)
+	}
+	return rc.Body, nil
 }
 
 // Statistics data structures

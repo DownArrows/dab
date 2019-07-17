@@ -44,11 +44,6 @@ func (r webResponse) Close() error {
 	return r.Gzip.Close()
 }
 
-type HTMLReportComment struct {
-	ReportComment
-	HTMLBody template.HTML
-}
-
 // Component
 type WebServer struct {
 	backupStorage   BackupStorage
@@ -123,7 +118,7 @@ func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	output := newWebResponse(w, r)
 	defer output.Close()
-	if err := WriteMarkdownReport(report, output); err != nil {
+	if err := MarkdownReport.Execute(output, report); err != nil {
 		wsrv.fatal(err)
 	}
 }
@@ -140,25 +135,14 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	comments := make([]HTMLReportComment, 0, report.Len())
-	for _, src := range report.Comments() {
-		var comment HTMLReportComment
-		comment.ReportComment = src
+	report.CommentBodyConverter = func(src ReportComment) (interface{}, error) {
 		html := blackfriday.Run([]byte(src.Body), wsrv.markdownOptions)
-		comment.HTMLBody = template.HTML(html)
-		comments = append(comments, comment)
+		return template.HTML(html), nil
 	}
-	data := map[string]interface{}{
-		"Year":     report.Year,
-		"Week":     report.Week,
-		"Head":     report.Head(),
-		"Comments": comments,
-	}
-
 	w.Header().Set("Content-Type", "text/html")
 	output := newWebResponse(w, r)
 	defer output.Close()
-	if err := HTMLReportPage.Execute(output, data); err != nil {
+	if err := HTMLReportPage.Execute(output, report); err != nil {
 		wsrv.fatal(err)
 	}
 }
