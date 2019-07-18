@@ -159,7 +159,7 @@ func (wsrv *WebServer) CSS(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Content-Type", "text/css")
+	w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	w.Write([]byte(css))
 }
 
