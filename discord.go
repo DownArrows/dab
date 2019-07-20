@@ -306,8 +306,13 @@ func (bot *DiscordBot) channelErrorSend(channelID, userID, content string) error
 	if err != nil {
 		return err
 	}
-	time.Sleep(discordMessageDeletionWait)
-	return bot.client.ChannelMessageDelete(channelID, msg.ID)
+	go func() {
+		time.Sleep(discordMessageDeletionWait)
+		if err := bot.client.ChannelMessageDelete(channelID, msg.ID); err != nil {
+			bot.logger.Errorf("error when deleting discord error message %q: %v", content, err)
+		}
+	}()
+	return nil
 }
 
 func (bot *DiscordBot) myColor(channelID string) int {
