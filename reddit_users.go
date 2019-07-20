@@ -13,6 +13,7 @@ type RedditUsers struct {
 	logger  LevelLogger
 	storage RedditUsersStorage
 
+	compendiumSub                        string
 	compendiumUpdateInterval             time.Duration
 	AutoUpdateUsersFromCompendiumEnabled bool
 
@@ -32,8 +33,9 @@ func NewRedditUsers(
 		logger:  logger,
 		storage: storage,
 
-		compendiumUpdateInterval:             conf.CompendiumUpdateInterval.Value,
-		AutoUpdateUsersFromCompendiumEnabled: conf.CompendiumUpdateInterval.Value > 0,
+		compendiumSub:                        conf.Compendium.Sub,
+		compendiumUpdateInterval:             conf.Compendium.UpdateInterval.Value,
+		AutoUpdateUsersFromCompendiumEnabled: conf.Compendium.UpdateInterval.Value > 0 && conf.Compendium.Sub != "",
 
 		unsuspensions:              make(chan User, DefaultChannelSize),
 		unsuspensionInterval:       conf.UnsuspensionInterval.Value,
@@ -113,7 +115,7 @@ func (ru *RedditUsers) AutoUpdateUsersFromCompendium(ctx context.Context) error 
 
 func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
 	ru.logger.Debug("updating users from compendium")
-	page, err := ru.api.WikiPage(ctx, "downvote_trolls", "compendium")
+	page, err := ru.api.WikiPage(ctx, ru.compendiumSub, "compendium")
 	if err != nil {
 		return err
 	}

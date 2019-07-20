@@ -192,7 +192,7 @@ and <http://golang.localhost/pkg/text/template/>.
     - `log` *string* (*none*): Discord ID of the channel where links to comments on reddit are reposted; disabled if left empty
     - `prefix` *string* (!): prefix for commands
     - `privileged_role` *string* (*none*): Discord ID of the role that can use privileged commands, along with the server's owner
-    - `retry_connection`:
+    - `retry_connection` *dictionary*:
        - `times` *int* (5): maximum number of times to try to connect to Discord; use -1 for infinite retries
        - `max_interval` *duration* (2m): maximum wait between connection retries
     - `token` *string* (*none*): token to connect to Discord; leave out to disable the Discord component
@@ -202,10 +202,13 @@ and <http://golang.localhost/pkg/text/template/>.
 		`BotID` is the ID of the bot so that you can mention it with `<@{{.BotID}}>`.
 		Welcome messages are disabled if the template is empty or not set
  - `reddit`
-    - `compendium_update_interval` *duration* (*none*): interval between each scan of the compendium;
-      leave out to disable, else must be at least an hour
+    - `compendium` *dictionary*:
+       - `sub` *string* (*none*): sub on which the compendium can be found; leave out to disable scans of the compendium
+       - `update_interval` *duration* (*none*): interval between each scan of the compendium;
+         leave out to disable, else must be at least an hour
     - `dvt_interval` *string* (*none*): interval between each check of the downvote sub's new reports;
-      leave out to disable, else must be at least a minute
+      leave out to disable, else must be at least a minute.
+      **Deprecated**: starting with version 1.10.0 this option has no effect.
     - `full_scan_interval` *duration* (6h): interval between each scan of all users, inactive or not
     - `id` *string* (*none*): Reddit application ID for the bot; leave out to disable the Reddit component
     - `inactivity_threshold` *duration* (2200h): if a user hasn't commented since that long ago,
@@ -214,7 +217,7 @@ and <http://golang.localhost/pkg/text/template/>.
       must be at least one day
     - `max_batches` *int* (5): maximum number of batches of comments to get from Reddit for a single user before moving to the next one
     - `password` *string* (*none*): Reddit password for the bot's account; leave out to disable the Reddit component
-	 - `retry_connection`:
+	 - `retry_connection` *dictionary*:
        - `times` *int* (10): maximum number of times to try to connect to Reddit; use -1 for infinite retries
        - `max_interval` *duration* (5m): maximum wait between connection retries
     - `secret` *string* (*none*): Reddit application secret for the bot; leave out to disable the Reddit component
@@ -222,6 +225,10 @@ and <http://golang.localhost/pkg/text/template/>.
       leave out to disable, else must be at least one minute
     - `user_agent` *template* (*none*): user agent of the bot on reddit; `OS` and `Version` are provided; leave out to disable the Reddit component
     - `username` *string* (*none*): Reddit username for the bot's account; leave out to disable the Reddit component
+    - `watch_submissions` *array of dictionaries*:
+       - `target` *string* (*none*): a username whose submissions will be watched, or a sub;
+          a username must start with `/u/`, and a sub with `/r/`
+       - `interval` *duration* (*none*): interval between each scan of the target
  - `report`
     - `cutoff` *int* (-50): ignore comments whose score is higher than this
     - `leeway` *duration* (12h): shift back the time window for comments' inclusion in the report
@@ -251,9 +258,14 @@ Note how the last value of a dictionary must not be followed by a comma:
 			"secret":     "D8PvhefS9ZTZFOUxK-9Bu7iaRLt",
 			"user_agent": "{{.OS}}:agreatbot:v{{.Version}} (by /u/AGreatUsername)",
 			"max_age":                    "72h",
-			"dvt_interval":               "5m",
 			"unsuspension_interval":      "15m",
-			"compendium_update_interval": "1h"
+			"compendium": {
+				"sub":             "DownvoteTrolling",
+				"update_interval": "1h"
+			},
+			"watch_submissions": [
+				{"target": "/r/DownvoteTrolling", "interval": "15m"}
+			]
 		},
 
 		"discord": {

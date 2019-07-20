@@ -32,8 +32,8 @@ type RedditUsersStorage interface {
 }
 
 type RedditSubsStorage interface {
+	KnownObjects
 	IsKnownSubPostID(string, string) bool
-	NbKnownPostIDs(string) int
 	SaveSubPostIDs(string, []Comment) error
 }
 
@@ -764,14 +764,6 @@ func (s *Storage) IsKnownSubPostID(sub, id string) bool {
 		is_known = ids.Has(id)
 	})
 	return is_known
-}
-
-func (s *Storage) NbKnownPostIDs(sub string) int {
-	var length int
-	s.readSubPostIDs(sub, func(ids *SyncSet) {
-		length = ids.Len()
-	})
-	return length
 }
 
 func (s *Storage) readSubPostIDs(sub string, cb func(*SyncSet)) {

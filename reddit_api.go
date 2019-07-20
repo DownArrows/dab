@@ -32,6 +32,7 @@ type RedditUsersAPI interface {
 
 type RedditSubsAPI interface {
 	SubPosts(context.Context, string, string) ([]Comment, string, error)
+	UserSubmissions(context.Context, string, string) ([]Comment, string, error)
 }
 
 const accessTokenRawURL = "https://www.reddit.com/api/v1/access_token"
@@ -180,6 +181,18 @@ func (ra *RedditAPI) UserComments(ctx context.Context, user User, nb uint) ([]Co
 	return comments, user, nil
 }
 
+func (ra *RedditAPI) UserSubmissions(ctx context.Context, user string, position string) ([]Comment, string, error) {
+	posts, position, status, err := ra.getListing(ctx, "/u/"+user+"/submitted", position, MaxRedditListingLength)
+	if err != nil {
+		if status == 403 || status == 404 {
+			err = fmt.Errorf("reddit user %s has been suspended or deleted", user)
+		} else if status != 200 {
+			err = fmt.Errorf("bad status when fetching submissions of %s: %d", user, status)
+		}
+	}
+	return posts, position, err
+}
+
 func (ra *RedditAPI) AboutUser(ctx context.Context, username string) UserQuery {
 	query := UserQuery{User: User{Name: username}}
 	sane, err := regexp.MatchString(`^[[:word:]-]+$`, username)
@@ -237,7 +250,14 @@ func (ra *RedditAPI) WikiPage(ctx context.Context, sub, page string) (string, er
 }
 
 func (ra *RedditAPI) SubPosts(ctx context.Context, sub string, position string) ([]Comment, string, error) {
-	comments, position, _, err := ra.getListing(ctx, "/r/"+sub+"/new", position, MaxRedditListingLength)
+	comments, position, status, err := ra.getListing(ctx, "/r/"+sub+"/new", position, MaxRedditListingLength)
+	if err != nil {
+		if status == 403 || status == 404 {
+			err = fmt.Errorf("reddit sub %s doesn't exist or has been banned", sub)
+		} else if status != 200 {
+			err = fmt.Errorf("bad status when fetching submissions of %s: %d", sub, status)
+		}
+	}
 	return comments, position, err
 }
 

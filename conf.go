@@ -71,8 +71,14 @@ type RedditScannerConf struct {
 }
 
 type RedditUsersConf struct {
-	CompendiumUpdateInterval Duration `json:"compendium_update_interval"`
-	UnsuspensionInterval     Duration `json:"unsuspension_interval"`
+	Compendium               CompendiumConf `json:"compendium"`
+	CompendiumUpdateInterval Duration       `json:"compendium_update_interval"` // Deprecated
+	UnsuspensionInterval     Duration       `json:"unsuspension_interval"`
+}
+
+type CompendiumConf struct {
+	Sub            string   `json:"sub"`
+	UpdateInterval Duration `json:"update_interval"`
 }
 
 type ReportConf struct {
@@ -112,9 +118,10 @@ type Configuration struct {
 		RedditAuth
 		RedditScannerConf
 		RedditUsersConf
-		DVTInterval Duration     `json:"dvt_interval"`
-		Retry       RetryOptions `json:"retry_connection"`
-		UserAgent   string       `json:"user_agent"`
+		DVTInterval      Duration           `json:"dvt_interval"` // Deprecated
+		Retry            RetryOptions       `json:"retry_connection"`
+		UserAgent        string             `json:"user_agent"`
+		WatchSubmissions []WatchSubmissions `json:"watch_submissions"`
 	}
 
 	Report ReportConf
@@ -187,6 +194,24 @@ func (conf Configuration) HasSaneValues() error {
 		return errors.New("reports' cut-off can't be higher than 0")
 	}
 	return nil
+}
+
+func (conf Configuration) Deprecations() []string {
+	var msgs []string
+
+	if conf.Discord.Admin != "" {
+		msgs = append(msgs, "discord.admin is deprecated, use discord.privileged_role instead")
+	}
+
+	if conf.Reddit.DVTInterval.Value != 0 {
+		msgs = append(msgs, "reddit.dvt_interval is deprecated, use reddit.watch_submissions instead")
+	}
+
+	if conf.Reddit.CompendiumUpdateInterval.Value != 0 {
+		msgs = append(msgs, "reddit.compendium_update_interval is deprecated, use reddit.compendium instead")
+	}
+
+	return msgs
 }
 
 func (conf Configuration) Components() ComponentsConf {

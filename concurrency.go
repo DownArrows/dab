@@ -61,18 +61,19 @@ func Retry(opts RetryOptions, task Task) Task {
 // TaskGroup.Wait returns a type of error that contains multiple errors and which
 // can be converted to a normal error that can be usefully compared to nil.
 type TaskGroup struct {
-	cancel  context.CancelFunc
-	context context.Context
-	errors  *ErrorGroup
+	parent  *TaskGroup
+	Cancel  context.CancelFunc
+	Context context.Context
+	Errors  *ErrorGroup
 	wait    *sync.WaitGroup
 }
 
-func NewTaskGroup(parent context.Context) *TaskGroup {
-	ctx, cancel := context.WithCancel(parent)
+func NewTaskGroup(parent_ctx context.Context) *TaskGroup {
+	ctx, cancel := context.WithCancel(parent_ctx)
 	return &TaskGroup{
-		cancel:  cancel,
-		context: ctx,
-		errors:  NewErrorGroup(),
+		Cancel:  cancel,
+		Context: ctx,
+		Errors:  NewErrorGroup(),
 		wait:    &sync.WaitGroup{},
 	}
 }
@@ -80,8 +81,11 @@ func NewTaskGroup(parent context.Context) *TaskGroup {
 func (tg *TaskGroup) SpawnCtx(cb Task) {
 	tg.wait.Add(1)
 	go func() {
-		if err := cb(tg.context); err != nil && !IsCancellation(err) {
-			tg.errors.Add(err)
+		if err := cb(tg.Context); err != nil && !IsCancellation(err) {
+			tg.Errors.Add(err)
+			if tg.parent != nil {
+				tg.parent.Errors.Add(err)
+			}
 			tg.Cancel()
 		}
 		tg.wait.Done()
@@ -96,18 +100,16 @@ func (tg *TaskGroup) Spawn(cb func()) {
 	}()
 }
 
-func (tg *TaskGroup) Cancel() {
-	tg.cancel()
-}
-
-func (tg *TaskGroup) Errors() *ErrorGroup {
-	return tg.errors
+func (tg *TaskGroup) SubGroup() *TaskGroup {
+	sub_tg := NewTaskGroup(tg.Context)
+	sub_tg.parent = tg
+	return sub_tg
 }
 
 func (tg *TaskGroup) Wait() *ErrorGroup {
 	defer tg.Cancel()
 	tg.wait.Wait()
-	return tg.errors
+	return tg.Errors
 }
 
 type ErrorGroup struct {

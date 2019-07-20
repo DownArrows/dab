@@ -2,8 +2,14 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
+
+type WatchSubmissions struct {
+	Target   string
+	Interval Duration
+}
 
 // Component
 type RedditSubs struct {
@@ -20,36 +26,49 @@ func NewRedditSubs(logger LevelLogger, storage RedditSubsStorage, api RedditSubs
 	}
 }
 
-func (rs *RedditSubs) NewPostsOnSub(ctx context.Context, sub string, ch chan<- Comment, sleep time.Duration) error {
-	rs.logger.Infof("watching new posts from %s with interval %s", sub, sleep)
+func (rs *RedditSubs) WatchSubmissions(ctx context.Context, config WatchSubmissions, ch chan<- Comment) error {
+	var fetcher func(context.Context, string, string) ([]Comment, string, error)
+	target := config.Target
+	sleep := config.Interval.Value
 
-	// This assumes the sub isn't empty
-	first_time := (rs.storage.NbKnownPostIDs(sub) == 0)
+	if sleep < time.Minute {
+		return fmt.Errorf("watcher interval for %q must be greater than a minute", target)
+	}
+
+	if prefix := target[:3]; prefix == "/r/" {
+		fetcher = rs.api.SubPosts
+	} else if prefix == "/u/" {
+		fetcher = rs.api.UserSubmissions
+	} else {
+		return fmt.Errorf("the target of the submission watcher must start with /r/ or /u/, not %q", prefix)
+	}
+
+	rs.logger.Infof("watching new posts from %q with interval %s", target, sleep)
 
 	for SleepCtx(ctx, sleep) {
-		rs.logger.Debugf("checkin sub %s for new posts", sub)
+		rs.logger.Debugf("checking %q for new posts", target)
 
-		posts, _, err := rs.api.SubPosts(ctx, sub, "")
+		posts, _, err := fetcher(ctx, target[3:], "")
 		if IsCancellation(err) {
 			return err
 		} else if err != nil {
-			rs.logger.Errorf("error when watching sub %s: %v", sub, err)
+			rs.logger.Errorf("error when watching %q: %v", target, err)
 		}
 
 		new_posts := make([]Comment, 0, len(posts))
 		for _, post := range posts {
-			if !rs.storage.IsKnownSubPostID(sub, post.Id) {
+			if !rs.storage.IsKnownSubPostID(target, post.Id) {
 				new_posts = append(new_posts, post)
 			}
 		}
 
-		if err := rs.storage.SaveSubPostIDs(sub, posts); err != nil {
-			rs.logger.Errorf("error when watching sub %s: %v", sub, err)
+		if err := rs.storage.SaveSubPostIDs(target, posts); err != nil {
+			rs.logger.Errorf("error when watching %q: %v", target, err)
 		}
 
-		if first_time {
-			first_time = false
-			break
+		if !rs.storage.IsKnownObject("submissions-from-" + target) {
+			rs.storage.SaveKnownObject("submissions-from-" + target)
+			continue
 		}
 
 		for _, post := range new_posts {

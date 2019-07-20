@@ -9,7 +9,7 @@ import (
 	"text/template"
 )
 
-var Version = SemVer{1, 9, 2}
+var Version = SemVer{1, 10, 0}
 
 const DefaultChannelSize = 100
 
@@ -84,8 +84,8 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if dab.conf.Discord.Admin != "" {
-		dab.logger.Info("discord.admin is deprecated, use discord.privileged_role instead")
+	for _, msg := range dab.conf.Deprecations() {
+		dab.logger.Info(msg)
 	}
 
 	dab.logger.Infof("using database %s", dab.conf.Database.Path)
@@ -179,13 +179,24 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 			return dab.components.RedditUsers.AddUserServer(ctx, dab.components.Discord.OpenAddUser())
 		})
 
-		if dab.conf.Reddit.DVTInterval.Value > 0 {
+		if len(dab.conf.Reddit.WatchSubmissions) > 0 {
 			reddit_evts := make(chan Comment, DefaultChannelSize)
-			tasks.Spawn(func() { dab.components.Discord.SignalNewRedditPosts(reddit_evts) })
-			tasks.SpawnCtx(func(ctx context.Context) error {
-				defer close(reddit_evts)
-				return dab.components.RedditSubs.NewPostsOnSub(ctx, "downvote_trolls", reddit_evts, dab.conf.Reddit.DVTInterval.Value)
+
+			watchers := tasks.SubGroup()
+
+			for _, watch_conf := range dab.conf.Reddit.WatchSubmissions {
+				conf := watch_conf // copy the struct
+				watchers.SpawnCtx(func(ctx context.Context) error {
+					return dab.components.RedditSubs.WatchSubmissions(ctx, conf, reddit_evts)
+				})
+			}
+
+			tasks.Spawn(func() {
+				watchers.Wait()
+				close(reddit_evts)
 			})
+
+			tasks.Spawn(func() { dab.components.Discord.SignalNewRedditPosts(reddit_evts) })
 		}
 
 		tasks.Spawn(func() { dab.components.Discord.SignalSuspensions(dab.components.RedditScanner.OpenSuspensions()) })

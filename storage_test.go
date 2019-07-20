@@ -241,17 +241,4 @@ func TestKeyValue(t *testing.T) {
 			t.Error(err)
 		}
 	})
-
-	t.Run("count seen sub posts", func(t *testing.T) {
-		if s.NbKnownPostIDs("sub") != 2 {
-			t.Error("should have got 2 seen posts IDs in 'sub'")
-		}
-	})
-
-	t.Run("count of unknown sub is 0 ", func(t *testing.T) {
-		if s.NbKnownPostIDs("othersub") != 0 {
-			t.Error("should have got 0 seen posts IDs in 'sub'")
-		}
-	})
-
 }
