@@ -7,7 +7,7 @@ import (
 
 var MarkdownReport = text.Must(text.New("MarkdownReport").Parse(`
 {{- with .Head -}}
-From {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}.
+{{.Number}} comments under {{.CutOff}} from {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}.
 
 Top {{.Delta | len}} total negative karma change for this week:
 {{range .Delta}}
@@ -33,9 +33,7 @@ Date: {{.Created.Format "Monday 02 January 15:04 PM"}}
 
 Score: **{{.Score}}**
 
-Subreddit: [/r/{{.Sub}}](https://reddit.com/r/{{.Sub}})
-
-Link: [{{.Permalink}}](https://reddit.com{{.Permalink}})
+Link: [{{.Permalink}}](https://np.reddit.com{{.Permalink}})
 
 Post text:
 
@@ -97,11 +95,6 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 		<div class="ditem">
 		<dt>Score</dt>
 		<dd class="score">{{.Score}}</dd>
-		</div>
-
-		<div class="ditem">
-		<dt>Subreddit</dt>
-		<dd><a href="https://reddit.com/r/{{.Sub}}">/r/{{.Sub}}</a></dd>
 		</div>
 
 		<div class="ditem">
