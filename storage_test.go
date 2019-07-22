@@ -215,30 +215,3 @@ func TestCRUDComments(t *testing.T) {
 		}
 	})
 }
-
-func TestKeyValue(t *testing.T) {
-	s, _ := NewStorage(newLogger(), StorageConf{Path: ":memory:"})
-	t.Run("known object write", func(t *testing.T) {
-		if err := s.SaveKnownObject("someid"); err != nil {
-			t.Error(err)
-		}
-	})
-
-	t.Run("known object read", func(t *testing.T) {
-		if !s.IsKnownObject("someid") {
-			t.Errorf("'someid' should be a known object")
-		}
-	})
-
-	t.Run("unknown object read", func(t *testing.T) {
-		if s.IsKnownObject("unknownid") {
-			t.Errorf("'unknown' should not be a known object")
-		}
-	})
-
-	t.Run("write sub posts' IDs", func(t *testing.T) {
-		if err := s.SaveSubPostIDs("sub", []Comment{{Id: "a"}, {Id: "b"}}); err != nil {
-			t.Error(err)
-		}
-	})
-}

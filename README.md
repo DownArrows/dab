@@ -402,13 +402,11 @@ They communicate together through channels that are passed either via a closure 
     - `sub`: name of the subreddit where the comment was made
     - `created`: UNIX timestamp of when the comment was first made
     - `body`: HTML-escaped textual content of the comment
- - `seen_posts`: basic information about posts that have already been seen by the bot (avoids repeated actions)
-    - `id`: reddit ID of the post
-    - `sub`: name of the subreddit where the post was made
-    - `created`: UNIX timestamp of when the post was made
- - `known_objects`: set of various values to persist for specific purposes
-    - `id`: identifier or content of the thing
-    - `date`: when this thing was added
+ - `key_value`: key/value store that associates one key to many values
+   for various operations of the bot that don't require their own table
+    - `key`: key, often in the format "[feature]-[id]"
+    - `value`: any string value
+    - `created`: UNIX timestamp of when the key/value pair was added
 
 ### TODO
 

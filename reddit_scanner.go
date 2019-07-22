@@ -163,7 +163,7 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 				break
 			}
 
-			if err := rs.alertIfHighScore(comments); err != nil {
+			if err := rs.alertIfHighScore(ctx, comments); err != nil {
 				rs.logger.Error(err)
 			}
 
@@ -196,7 +196,7 @@ func (rs *RedditScanner) getUsersOrWait(ctx context.Context, full_scan bool) []U
 	return users
 }
 
-func (rs *RedditScanner) alertIfHighScore(comments []Comment) error {
+func (rs *RedditScanner) alertIfHighScore(ctx context.Context, comments []Comment) error {
 	rs.Lock()
 	defer rs.Unlock()
 
@@ -204,22 +204,23 @@ func (rs *RedditScanner) alertIfHighScore(comments []Comment) error {
 		return nil
 	}
 
+	var highscores_id []string
+	var highscores []Comment
 	for _, comment := range comments {
-
 		if comment.Score < rs.highScoreThreshold {
-
-			if rs.storage.IsKnownObject(comment.Id) {
-				continue
+			if !rs.storage.KV().Has("highscores", comment.Id) {
+				highscores_id = append(highscores_id, comment.Id)
+				highscores = append(highscores, comment)
 			}
-
-			if err := rs.storage.SaveKnownObject(comment.Id); err != nil {
-				return err
-			}
-
-			rs.highScores <- comment
-
 		}
+	}
 
+	if err := rs.storage.KV().SaveMany(ctx, "highscores", highscores_id); err != nil {
+		return err
+	}
+
+	for _, comment := range highscores {
+		rs.highScores <- comment
 	}
 
 	return nil

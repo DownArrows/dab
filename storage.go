@@ -12,7 +12,7 @@ import (
 )
 
 type RedditScannerStorage interface {
-	KnownObjects
+	KV() *KeyValueStore
 	ListActiveUsers() []User
 	ListSuspendedAndNotFound() []User
 	ListUsers() []User
@@ -21,7 +21,7 @@ type RedditScannerStorage interface {
 }
 
 type RedditUsersStorage interface {
-	KnownObjects
+	KV() *KeyValueStore
 	AddUser(string, bool, int64) error
 	FoundUser(string) error
 	GetUser(string) UserQuery
@@ -32,9 +32,7 @@ type RedditUsersStorage interface {
 }
 
 type RedditSubsStorage interface {
-	KnownObjects
-	IsKnownSubPostID(string, string) bool
-	SaveSubPostIDs(string, []Comment) error
+	KV() *KeyValueStore
 }
 
 type DiscordBotStorage interface {
@@ -55,11 +53,6 @@ type ReportFactoryStorage interface {
 type BackupStorage interface {
 	Backup() error
 	BackupPath() string
-}
-
-type KnownObjects interface {
-	IsKnownObject(string) bool
-	SaveKnownObject(string) error
 }
 
 const ApplicationFileID int32 = 0x00000dab
@@ -111,15 +104,6 @@ var initQueries = []string{
 		) WITHOUT ROWID`,
 	`CREATE INDEX IF NOT EXISTS comments_stats_idx
 			ON comments (created)`,
-	`CREATE TABLE IF NOT EXISTS seen_posts (
-			id TEXT PRIMARY KEY,
-			sub TEXT NOT NULL,
-			created INTEGER NOT NULL
-		) WITHOUT ROWID`,
-	`CREATE TABLE IF NOT EXISTS known_objects (
-			id TEXT PRIMARY KEY,
-			date INTEGER NOT NULL
-		) WITHOUT ROWID`,
 	`CREATE VIEW IF NOT EXISTS
 			users(name, created, not_found, suspended, added, batch_size, hidden, inactive, last_scan, new, position)
 		AS
@@ -141,17 +125,14 @@ type storageBackup struct {
 }
 
 type Storage struct {
+	sync.Mutex
 	backup          storageBackup
 	cleanupInterval time.Duration
 	conn            *sqlite3.SQLiteConn
 	db              *sqlx.DB
+	kv              *KeyValueStore
 	logger          LevelLogger
 	path            string
-	cache           struct {
-		KnownObjects   *SyncSet
-		SubPostIDs     map[string]*SyncSet
-		SubPostIDsLock sync.Mutex
-	}
 
 	PeriodicCleanupEnabled bool
 }
@@ -216,9 +197,15 @@ func NewStorage(logger LevelLogger, conf StorageConf) (*Storage, error) {
 		s.logger.Debug("skipping checks as we are using an in-memory database")
 	}
 
-	if err := s.init(); err != nil {
+	if err := s.RunQueryList(initQueries); err != nil {
 		return nil, err
 	}
+
+	kv, err := NewKeyValueStore(context.Background(), s.db.DB, "key_value")
+	if err != nil {
+		return nil, err
+	}
+	s.kv = kv
 
 	ok = true
 	return s, nil
@@ -246,7 +233,7 @@ func (s *Storage) connect() error {
 	return nil
 }
 
-func (s *Storage) runQueryList(queries []string) error {
+func (s *Storage) RunQueryList(queries []string) error {
 	for _, query := range queries {
 		if _, err := s.db.Exec(query); err != nil {
 			return err
@@ -304,7 +291,7 @@ func (s *Storage) migrate(from SemVer, migrations []storageMigration) error {
 	for _, migration := range migrations {
 		// The migrations are supposed to be sorted from lowest to highest version,
 		// so there's no point in having a stop condition.
-		if migration.From.Equal(from) || migration.From.After(from) {
+		if migration.From.AfterOrEqual(from) && Version.AfterOrEqual(migration.To) {
 			s.logger.Infof("migrating database from version %s to %s", migration.From, migration.To)
 			if err := migration.Do(s); err != nil {
 				return err
@@ -341,27 +328,14 @@ func (s *Storage) startupChecks() error {
 	return nil
 }
 
-func (s *Storage) init() error {
-	if err := s.runQueryList(initQueries); err != nil {
-		return err
-	}
-
-	s.cache.KnownObjects = NewSyncSet()
-	known_objects, err := s.getKnownObjects()
-	if err != nil {
-		return err
-	}
-	s.cache.KnownObjects.MultiPut(known_objects)
-	s.cache.SubPostIDs = make(map[string]*SyncSet)
-	s.cache.SubPostIDsLock = sync.Mutex{}
-
-	return nil
-}
-
 func (s *Storage) autofatal(err error) {
 	if err != nil {
 		s.logger.Fatal(err)
 	}
+}
+
+func (s *Storage) KV() *KeyValueStore {
+	return s.kv
 }
 
 /***********
@@ -725,88 +699,4 @@ func (s *Storage) StatsBetween(score int64, since, until time.Time) UserStatsMap
 	s.autofatal(rows.Err())
 
 	return stats
-}
-
-/*****
- Posts
-******/
-
-func (s *Storage) SaveSubPostIDs(sub string, listing []Comment) error {
-	var err error
-	// We are limited to one connection to the database, and readSubPostIDs may use one,
-	// so we have to wrap everything into it to avoid a deadlock.
-	s.readSubPostIDs(sub, func(ids *SyncSet) {
-		tx := s.db.MustBegin()
-		stmt, err := tx.Preparex("INSERT INTO seen_posts(id, sub, created) VALUES (?, ?, ?)")
-		if err != nil {
-			tx.Rollback()
-			return
-		}
-		defer stmt.Close()
-
-		ids.Transaction(func(data map[string]bool) {
-			for _, post := range listing {
-				if _, ok := data[post.Id]; !ok {
-					stmt.MustExec(post.Id, sub, post.Created)
-					data[post.Id] = true
-				}
-			}
-		})
-		err = tx.Commit()
-	})
-
-	return err
-}
-
-func (s *Storage) IsKnownSubPostID(sub, id string) bool {
-	var is_known bool
-	s.readSubPostIDs(sub, func(ids *SyncSet) {
-		is_known = ids.Has(id)
-	})
-	return is_known
-}
-
-func (s *Storage) readSubPostIDs(sub string, cb func(*SyncSet)) {
-	s.cache.SubPostIDsLock.Lock()
-	defer s.cache.SubPostIDsLock.Unlock()
-
-	cache := s.cache.SubPostIDs
-
-	if _, ok := cache[sub]; !ok {
-		cache[sub] = NewSyncSet()
-		cache[sub].MultiPut(s.getPostIDsOf(sub))
-	}
-
-	cb(cache[sub])
-}
-
-func (s *Storage) getPostIDsOf(sub string) []string {
-	var ids []string
-	err := s.db.Select(&ids, "SELECT id FROM seen_posts WHERE sub = ?", sub)
-	if err != nil && err != sql.ErrNoRows {
-		panic(err)
-	}
-	return ids
-}
-
-func (s *Storage) SaveKnownObject(id string) error {
-	_, err := s.db.Exec("INSERT INTO known_objects VALUES (?, strftime(\"%s\", CURRENT_TIMESTAMP))", id)
-	if err != nil {
-		return err
-	}
-	s.cache.KnownObjects.Put(id)
-	return nil
-}
-
-func (s *Storage) IsKnownObject(id string) bool {
-	return s.cache.KnownObjects.Has(id)
-}
-
-func (s *Storage) getKnownObjects() ([]string, error) {
-	var ids []string
-	err := s.db.Select(&ids, "SELECT id FROM known_objects")
-	if err == sql.ErrNoRows {
-		err = nil
-	}
-	return ids, err
 }

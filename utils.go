@@ -56,6 +56,10 @@ func (v SemVer) Equal(ov SemVer) bool {
 	return v.Major() == ov.Major() && v.Minor() == ov.Minor() && v.Patch() == ov.Patch()
 }
 
+func (v SemVer) AfterOrEqual(ov SemVer) bool {
+	return v.After(ov) || v.Equal(ov)
+}
+
 func (v SemVer) String() string {
 	return fmt.Sprintf("%d.%d.%d", v.Major(), v.Minor(), v.Patch())
 }

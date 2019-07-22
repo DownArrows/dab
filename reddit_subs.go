@@ -45,6 +45,8 @@ func (rs *RedditSubs) WatchSubmissions(ctx context.Context, config WatchSubmissi
 
 	rs.logger.Infof("watching new posts from %q with interval %s", target, sleep)
 
+	target_key := "watcher_" + target
+
 	for SleepCtx(ctx, sleep) {
 		rs.logger.Debugf("checking %q for new posts", target)
 
@@ -56,23 +58,26 @@ func (rs *RedditSubs) WatchSubmissions(ctx context.Context, config WatchSubmissi
 		}
 
 		new_posts := make([]Comment, 0, len(posts))
+		new_posts_id := make([]string, 0, len(posts))
 		for _, post := range posts {
-			if !rs.storage.IsKnownSubPostID(target, post.Id) {
+			if !rs.storage.KV().Has(target_key, post.Id) {
 				new_posts = append(new_posts, post)
+				new_posts_id = append(new_posts_id, post.Id)
 			}
 		}
 
-		if err := rs.storage.SaveSubPostIDs(target, posts); err != nil {
+		if err := rs.storage.KV().SaveMany(ctx, target_key, new_posts_id); err != nil {
 			rs.logger.Errorf("error when watching %q: %v", target, err)
 		}
 
-		if !rs.storage.IsKnownObject("submissions-from-" + target) {
-			rs.storage.SaveKnownObject("submissions-from-" + target)
-			continue
-		}
-
-		for _, post := range new_posts {
-			ch <- post
+		if rs.storage.KV().Has("watcher-seen", target) {
+			for _, post := range new_posts {
+				ch <- post
+			}
+		} else {
+			if err := rs.storage.KV().Save(ctx, "watcher-seen", target); err != nil {
+				return err
+			}
 		}
 
 	}

@@ -153,7 +153,7 @@ func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
 	added_counter := 0
 	for _, username := range names {
 
-		if ru.storage.IsKnownObject("username-" + username) {
+		if ru.storage.KV().Has("compendium", username) {
 			continue
 		}
 
@@ -170,7 +170,7 @@ func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
 		}
 
 		if result.Error != nil || !result.Exists {
-			if err := ru.storage.SaveKnownObject("username-" + username); err != nil {
+			if err := ru.storage.KV().Save(ctx, "compendium", username); err != nil {
 				return err
 			}
 		}
