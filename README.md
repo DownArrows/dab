@@ -411,4 +411,7 @@ They communicate together through channels that are passed either via a closure 
 ### TODO
 
  - better browsability of the web reports
+ - compendium:
+   - per sub table: count, avgerage per comment, minimum score, last commented date
+   - header: weekly, monthly and yearly totals, top X comments
  - replace blackfriday with snudown
