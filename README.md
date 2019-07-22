@@ -383,15 +383,15 @@ They communicate together through channels that are passed either via a closure 
  - `user_archive`: table of all registered reddit users, deleted or not
     - `name`: name of the user
     - `created`: UNIX timestamp of the creation date according to reddit
-    - `not_found`: 1 if trying to get information about this user resulted in a 404 not found error
-    - `suspended`: 1 if suspended according to reddit's API
+    - `not_found`: TRUE if trying to get information about this user resulted in a 404 not found error
+    - `suspended`: TRUE if suspended according to reddit's API
     - `added`: UNIX timestamp of the date when the user was added to the database
     - `batch_size`: Number of comments below the max age on the last scan
-    - `deleted`: 1 if user is marked as deleted (will not be scanned or included in reports anymore)
-    - `hidden`: 1 if user is scanned but not shown in reports
-    - `inactive`: 1 if considered inactive
+    - `deleted`: TRUE if user is marked as deleted (will not be scanned or included in reports anymore)
+    - `hidden`: TRUE if user is scanned but not shown in reports
+    - `inactive`: TRUE if considered inactive
     - `last_scan`: UNIX timestamp of the last time this user was scanned
-    - `new`: 1 until all reachable pages of comments of that user have been saved
+    - `new`: TRUE until all reachable pages of comments of that user have been saved
     - `position`: reddit-specific ID of the position in the pages of comments of that user
  - `users`: view of the `user_archive` table without deleted users,
  - `comments`: table of comments from registered users
