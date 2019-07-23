@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -12,10 +11,6 @@ type RedditUsers struct {
 	api     RedditUsersAPI
 	logger  LevelLogger
 	storage RedditUsersStorage
-
-	compendiumSub                        string
-	compendiumUpdateInterval             time.Duration
-	AutoUpdateUsersFromCompendiumEnabled bool
 
 	unsuspensions              chan User
 	unsuspensionInterval       time.Duration
@@ -32,10 +27,6 @@ func NewRedditUsers(
 		api:     api,
 		logger:  logger,
 		storage: storage,
-
-		compendiumSub:                        conf.Compendium.Sub,
-		compendiumUpdateInterval:             conf.Compendium.UpdateInterval.Value,
-		AutoUpdateUsersFromCompendiumEnabled: conf.Compendium.UpdateInterval.Value > 0 && conf.Compendium.Sub != "",
 
 		unsuspensions:              make(chan User, DefaultChannelSize),
 		unsuspensionInterval:       conf.UnsuspensionInterval.Value,
@@ -101,85 +92,6 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 	}
 
 	return query
-}
-
-func (ru *RedditUsers) AutoUpdateUsersFromCompendium(ctx context.Context) error {
-	ru.logger.Infof("updating users from the compendium with interval %s", ru.compendiumUpdateInterval)
-	for SleepCtx(ctx, ru.compendiumUpdateInterval) {
-		if err := ru.UpdateUsersFromCompendium(ctx); err != nil {
-			ru.logger.Errorf("user list updater: %v", err)
-		}
-	}
-	return ctx.Err()
-}
-
-func (ru *RedditUsers) UpdateUsersFromCompendium(ctx context.Context) error {
-	ru.logger.Debug("updating users from compendium")
-	page, err := ru.api.WikiPage(ctx, ru.compendiumSub, "compendium")
-	if err != nil {
-		return err
-	}
-
-	lines := strings.Split(page, "\n")
-	state := "before"
-	names := make([]string, 0)
-
-	for _, line := range lines {
-		if line == "####Users ranked by total comment karma" {
-			state = "header1"
-		} else if state == "header1" {
-			state = "header2"
-		} else if state == "header2" {
-			state = "in_listing"
-		} else if state == "in_listing" && strings.HasPrefix(line, "*") && strings.HasSuffix(line, "*") {
-			break
-		} else if state == "in_listing" {
-			cells := strings.Split(line, "|")
-			if len(cells) < 6 {
-				return fmt.Errorf("the array of names/scores doesn't have the expected format")
-			}
-			name_link := cells[2]
-			start := strings.Index(name_link, "[")
-			end := strings.Index(name_link, "]")
-			escaped_name := name_link[start+1 : end]
-			if len(escaped_name) == 0 {
-				return fmt.Errorf("the names don't have the expected format")
-			}
-			name := strings.Replace(escaped_name, `\`, "", -1)
-			names = append(names, name)
-		}
-	}
-
-	added_counter := 0
-	for _, username := range names {
-
-		if ru.storage.KV().Has("compendium", username) {
-			continue
-		}
-
-		result := ru.AddUser(ctx, username, false, false)
-		if IsCancellation(result.Error) {
-			return result.Error
-		} else if result.Error != nil {
-			if !result.Exists {
-				msg := "update from compendium: error when adding the new user %s: %v"
-				ru.logger.Errorf(msg, result.User.Name, result.Error)
-			}
-		} else if result.Exists {
-			added_counter += 1
-		}
-
-		if result.Error != nil || !result.Exists {
-			if err := ru.storage.KV().Save(ctx, "compendium", username); err != nil {
-				return err
-			}
-		}
-
-	}
-
-	ru.logger.Infof("found %d user(s) in the compendium, added %d new one(s)", len(names), added_counter)
-
-	return nil
 }
 
 func (ru *RedditUsers) Unsuspensions() <-chan User {

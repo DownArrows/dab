@@ -202,7 +202,7 @@ and <http://golang.localhost/pkg/text/template/>.
 		`BotID` is the ID of the bot so that you can mention it with `<@{{.BotID}}>`.
 		Welcome messages are disabled if the template is empty or not set
  - `reddit`
-    - `compendium` *dictionary*:
+    - `compendium` *dictionary* **Deprecated**:
        - `sub` *string* (*none*): sub on which the compendium can be found; leave out to disable scans of the compendium
        - `update_interval` *duration* (*none*): interval between each scan of the compendium;
          leave out to disable, else must be at least an hour
@@ -225,7 +225,7 @@ and <http://golang.localhost/pkg/text/template/>.
       leave out to disable, else must be at least one minute
     - `user_agent` *template* (*none*): user agent of the bot on reddit; `OS` and `Version` are provided; leave out to disable the Reddit component
     - `username` *string* (*none*): Reddit username for the bot's account; leave out to disable the Reddit component
-    - `watch_submissions` *array of dictionaries*:
+    - `watch_submissions` *array of dictionaries* **Deprecated**:
        - `target` *string* (*none*): a username whose submissions will be watched, or a sub;
           a username must start with `/u/`, and a sub with `/r/`
        - `interval` *duration* (*none*): interval between each scan of the target
@@ -259,13 +259,6 @@ Note how the last value of a dictionary must not be followed by a comma:
 			"user_agent": "{{.OS}}:agreatbot:v{{.Version}} (by /u/AGreatUsername)",
 			"max_age":                    "72h",
 			"unsuspension_interval":      "15m",
-			"compendium": {
-				"sub":             "DownvoteTrolling",
-				"update_interval": "1h"
-			},
-			"watch_submissions": [
-				{"target": "/r/DownvoteTrolling", "interval": "15m"}
-			]
 		},
 
 		"discord": {

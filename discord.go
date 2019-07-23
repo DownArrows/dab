@@ -421,16 +421,6 @@ func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
 	}
 }
 
-func (bot *DiscordBot) SignalNewRedditPosts(evts <-chan Comment) {
-	for comment := range evts {
-		bot.logger.Infof("new post on sub %s by %s on %s", comment.Sub, comment.Author, comment.CreatedTime())
-		msg := "@everyone https://www.reddit.com" + comment.Permalink
-		if err := bot.channelMessageSend(bot.channelsID.General, msg); err != nil {
-			bot.logger.Errorf("error when signaling new post on reddit: %v", err)
-		}
-	}
-}
-
 func (bot *DiscordBot) SignalSuspensions(suspensions <-chan User) {
 	for user := range suspensions {
 		state := "suspended"

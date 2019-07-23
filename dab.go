@@ -9,7 +9,7 @@ import (
 	"text/template"
 )
 
-var Version = SemVer{1, 10, 1}
+var Version = SemVer{1, 11, 0}
 
 const DefaultChannelSize = 100
 
@@ -44,7 +44,6 @@ type DownArrowsBot struct {
 		Discord       *DiscordBot
 		RedditScanner *RedditScanner
 		RedditUsers   *RedditUsers
-		RedditSubs    *RedditSubs
 		Web           *WebServer
 	}
 }
@@ -133,7 +132,6 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 		dab.components.RedditScanner = NewRedditScanner(dab.logger, dab.layers.Storage, reddit_api, dab.conf.Reddit.RedditScannerConf)
 		dab.components.RedditUsers = NewRedditUsers(dab.logger, dab.layers.Storage, reddit_api, dab.conf.Reddit.RedditUsersConf)
-		dab.components.RedditSubs = NewRedditSubs(dab.logger, dab.layers.Storage, reddit_api)
 
 		tasks.SpawnCtx(Retry(dab.conf.Reddit.Retry, func(ctx context.Context) error {
 			dab.logger.Info("attempting to log into reddit")
@@ -145,13 +143,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 			}
 			dab.logger.Info("successfully logged into reddit")
 
-			tasks.SpawnCtx(dab.components.RedditScanner.Run)
-
-			if dab.components.RedditUsers.AutoUpdateUsersFromCompendiumEnabled {
-				tasks.SpawnCtx(dab.components.RedditUsers.AutoUpdateUsersFromCompendium)
-			}
-
-			return nil
+			return dab.components.RedditScanner.Run(ctx)
 		}))
 	}
 
@@ -178,26 +170,6 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 			defer dab.components.Discord.CloseAddUser()
 			return dab.components.RedditUsers.AddUserServer(ctx, dab.components.Discord.OpenAddUser())
 		})
-
-		if len(dab.conf.Reddit.WatchSubmissions) > 0 {
-			reddit_evts := make(chan Comment, DefaultChannelSize)
-
-			watchers := tasks.SubGroup()
-
-			for _, watch_conf := range dab.conf.Reddit.WatchSubmissions {
-				conf := watch_conf // copy the struct
-				watchers.SpawnCtx(func(ctx context.Context) error {
-					return dab.components.RedditSubs.WatchSubmissions(ctx, conf, reddit_evts)
-				})
-			}
-
-			tasks.Spawn(func() {
-				watchers.Wait()
-				close(reddit_evts)
-			})
-
-			tasks.Spawn(func() { dab.components.Discord.SignalNewRedditPosts(reddit_evts) })
-		}
 
 		tasks.Spawn(func() { dab.components.Discord.SignalSuspensions(dab.components.RedditScanner.OpenSuspensions()) })
 

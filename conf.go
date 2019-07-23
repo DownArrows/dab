@@ -70,6 +70,11 @@ type RedditScannerConf struct {
 	MaxBatches          uint     `json:"max_batches"`
 }
 
+type WatchSubmissions struct {
+	Target   string
+	Interval Duration
+}
+
 type RedditUsersConf struct {
 	Compendium               CompendiumConf `json:"compendium"`
 	CompendiumUpdateInterval Duration       `json:"compendium_update_interval"` // Deprecated
@@ -77,8 +82,8 @@ type RedditUsersConf struct {
 }
 
 type CompendiumConf struct {
-	Sub            string   `json:"sub"`
-	UpdateInterval Duration `json:"update_interval"`
+	Sub            string   `json:"sub"`             // Deprecated
+	UpdateInterval Duration `json:"update_interval"` // Deprecated
 }
 
 type ReportConf struct {
@@ -121,7 +126,7 @@ type Configuration struct {
 		DVTInterval      Duration           `json:"dvt_interval"` // Deprecated
 		Retry            RetryOptions       `json:"retry_connection"`
 		UserAgent        string             `json:"user_agent"`
-		WatchSubmissions []WatchSubmissions `json:"watch_submissions"`
+		WatchSubmissions []WatchSubmissions `json:"watch_submissions"` // Deprecated
 	}
 
 	Report ReportConf
@@ -174,16 +179,12 @@ func (conf Configuration) HasSaneValues() error {
 		return errors.New("backup path can't be the same as the database's path")
 	} else if val := conf.Database.CleanupInterval.Value; val != 0 && val < time.Minute {
 		return errors.New("interval between database cleanups can't be less than a minute")
-	} else if val := conf.Reddit.CompendiumUpdateInterval.Value; val != 0 && val < time.Minute {
-		return errors.New("interval between each check of the compendium can't be less than a minute if non-zero")
 	} else if conf.Reddit.FullScanInterval.Value < time.Hour {
 		return errors.New("interval for the full scan can't be less an hour")
 	} else if conf.Reddit.InactivityThreshold.Value < 24*time.Hour {
 		return errors.New("inactivity threshold can't be less than a day")
 	} else if conf.Reddit.MaxAge.Value < 24*time.Hour {
 		return errors.New("max comment age for further scanning can't be less than a day")
-	} else if val := conf.Reddit.DVTInterval.Value; val != 0 && val < time.Minute {
-		return errors.New("interval between each check of the downvote sub can't be less than a minute if non-zero")
 	} else if conf.Reddit.HighScoreThreshold > -1 {
 		return errors.New("high-score threshold can't be positive")
 	} else if val := conf.Reddit.UnsuspensionInterval.Value; val != 0 && val < time.Minute {
@@ -204,11 +205,20 @@ func (conf Configuration) Deprecations() []string {
 	}
 
 	if conf.Reddit.DVTInterval.Value != 0 {
-		msgs = append(msgs, "reddit.dvt_interval is deprecated, use reddit.watch_submissions instead")
+		msgs = append(msgs, "reddit.dvt_interval is deprecated")
+	}
+
+	if conf.Reddit.WatchSubmissions != nil {
+		msgs = append(msgs, "reddit.watch_submissions is deprecated")
 	}
 
 	if conf.Reddit.CompendiumUpdateInterval.Value != 0 {
-		msgs = append(msgs, "reddit.compendium_update_interval is deprecated, use reddit.compendium instead")
+		msgs = append(msgs, "reddit.compendium_update_interval is deprecated")
+	}
+
+	empty_compendium_conf := CompendiumConf{}
+	if conf.Reddit.Compendium != empty_compendium_conf {
+		msgs = append(msgs, "reddit.compendium is deprecated")
 	}
 
 	return msgs

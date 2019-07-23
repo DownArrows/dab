@@ -10,7 +10,7 @@ type storageMigration struct {
 var storageMigrations = []storageMigration{
 	{
 		From: SemVer{1, 10, 1},
-		To:   SemVer{1, 10, 2},
+		To:   SemVer{1, 11, 0},
 		Do: func(s *Storage) error {
 			return s.RunQueryList([]string{
 				`CREATE TABLE key_value (

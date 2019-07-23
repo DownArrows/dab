@@ -21,7 +21,6 @@ type RedditScannerStorage interface {
 }
 
 type RedditUsersStorage interface {
-	KV() *KeyValueStore
 	AddUser(string, bool, int64) error
 	FoundUser(string) error
 	GetUser(string) UserQuery
@@ -29,10 +28,6 @@ type RedditUsersStorage interface {
 	NotFoundUser(string) error
 	SuspendUser(string) error
 	UnSuspendUser(string) error
-}
-
-type RedditSubsStorage interface {
-	KV() *KeyValueStore
 }
 
 type DiscordBotStorage interface {
