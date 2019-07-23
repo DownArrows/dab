@@ -741,7 +741,7 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 	positive, err = bot.storage.GetPositiveKarma(username)
 	if err == ErrNoComment {
-		embed.AddField(DiscordEmbedField{Name: "Positive", Value: "no comment with a positive score", Inline: true})
+		embed.AddField(DiscordEmbedField{Name: "Positive", Value: "N/A", Inline: true})
 	} else if err != nil {
 		return err
 	} else {
@@ -750,7 +750,7 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 	negative, err = bot.storage.GetNegativeKarma(username)
 	if err == ErrNoComment {
-		embed.AddField(DiscordEmbedField{Name: "Negative", Value: "no comment with negative score", Inline: true})
+		embed.AddField(DiscordEmbedField{Name: "Negative", Value: "N/A", Inline: true})
 	} else if err != nil {
 		return err
 	} else {
