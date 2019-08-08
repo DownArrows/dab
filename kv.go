@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
+	sqlite "github.com/bvinc/go-sqlite-lite/sqlite3"
 	"sync"
 	"time"
 )
@@ -11,13 +11,13 @@ import (
 // Key-Value store with in-memory reads and on-disk writes.
 type KeyValueStore struct {
 	sync.RWMutex
-	db          *sql.DB
+	db          *SQLiteDatabase
 	insertQuery string
 	store       map[string]map[string]struct{}
 	table       string
 }
 
-func NewKeyValueStore(ctx context.Context, db *sql.DB, table string) (*KeyValueStore, error) {
+func NewKeyValueStore(ctx context.Context, db *SQLiteDatabase, table string) (*KeyValueStore, error) {
 	kv := &KeyValueStore{
 		db:          db,
 		insertQuery: fmt.Sprintf("INSERT INTO %s(key, value, created) VALUES (?, ?, ?)", table),
@@ -37,32 +37,25 @@ func NewKeyValueStore(ctx context.Context, db *sql.DB, table string) (*KeyValueS
 }
 
 func (kv *KeyValueStore) init(ctx context.Context) error {
-	schema_query := fmt.Sprintf(`
+	sql := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
 			key TEXT NOT NULL,
 			value TEXT NOT NULL,
 			created INTEGER NOT NULL,
 			PRIMARY KEY (key, value)
 		) WITHOUT ROWID`, kv.table)
-	_, err := kv.db.ExecContext(ctx, schema_query, kv.table)
-	return err
+	return kv.db.Exec(ctx, sql)
 }
 
 func (kv *KeyValueStore) readAll(ctx context.Context) error {
-	rows, err := kv.db.QueryContext(ctx, "SELECT key, value FROM "+kv.table)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil
+	return kv.db.Select(ctx, "SELECT key, value FROM "+kv.table, func(stmt *sqlite.Stmt) error {
+		key, _, err := stmt.ColumnText(0)
+		if err != nil {
+			return err
 		}
-		return err
-	}
-	defer rows.Close()
 
-	var key string
-	var value string
-
-	for rows.Next() {
-		if err := rows.Scan(&key, &value); err != nil {
+		value, _, err := stmt.ColumnText(1)
+		if err != nil {
 			return err
 		}
 
@@ -70,9 +63,9 @@ func (kv *KeyValueStore) readAll(ctx context.Context) error {
 			kv.store[key] = make(map[string]struct{})
 		}
 		kv.store[key][value] = struct{}{}
-	}
 
-	return nil
+		return nil
+	})
 }
 
 func (kv *KeyValueStore) Save(ctx context.Context, key string, value string) error {
@@ -80,43 +73,42 @@ func (kv *KeyValueStore) Save(ctx context.Context, key string, value string) err
 }
 
 func (kv *KeyValueStore) SaveMany(ctx context.Context, key string, values []string) error {
-	tx, err := kv.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-
-	stmt, err := tx.PrepareContext(ctx, kv.insertQuery)
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-	defer stmt.Close()
-
 	new := make(map[string]struct{})
 
-	kv.RLock()
-	if _, has_key := kv.store[key]; !has_key {
-		for _, value := range values {
-			if _, has_value := kv.store[key][value]; !has_value {
+	err := kv.db.WithTx(ctx, func(conn *SQLiteConn) error {
+		stmt, err := conn.Prepare(kv.insertQuery)
+		if err != nil {
+			return err
+		}
+		defer stmt.Close()
+
+		kv.RLock()
+		if _, has_key := kv.store[key]; !has_key {
+			for _, value := range values {
+				if _, has_value := kv.store[key][value]; !has_value {
+					new[value] = struct{}{}
+				}
+			}
+		} else {
+			for _, value := range values {
 				new[value] = struct{}{}
 			}
 		}
-	} else {
-		for _, value := range values {
-			new[value] = struct{}{}
-		}
-	}
-	kv.RUnlock()
+		kv.RUnlock()
 
-	for value, _ := range new {
-		now := time.Now().Round(0).Unix()
-		if _, err := stmt.ExecContext(ctx, key, value, now); err != nil {
-			tx.Rollback()
-			return err
+		for value, _ := range new {
+			if err := stmt.Exec(key, value, time.Now().Unix()); err != nil {
+				return err
+			}
+			if err := stmt.ClearBindings(); err != nil {
+				return err
+			}
 		}
-	}
 
-	if err := tx.Commit(); err != nil {
+		return nil
+	})
+
+	if err != nil {
 		return err
 	}
 

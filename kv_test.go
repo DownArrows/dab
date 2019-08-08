@@ -2,28 +2,34 @@ package main
 
 import (
 	"context"
-	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
 func TestKeyValue(t *testing.T) {
+	t.Parallel()
+
+	logger := NewTestLevelLogger(t)
+
 	ctx := context.Background()
 
-	db, err := sql.Open("sqlite3", "file::memory:")
+	dir, err := ioutil.TempDir("", "kv-test")
 	if err != nil {
-		t.Error(err)
-		t.Fail()
-		return
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "test.db")
+
+	db, err := NewSQLiteDatabase(ctx, logger, SQLiteDatabaseOptions{Path: path})
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	db.SetMaxOpenConns(1)
-
-	kv, err := NewKeyValueStore(ctx, db, "test")
+	kv, err := NewKeyValueStore(context.Background(), db, "test")
 	if err != nil {
-		t.Error(err)
-		t.Fail()
-		return
+		t.Fatal(err)
 	}
 
 	t.Run("write", func(t *testing.T) {
@@ -68,8 +74,7 @@ func TestKeyValue(t *testing.T) {
 	t.Run("caching on startup", func(t *testing.T) {
 		kv2, err := NewKeyValueStore(ctx, db, "test")
 		if err != nil {
-			t.Error(err)
-			return
+			t.Fatal(err)
 		}
 
 		if !kv2.Has("key1", "value1") {
@@ -77,5 +82,4 @@ func TestKeyValue(t *testing.T) {
 		}
 	})
 
-	db.Close()
 }

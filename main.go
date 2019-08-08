@@ -36,7 +36,7 @@ func main() {
 		}
 	}
 
-	if err != nil {
+	if err != nil && !IsCancellation(err) {
 		fmt.Fprintf(os.Stderr, "Fatal error: %v\n", err)
 		os.Exit(1)
 	}

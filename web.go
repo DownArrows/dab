@@ -174,8 +174,11 @@ func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	report := wsrv.reports.ReportWeek(week, year)
-	if report.Len() == 0 {
+	report, err := wsrv.reports.ReportWeek(r.Context(), week, year)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	} else if report.Len() == 0 {
 		http.NotFound(w, r)
 		return
 	}
@@ -192,8 +195,11 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	report := wsrv.reports.ReportWeek(week, year)
-	if report.Len() == 0 {
+	report, err := wsrv.reports.ReportWeek(r.Context(), week, year)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	} else if report.Len() == 0 {
 		http.NotFound(w, r)
 		return
 	}
@@ -220,8 +226,8 @@ func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
-	if err := wsrv.backupStorage.Backup(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := wsrv.backupStorage.Backup(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-sqlite3")

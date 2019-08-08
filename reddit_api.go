@@ -49,14 +49,22 @@ type oAuthResponse struct {
 type wikiPage struct {
 	Data struct {
 		RevisionDate float64
-		Content      string `json:"content_md"`
+		Content_MD   string
 	}
 }
 
 type commentListing struct {
 	Data struct {
 		Children []struct {
-			Data Comment
+			Data struct {
+				ID          string
+				Author      string
+				Score       int64
+				Permalink   string
+				Sub         string
+				Created_UTC float64
+				Body        string
+			}
 		}
 		After string
 	}
@@ -64,10 +72,9 @@ type commentListing struct {
 
 type aboutUser struct {
 	Data struct {
-		Name      string  `json:"name"`
-		Created   float64 `json:"created_utc"`
-		Suspended bool    `json:"is_suspended"`
-		ModHash   string  `json:"modhash"`
+		Name         string
+		Created_UTC  float64
+		Is_Suspended bool
 	}
 }
 
@@ -158,7 +165,7 @@ func (ra *RedditAPI) Connect(ctx context.Context) error {
 func (ra *RedditAPI) UserComments(ctx context.Context, user User, nb uint) ([]Comment, User, error) {
 	comments, position, status, err := ra.getListing(ctx, "/u/"+user.Name+"/comments", user.Position, nb)
 	if err != nil {
-		return []Comment{}, user, err
+		return nil, user, err
 	}
 	user.Position = position
 
@@ -167,7 +174,7 @@ func (ra *RedditAPI) UserComments(ctx context.Context, user User, nb uint) ([]Co
 	if status == 403 || status == 404 {
 		about := ra.AboutUser(ctx, user.Name)
 		if about.Error != nil {
-			return []Comment{}, user, about.Error
+			return nil, user, about.Error
 		}
 		user.Suspended = about.User.Suspended
 		user.NotFound = !about.Exists
@@ -209,8 +216,8 @@ func (ra *RedditAPI) AboutUser(ctx context.Context, username string) UserQuery {
 
 	query.Exists = true
 	query.User.Name = about.Data.Name
-	query.User.Created = int64(about.Data.Created)
-	query.User.Suspended = about.Data.Suspended
+	query.User.Created = time.Unix(int64(about.Data.Created_UTC), 0)
+	query.User.Suspended = about.Data.Is_Suspended
 	return query
 }
 
@@ -229,7 +236,7 @@ func (ra *RedditAPI) WikiPage(ctx context.Context, sub, page string) (string, er
 		return "", err
 	}
 
-	return parsed.Data.Content, nil
+	return parsed.Data.Content_MD, nil
 }
 
 func (ra *RedditAPI) getListing(ctx context.Context, path, position string, nb uint) ([]Comment, string, int, error) {
@@ -259,10 +266,18 @@ func (ra *RedditAPI) getListing(ctx context.Context, path, position string, nb u
 		return nil, position, res.Status, err
 	}
 
-	children := parsed.Data.Children
-	comments := make([]Comment, 0, len(children))
-	for _, child := range children {
-		comments = append(comments, child.Data.FinishDecoding())
+	comments := make([]Comment, 0, len(parsed.Data.Children))
+	for _, child := range parsed.Data.Children {
+		comment := Comment{
+			ID:        child.Data.ID,
+			Author:    child.Data.Author,
+			Score:     child.Data.Score,
+			Permalink: child.Data.Permalink,
+			Sub:       child.Data.Sub,
+			Created:   time.Unix(int64(child.Data.Created_UTC), 0),
+			Body:      child.Data.Body,
+		}
+		comments = append(comments, comment)
 	}
 
 	new_position := parsed.Data.After

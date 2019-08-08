@@ -9,7 +9,7 @@ import (
 	"text/template"
 )
 
-var Version = SemVer{1, 11, 0}
+var Version = SemVer{1, 12, 0}
 
 const DefaultChannelSize = 100
 
@@ -62,7 +62,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if logger, err := NewLevelLogger(dab.logOut, dab.logLvl); err != nil {
+	if logger, err := NewStdLevelLogger(dab.logOut, dab.logLvl); err != nil {
 		return err
 	} else {
 		dab.logger = logger
@@ -88,11 +88,10 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	}
 
 	dab.logger.Infof("using database %s", dab.conf.Database.Path)
-	if storage, err := NewStorage(dab.logger, dab.conf.Database); err != nil {
+	if storage, err := NewStorage(ctx, dab.logger, dab.conf.Database); err != nil {
 		return err
 	} else {
 		dab.layers.Storage = storage
-		defer dab.layers.Storage.Close()
 	}
 
 	if dab.runtimeConf.InitDB {
@@ -101,7 +100,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 	dab.layers.Report = NewReportFactory(dab.layers.Storage, dab.conf.Report)
 	if dab.runtimeConf.Report {
-		return dab.report()
+		return dab.report(ctx)
 	}
 
 	if dab.runtimeConf.UserAdd {
@@ -120,7 +119,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		tasks.SpawnCtx(dab.components.Web.Run)
 	}
 
-	if dab.layers.Storage.PeriodicCleanupEnabled {
+	if dab.layers.Storage.PeriodicCleanupIsEnabled() {
 		tasks.SpawnCtx(dab.layers.Storage.PeriodicCleanup)
 	}
 
@@ -143,7 +142,11 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 			}
 			dab.logger.Info("successfully logged into reddit")
 
-			return dab.components.RedditScanner.Run(ctx)
+			err := dab.components.RedditScanner.Run(ctx)
+			if err != nil && !IsCancellation(err) {
+				dab.logger.Errorf("reddit scanner failed with: %v", err)
+			}
+			return err
 		}))
 	}
 
@@ -222,11 +225,13 @@ func (dab *DownArrowsBot) makeRedditAPI(ctx context.Context) (*RedditAPI, error)
 	return ra, nil
 }
 
-func (dab *DownArrowsBot) report() error {
+func (dab *DownArrowsBot) report(ctx context.Context) error {
 	dab.logger.Info("printing report for last week")
 	year, week := dab.layers.Report.LastWeekCoordinates()
-	report := dab.layers.Report.ReportWeek(year, week)
-	if report.Len() == 0 {
+	report, err := dab.layers.Report.ReportWeek(ctx, year, week)
+	if err != nil {
+		return err
+	} else if report.Len() == 0 {
 		return errors.New("empty report")
 	}
 	return MarkdownReport.Execute(dab.stdOut, report)

@@ -54,12 +54,11 @@ func (rs *RedditScanner) Run(ctx context.Context) error {
 
 	for ctx.Err() == nil {
 
-		now := time.Now().Round(0)
-		full_scan := now.Sub(last_full_scan) >= rs.fullScanInterval
+		full_scan := time.Now().Sub(last_full_scan) >= rs.fullScanInterval
 
-		users := rs.getUsersOrWait(ctx, full_scan)
-		if len(users) == 0 {
-			return ctx.Err()
+		users, err := rs.getUsersOrWait(ctx, full_scan)
+		if err != nil {
+			return err
 		}
 
 		rs.logger.Debugf("scan pass: %d users, full scan: %t", len(users), full_scan)
@@ -69,8 +68,8 @@ func (rs *RedditScanner) Run(ctx context.Context) error {
 		rs.logger.Debug("scan pass done")
 
 		if full_scan {
-			last_full_scan = now
-			if err := rs.storage.UpdateInactiveStatus(rs.inactivityThreshold); err != nil {
+			last_full_scan = time.Now()
+			if err := rs.storage.UpdateInactiveStatus(ctx, rs.inactivityThreshold); err != nil {
 				return err
 			}
 		}
@@ -125,7 +124,7 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 			var err error
 			var comments []Comment
 			var limit uint
-			last_scan := time.Now().Round(0).Sub(user.LastScanTime())
+			last_scan := time.Now().Sub(user.LastScan)
 
 			if user.New || // if the user is new, we need to scan everything as fast as possible
 				user.Position != "" || // we don't know how many relevant comments the next page has, so take as many as possible
@@ -148,8 +147,10 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 			// This method contains logic that returns an User datastructure whose metadata
 			// has been updated; in other words, it indirectly controls the behavior of the
 			// current loop.
-			user, err = rs.storage.SaveCommentsUpdateUser(comments, user, last_scan+rs.maxAge)
-			if err != nil {
+			user, err = rs.storage.SaveCommentsUpdateUser(ctx, comments, user, last_scan+rs.maxAge)
+			if IsCancellation(err) {
+				return err
+			} else if err != nil {
 				rs.logger.Errorf("error while registering comments of user %s: %v", user.Name, err)
 			}
 
@@ -178,22 +179,29 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 	return nil
 }
 
-func (rs *RedditScanner) getUsersOrWait(ctx context.Context, full_scan bool) []User {
+func (rs *RedditScanner) getUsersOrWait(ctx context.Context, full_scan bool) ([]User, error) {
 	var users []User
+	var err error
 	// We could be using a channel to signal when a new user is added,
 	// but this isn't worth complicating AddUser for a feature that
 	// is used in production only once, when the database is empty.
 	for SleepCtx(ctx, time.Second) {
 		if full_scan {
-			users = rs.storage.ListUsers()
+			users, err = rs.storage.ListUsers(ctx)
+			if err != nil {
+				return nil, err
+			}
 		} else {
-			users = rs.storage.ListActiveUsers()
+			users, err = rs.storage.ListActiveUsers(ctx)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if len(users) > 0 {
 			break
 		}
 	}
-	return users
+	return users, nil
 }
 
 func (rs *RedditScanner) alertIfHighScore(ctx context.Context, comments []Comment) error {
@@ -208,8 +216,8 @@ func (rs *RedditScanner) alertIfHighScore(ctx context.Context, comments []Commen
 	var highscores []Comment
 	for _, comment := range comments {
 		if comment.Score < rs.highScoreThreshold {
-			if !rs.storage.KV().Has("highscores", comment.Id) {
-				highscores_id = append(highscores_id, comment.Id)
+			if !rs.storage.KV().Has("highscores", comment.ID) {
+				highscores_id = append(highscores_id, comment.ID)
 				highscores = append(highscores, comment)
 			}
 		}

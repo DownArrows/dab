@@ -12,42 +12,84 @@ import (
 var LevelLoggerLevels = []string{"Fatal", "Error", "Info", "Debug"}
 
 const (
-	levelLoggerFatal = iota
-	levelLoggerError
-	levelLoggerInfo
-	levelLoggerDebug
+	LevelLoggerFatal = iota
+	LevelLoggerError
+	LevelLoggerInfo
+	LevelLoggerDebug
 )
 
-func locateInSource(depth uint) (string, int) {
-	if _, file, line, ok := runtime.Caller(int(depth)); ok {
-		return path.Base(file), line
-	}
-	return "", 0
+type LevelLogger interface {
+	Debugf(string, ...interface{})
+	Debug(interface{})
+	Error(error)
+	Errorf(string, ...interface{})
+	Fatal(error)
+	Fatalf(string, ...interface{})
+	Infof(string, ...interface{})
+	Info(interface{})
 }
 
-type LevelLogger struct {
+type StdLevelLogger struct {
 	out   io.Writer
 	level int
 }
 
-func NewLevelLogger(out io.Writer, level string) (LevelLogger, error) {
-	ll := LevelLogger{out: out}
+func NewStdLevelLogger(out io.Writer, level string) (*StdLevelLogger, error) {
 
 	int_map := map[string]int{
-		"Fatal": levelLoggerFatal,
-		"Error": levelLoggerError,
-		"Info":  levelLoggerInfo,
-		"Debug": levelLoggerDebug,
+		"Fatal": LevelLoggerFatal,
+		"Error": LevelLoggerError,
+		"Info":  LevelLoggerInfo,
+		"Debug": LevelLoggerDebug,
 	}
 	if _, ok := int_map[level]; !ok {
-		return ll, fmt.Errorf("invalid logging level %s", level)
+		return nil, fmt.Errorf("invalid logging level %s", level)
 	}
 
-	ll.level = int_map[level]
-	return ll, nil
+	return &StdLevelLogger{out: out, level: int_map[level]}, nil
 }
 
-func (ll LevelLogger) log(level int, msg interface{}) {
+func (ll *StdLevelLogger) Debug(msg interface{}) {
+	if ll.level >= LevelLoggerDebug {
+		file, line := locateInSource(2)
+		ll.log(LevelLoggerDebug, fmt.Sprintf("%s:%d: %s", file, line, msg))
+	}
+}
+
+func (ll *StdLevelLogger) Debugf(template string, opts ...interface{}) {
+	if ll.level >= LevelLoggerDebug {
+		file, line := locateInSource(2)
+		ll.logf(LevelLoggerDebug, file+":"+strconv.Itoa(line)+": "+template, opts...)
+	}
+}
+
+func (ll *StdLevelLogger) Error(err error) {
+	ll.log(LevelLoggerError, err)
+}
+
+func (ll *StdLevelLogger) Errorf(template string, opts ...interface{}) {
+	ll.logf(LevelLoggerError, template, opts...)
+}
+
+func (ll *StdLevelLogger) Fatal(err error) {
+	ll.log(LevelLoggerFatal, err)
+	os.Exit(1)
+}
+
+func (ll *StdLevelLogger) Fatalf(template string, opts ...interface{}) {
+	ll.logf(LevelLoggerFatal, template, opts...)
+	os.Exit(1)
+}
+
+func (ll *StdLevelLogger) Info(msg interface{}) {
+	ll.log(LevelLoggerInfo, msg)
+}
+
+func (ll *StdLevelLogger) Infof(template string, opts ...interface{}) {
+	ll.logf(LevelLoggerInfo, template, opts...)
+}
+
+func (ll *StdLevelLogger) log(level int, msg interface{}) {
 	if ll.level >= level {
 		if _, err := fmt.Fprintf(ll.out, "%s\n", msg); err != nil {
 			panic(err)
@@ -55,7 +97,7 @@ func (ll LevelLogger) log(level int, msg interface{}) {
 	}
 }
 
-func (ll LevelLogger) logf(level int, template string, opts ...interface{}) {
+func (ll *StdLevelLogger) logf(level int, template string, opts ...interface{}) {
 	if ll.level >= level {
 		if _, err := fmt.Fprintf(ll.out, template+"\n", opts...); err != nil {
 			panic(err)
@@ -63,42 +105,9 @@ func (ll LevelLogger) logf(level int, template string, opts ...interface{}) {
 	}
 }
 
-func (ll LevelLogger) Fatal(err error) {
-	ll.log(levelLoggerFatal, err)
-	os.Exit(1)
-}
-
-func (ll LevelLogger) Fatalf(template string, opts ...interface{}) {
-	ll.logf(levelLoggerFatal, template, opts...)
-	os.Exit(1)
-}
-
-func (ll LevelLogger) Error(err error) {
-	ll.log(levelLoggerError, err)
-}
-
-func (ll LevelLogger) Errorf(template string, opts ...interface{}) {
-	ll.logf(levelLoggerError, template, opts...)
-}
-
-func (ll LevelLogger) Info(msg interface{}) {
-	ll.log(levelLoggerInfo, msg)
-}
-
-func (ll LevelLogger) Infof(template string, opts ...interface{}) {
-	ll.logf(levelLoggerInfo, template, opts...)
-}
-
-func (ll LevelLogger) Debug(msg interface{}) {
-	if ll.level >= levelLoggerDebug {
-		file, line := locateInSource(2)
-		ll.log(levelLoggerDebug, fmt.Sprintf("%s:%d: %s", file, line, msg))
+func locateInSource(depth uint) (string, int) {
+	if _, file, line, ok := runtime.Caller(int(depth)); ok {
+		return path.Base(file), line
 	}
-}
-
-func (ll LevelLogger) Debugf(template string, opts ...interface{}) {
-	if ll.level >= levelLoggerDebug {
-		file, line := locateInSource(2)
-		ll.logf(levelLoggerDebug, file+":"+strconv.Itoa(line)+": "+template, opts...)
-	}
+	return "", 0
 }

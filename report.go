@@ -1,9 +1,9 @@
 package main
 
 import (
+	"context"
 	"html"
 	"math"
-	"sort"
 	"strings"
 	"time"
 )
@@ -26,18 +26,33 @@ func NewReportFactory(storage ReportFactoryStorage, conf ReportConf) ReportFacto
 	}
 }
 
-func (rf ReportFactory) ReportWeek(week_num uint8, year int) Report {
+func (rf ReportFactory) ReportWeek(ctx context.Context, week_num uint8, year int) (Report, error) {
 	start, end := rf.WeekYearToDates(week_num, year)
-	report := rf.Report(start.Add(-rf.leeway), end.Add(-rf.leeway))
+	report, err := rf.Report(ctx, start.Add(-rf.leeway), end.Add(-rf.leeway))
+	if err != nil {
+		return report, err
+	}
 	report.Week = week_num
 	report.Year = year
-	return report
+	return report, nil
 }
 
-func (rf ReportFactory) Report(start, end time.Time) Report {
-	return Report{
-		RawComments:       rf.storage.GetCommentsBelowBetween(rf.cutOff, start, end),
-		Stats:             rf.storage.StatsBetween(rf.cutOff, start, end),
+func (rf ReportFactory) Report(ctx context.Context, start, end time.Time) (Report, error) {
+	report := Report{}
+
+	comments, err := rf.storage.GetCommentsBelowBetween(ctx, rf.cutOff, start, end)
+	if err != nil {
+		return report, err
+	}
+
+	stats, err := rf.storage.StatsBetween(ctx, rf.cutOff, start, end)
+	if err != nil {
+		return report, err
+	}
+
+	report = Report{
+		RawComments:       comments,
+		Stats:             stats,
 		Start:             start,
 		End:               end,
 		MaxStatsSummaries: rf.nbTop,
@@ -45,6 +60,7 @@ func (rf ReportFactory) Report(start, end time.Time) Report {
 		CutOff:            rf.cutOff,
 		Version:           Version,
 	}
+	return report, nil
 }
 
 func (rf ReportFactory) CurrentWeekCoordinates() (uint8, int) {
@@ -123,7 +139,7 @@ func (r Report) Comment(i int) ReportComment {
 		Number:    i + 1,
 		Average:   int64(math.Round(stats.Average)),
 		Author:    comment.Author,
-		Created:   comment.CreatedTime().In(r.Timezone),
+		Created:   comment.Created.In(r.Timezone),
 		Score:     comment.Score,
 		Sub:       comment.Sub,
 		Body:      html.UnescapeString(comment.Body),
@@ -166,72 +182,4 @@ func (rc ReportComment) BodyConvert() (interface{}, error) {
 		return rc.BodyConverter(rc)
 	}
 	return rc.Body, nil
-}
-
-// Statistics data structures
-
-type UserStats struct {
-	Name    string  // User name
-	Average float64 // Average karma for the time span considered
-	Delta   int64   // Karma loss for the time span considered
-	Count   uint64  // Number of comments made by that user
-}
-
-type UserStatsMap map[string]UserStats // Maps user names to corresponding stats for faster lookup
-
-func (usm UserStatsMap) DeltasToSummaries() StatsSummaries {
-	return usm.toSummaries(func(us UserStats) int64 { return us.Delta })
-}
-
-func (usm UserStatsMap) AveragesToSummaries() StatsSummaries {
-	return usm.toSummaries(func(us UserStats) int64 { return int64(math.Round(us.Average)) })
-}
-
-func (usm UserStatsMap) toSummaries(summary func(UserStats) int64) StatsSummaries {
-	stats := make([]StatsSummary, 0, len(usm))
-	for name, data := range usm {
-		stats = append(stats, StatsSummary{
-			Name:    name,
-			Count:   data.Count,
-			Summary: summary(data),
-		})
-	}
-	return stats
-}
-
-// Abstract representation of a value corresponding to a statistical summary
-// of a collection of things related to a user.
-type StatsSummary struct {
-	Name    string // User name
-	Count   uint64 // Number of things considered
-	Summary int64  // Summary number for the things considered
-}
-
-type StatsSummaries []StatsSummary
-
-func (s StatsSummaries) Limit(limit uint) StatsSummaries {
-	length := uint(len(s))
-	if length > limit {
-		length = limit
-	}
-	result := make([]StatsSummary, length)
-	copy(result, s)
-	return result
-}
-
-func (s StatsSummaries) Len() int {
-	return len(s)
-}
-
-func (s StatsSummaries) Less(i, j int) bool {
-	return s[i].Summary < s[j].Summary
-}
-
-func (s StatsSummaries) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
-func (s StatsSummaries) Sort() StatsSummaries {
-	sort.Sort(s)
-	return s
 }

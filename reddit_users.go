@@ -61,7 +61,7 @@ Loop:
 func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool, force_suspended bool) UserQuery {
 	query := UserQuery{User: User{Name: username}}
 
-	query = ru.storage.GetUser(username)
+	query = ru.storage.GetUser(ctx, username)
 	if query.Error != nil {
 		return query
 	} else if query.Exists {
@@ -87,7 +87,7 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 		}
 	}
 
-	if err := ru.storage.AddUser(query.User.Name, hidden, query.User.Created); err != nil {
+	if err := ru.storage.AddUser(ctx, query.User.Name, hidden, query.User.Created); err != nil {
 		query.Error = err
 	}
 
@@ -103,7 +103,11 @@ func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
 	for SleepCtx(ctx, ru.unsuspensionInterval) {
 		ru.logger.Debug("checking uspended/deleted users")
 
-		for _, user := range ru.storage.ListSuspendedAndNotFound() {
+		users, err := ru.storage.ListSuspendedAndNotFound(ctx)
+		if err != nil {
+			return err
+		}
+		for _, user := range users {
 			ru.logger.Debugf("checking suspended/deleted user %s", user.Name)
 
 			res := ru.api.AboutUser(ctx, user.Name)
@@ -133,24 +137,24 @@ func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
 			*/
 
 			if user.NotFound && res.Exists { // undeletion
-				if err := ru.storage.FoundUser(user.Name); err != nil {
+				if err := ru.storage.FoundUser(ctx, user.Name); err != nil {
 					ru.logger.Error(err)
 					continue
 				}
 				if res.User.Suspended {
-					if err := ru.storage.SuspendUser(user.Name); err != nil {
+					if err := ru.storage.SuspendUser(ctx, user.Name); err != nil {
 						ru.logger.Error(err)
 					}
 					continue // don't signal accounts that went from deleted to suspended
 				}
 			} else if user.Suspended && !res.Exists { // deletion of a suspended account
-				if err := ru.storage.NotFoundUser(user.Name); err != nil {
+				if err := ru.storage.NotFoundUser(ctx, user.Name); err != nil {
 					ru.logger.Error(err)
 					continue
 				}
 				continue // don't signal it, we only need to keep track of it
 			} else if user.Suspended && !res.User.Suspended { // unsuspension
-				if err := ru.storage.UnSuspendUser(user.Name); err != nil {
+				if err := ru.storage.UnSuspendUser(ctx, user.Name); err != nil {
 					ru.logger.Error(err)
 					continue
 				}

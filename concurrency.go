@@ -3,13 +3,18 @@ package main
 import (
 	"context"
 	"fmt"
-	"strings"
+	sqlite "github.com/bvinc/go-sqlite-lite/sqlite3"
 	"sync"
 	"time"
 )
 
 func IsCancellation(err error) bool {
-	return err == context.Canceled || err == context.DeadlineExceeded
+	if err == context.Canceled || err == context.DeadlineExceeded {
+		return true
+	} else if sqlite_err, ok := err.(*sqlite.Error); ok && sqlite_err.Code() == sqlite.INTERRUPT {
+		return true
+	}
+	return false
 }
 
 func SleepCtx(ctx context.Context, duration time.Duration) bool {
@@ -146,21 +151,13 @@ func (eg *ErrorGroup) Len() int {
 
 func (eg *ErrorGroup) Error() string {
 	errors := eg.Errors()
-
-	if len(errors) == 0 {
+	nb_errs := len(errors)
+	if nb_errs == 0 {
 		return ""
-	} else if len(errors) == 1 {
+	} else if nb_errs == 1 {
 		return errors[0].Error()
 	}
-
-	msgs := make([]string, 1, len(errors))
-
-	msgs[0] = fmt.Sprintf("%d error(s):", len(errors))
-	for i, err := range errors {
-		msgs = append(msgs, fmt.Sprintf("\t%d. %v", i+1, err))
-	}
-
-	return strings.Join(msgs, "\n")
+	return fmt.Sprintf("%d error(s): %v", nb_errs, errors)
 }
 
 func (eg *ErrorGroup) ToError() error {

@@ -180,6 +180,7 @@ and <http://golang.localhost/pkg/text/template/>.
     - `cleanup_interval` *duration* (30m): interval between clean-ups of the database (reduces its size and optimizes queries);
        put at `0s` to disable, else must be at least one minute
     - `path` *string* (./dab.db): path to the database file
+    - `timeout` *duration* (15s): timeout on the [database' lock](https://sqlite.org/c3ref/busy_timeout.html)
  - `discord`
     - `admin` *string* (*none*): Discord ID of the privileged user (use Discord's developer mode to get them);
       if empty will use the owner of the channels' server, and if no channel is enabled, will disable privileged commands.

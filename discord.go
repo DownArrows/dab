@@ -164,6 +164,7 @@ type DiscordBot struct {
 
 	// dependencies
 	client  *discordgo.Session
+	ctx     context.Context
 	logger  LevelLogger
 	storage DiscordBotStorage
 
@@ -239,6 +240,8 @@ func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, conf DiscordBo
 }
 
 func (bot *DiscordBot) Run(ctx context.Context) error {
+	bot.ctx = ctx
+
 	go func() {
 		if err := bot.client.Open(); err != nil {
 			if !IsCancellation(err) {
@@ -642,7 +645,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 	return bot.channelEmbedSend(msg.ChannelID, status)
 }
 
-func (bot *DiscordBot) editUsers(action_name string, action func(string) error) func(DiscordMessage) error {
+func (bot *DiscordBot) editUsers(action_name string, action func(context.Context, string) error) func(DiscordMessage) error {
 	return func(msg DiscordMessage) error {
 		names := msg.Args
 		bot.logger.Infof("%s wants to %s %v", msg.Author.FQN(), action_name, names)
@@ -654,7 +657,7 @@ func (bot *DiscordBot) editUsers(action_name string, action func(string) error) 
 
 		for _, name := range names {
 			name = TrimUsername(name)
-			if err := action(name); err != nil {
+			if err := action(bot.ctx, name); err != nil {
 				status.AddField(DiscordEmbedField{Name: name, Value: fmt.Sprintf("%s %s", EmojiCrossMark, err)})
 			} else {
 				status.AddField(DiscordEmbedField{Name: name, Value: EmojiCheckMark})
@@ -668,7 +671,7 @@ func (bot *DiscordBot) editUsers(action_name string, action func(string) error) 
 func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 	username := TrimUsername(msg.Content)
 
-	query := bot.storage.GetUser(username)
+	query := bot.storage.GetUser(bot.ctx, username)
 
 	if !query.Exists {
 		response := fmt.Sprintf("user '%s' not found in the database.", username)
@@ -682,11 +685,11 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 		Color: bot.myColor(msg.ChannelID),
 		Fields: []DiscordEmbedField{{
 			Name:   "Created",
-			Value:  user.CreatedTime().In(bot.timezone).Format(time.RFC850),
+			Value:  user.Created.In(bot.timezone).Format(time.RFC850),
 			Inline: true,
 		}, {
 			Name:   "Added",
-			Value:  user.AddedTime().In(bot.timezone).Format(time.RFC850),
+			Value:  user.Added.In(bot.timezone).Format(time.RFC850),
 			Inline: true,
 		}, {
 			Name:   "Hidden from reports",
@@ -707,10 +710,10 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 		}},
 	}
 
-	if user.LastScan > 0 {
+	if !user.LastScan.IsZero() {
 		embed.AddField(DiscordEmbedField{
 			Name:   "Last scan",
-			Value:  user.LastScanTime().In(bot.timezone).Format(time.RFC850),
+			Value:  user.LastScan.In(bot.timezone).Format(time.RFC850),
 			Inline: true,
 		})
 	}
@@ -725,7 +728,7 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 	username := TrimUsername(msg.Args[0])
 
-	res := bot.storage.GetUser(username)
+	res := bot.storage.GetUser(bot.ctx, username)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -741,7 +744,7 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 	var negative int64
 	var err error
 
-	positive, err = bot.storage.GetPositiveKarma(username)
+	positive, err = bot.storage.GetPositiveKarma(bot.ctx, username)
 	if err == ErrNoComment {
 		embed.AddField(DiscordEmbedField{Name: "Positive", Value: "N/A", Inline: true})
 	} else if err != nil {
@@ -750,7 +753,7 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 		embed.AddField(DiscordEmbedField{Name: "Positive", Value: fmt.Sprintf("%d", positive), Inline: true})
 	}
 
-	negative, err = bot.storage.GetNegativeKarma(username)
+	negative, err = bot.storage.GetNegativeKarma(bot.ctx, username)
 	if err == ErrNoComment {
 		embed.AddField(DiscordEmbedField{Name: "Negative", Value: "N/A", Inline: true})
 	} else if err != nil {

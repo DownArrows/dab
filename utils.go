@@ -1,10 +1,8 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 )
 
@@ -19,17 +17,6 @@ func FileOlderThan(path string, max_age time.Duration) (bool, error) {
 
 	time_diff := time.Now().Sub(stat.ModTime())
 	return (time_diff > max_age), nil
-}
-
-func ErrorsToError(errs []error, sep string) error {
-	if len(errs) == 0 {
-		return nil
-	}
-	strs := make([]string, 0, len(errs))
-	for _, err := range errs {
-		strs = append(strs, err.Error())
-	}
-	return errors.New(strings.Join(strs, sep))
 }
 
 type SemVer [3]byte
@@ -65,11 +52,11 @@ func (v SemVer) String() string {
 }
 
 // Encodes the SemVer on the lower three bytes of a 32 bits integer.
-func (v SemVer) ToInt32() int32 {
-	return (int32(v.Major()) * 65536) + (int32(v.Minor()) * 256) + int32(v.Patch())
+func (v SemVer) ToInt() int {
+	return (int(v.Major()) * 65536) + (int(v.Minor()) * 256) + int(v.Patch())
 }
 
-func SemVerFromInt32(encoded int32) SemVer {
+func SemVerFromInt(encoded int) SemVer {
 	major := encoded / 65536
 
 	encoded %= 65536
