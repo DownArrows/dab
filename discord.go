@@ -539,6 +539,10 @@ func (bot *DiscordBot) getCommandsDescriptors() []DiscordCommand {
 		Callback: bot.karma,
 		HasArgs:  true,
 	}, {
+		Command:  "karma",
+		Callback: bot.simpleError("Type \"%skarma reddit-username\" to get the karma stats of \"reddit-username\".", bot.prefix),
+		HasArgs:  false,
+	}, {
 		Command:    "version",
 		Callback:   bot.simpleReply(Version.String()),
 		Privileged: true,
@@ -571,9 +575,8 @@ func (bot *DiscordBot) getCommandsDescriptors() []DiscordCommand {
 	}, {
 		Command: "sip",
 		Aliases: []string{"sipthebep"},
-		Callback: bot.simpleReply(fmt.Sprintf(
-			"More like N0000 1 cares %s This shitpost is horrible %s",
-			EmojiFire, strings.Repeat(EmojiThumbDown, 3))),
+		Callback: bot.simpleReply("More like N0000 1 cares %s This shitpost is horrible %s",
+			EmojiFire, strings.Repeat(EmojiThumbDown, 3)),
 	}, {
 		Command:  "separator",
 		Aliases:  []string{"sep", "="},
@@ -586,9 +589,15 @@ func (bot *DiscordBot) getCommandsDescriptors() []DiscordCommand {
 	}}
 }
 
-func (bot *DiscordBot) simpleReply(reply string) func(DiscordMessage) error {
+func (bot *DiscordBot) simpleReply(str string, args ...interface{}) func(DiscordMessage) error {
 	return func(msg DiscordMessage) error {
-		return bot.channelMessageSend(msg.ChannelID, reply)
+		return bot.channelMessageSend(msg.ChannelID, fmt.Sprintf(str, args...))
+	}
+}
+
+func (bot *DiscordBot) simpleError(str string, args ...interface{}) func(DiscordMessage) error {
+	return func(msg DiscordMessage) error {
+		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, fmt.Sprintf(str, args...))
 	}
 }
 
@@ -707,11 +716,14 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 	}
 
 	return bot.channelEmbedSend(msg.ChannelID, embed)
-
 }
 
 func (bot *DiscordBot) karma(msg DiscordMessage) error {
-	username := TrimUsername(msg.Content)
+	if len(msg.Args) > 1 {
+		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, "Only one username at a time is accepted.")
+	}
+
+	username := TrimUsername(msg.Args[0])
 
 	res := bot.storage.GetUser(username)
 	if res.Error != nil {
