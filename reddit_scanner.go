@@ -135,15 +135,16 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 				limit = user.BatchSize + rs.commentsLeeway
 			}
 
-			rs.logger.Debugf("trying to get %d comments from user %s, last scanned %v ago, page position '%s'",
-				limit, user.Name, last_scan, user.Position)
+			rs.logger.Debugf("trying to get %d comments from user %+v", limit, user)
 			comments, user, err = rs.api.UserComments(ctx, user, limit)
 			if IsCancellation(err) {
 				return err
 			} else if err != nil {
 				rs.logger.Errorf("error while scanning user %s: %v", user.Name, err)
 			}
+			rs.logger.Debugf("fetched comments: %+v", comments)
 
+			rs.logger.Debugf("before scanner's user update: %+v", user)
 			// This method contains logic that returns an User datastructure whose metadata
 			// has been updated; in other words, it indirectly controls the behavior of the
 			// current loop.
@@ -153,9 +154,9 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 			} else if err != nil {
 				rs.logger.Errorf("error while registering comments of user %s: %v", user.Name, err)
 			}
+			rs.logger.Debugf("after scanner's user update: %+v", user)
 
 			if user.Suspended || user.NotFound {
-				rs.logger.Debugf("user %s status change: suspended %t, not found: %t", user.Name, user.Suspended, user.NotFound)
 				rs.Lock()
 				if rs.suspensions != nil {
 					rs.suspensions <- user

@@ -45,9 +45,9 @@ Loop:
 		case <-ctx.Done():
 			break Loop
 		}
-		ru.logger.Infof("received query to add a new user, %s", query)
+		ru.logger.Infof("received query to add a new user, %+v", query)
 		query = ru.AddUser(ctx, query.User.Name, query.User.Hidden, false)
-		ru.logger.Infof("replying to query to add a new user, %s", query)
+		ru.logger.Infof("replying to query to add a new user, %+v", query)
 		select {
 		case queries <- query:
 			break
@@ -65,7 +65,7 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 	if query.Error != nil {
 		return query
 	} else if query.Exists {
-		template := "'%s' already exists"
+		template := "%q already exists"
 		ru.logger.Errorf(template, username)
 		query.Error = fmt.Errorf(template, username)
 		return query
@@ -82,7 +82,7 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 
 	if query.User.Suspended {
 		if !force_suspended {
-			query.Error = fmt.Errorf("user '%s' can't be added, forced mode not enabled", query.User.Name)
+			query.Error = fmt.Errorf("user %q can't be added, forced mode not enabled", query.User.Name)
 			return query
 		}
 	}
@@ -108,7 +108,7 @@ func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
 			return err
 		}
 		for _, user := range users {
-			ru.logger.Debugf("checking suspended/deleted user %s", user.Name)
+			ru.logger.Debugf("checking suspended/deleted user %+v", user)
 
 			res := ru.api.AboutUser(ctx, user.Name)
 			if IsCancellation(res.Error) {

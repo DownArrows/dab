@@ -496,7 +496,7 @@ func (bot *DiscordBot) command(msg DiscordMessage) error {
 	if cmd.Command == "" {
 		return nil
 	}
-	bot.logger.Debugf("matched command '%s', args %v, from user %s", cmd.Command, msg.Args, msg.Author.FQN())
+	bot.logger.Debugf("matched command %q, args %v, from user %s", cmd.Command, msg.Args, msg.Author.FQN())
 
 	if err := bot.client.ChannelTyping(msg.ChannelID); err != nil {
 		return err

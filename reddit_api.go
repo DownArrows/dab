@@ -61,7 +61,7 @@ type commentListing struct {
 				Author      string
 				Score       int64
 				Permalink   string
-				Sub         string
+				Subreddit   string
 				Created_UTC float64
 				Body        string
 			}
@@ -273,7 +273,7 @@ func (ra *RedditAPI) getListing(ctx context.Context, path, position string, nb u
 			Author:    child.Data.Author,
 			Score:     child.Data.Score,
 			Permalink: child.Data.Permalink,
-			Sub:       child.Data.Sub,
+			Sub:       child.Data.Subreddit,
 			Created:   time.Unix(int64(child.Data.Created_UTC), 0),
 			Body:      child.Data.Body,
 		}
