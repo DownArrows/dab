@@ -1,6 +1,8 @@
+*.bak
+dab
 dab.conf.json
 dab.db
-.*.swp
-*.bak
-*.sh
+dab.db.*
 Makefile
+*.sh
+.*.swp
