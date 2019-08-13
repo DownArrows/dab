@@ -2,15 +2,12 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	sqlite "github.com/bvinc/go-sqlite-lite/sqlite3"
 	"time"
 )
 
 const ApplicationFileID int = 0xdab
-
-var ErrNoComment = errors.New("no comment found")
 
 type RedditScannerStorage interface {
 	KV() *KeyValueStore
@@ -37,8 +34,7 @@ type DiscordBotStorage interface {
 	HideUser(context.Context, string) error
 	UnHideUser(context.Context, string) error
 	GetUser(context.Context, string) UserQuery
-	GetPositiveKarma(context.Context, string) (int64, error)
-	GetNegativeKarma(context.Context, string) (int64, error)
+	GetKarma(context.Context, string) (int64, int64, error)
 }
 
 type ReportFactoryStorage interface {
@@ -345,29 +341,25 @@ func (s *Storage) GetCommentsBelowBetween(ctx context.Context, score int64, sinc
  Statistics
 ***********/
 
-func (s *Storage) GetPositiveKarma(ctx context.Context, username string) (int64, error) {
-	return s.getKarma(ctx, "SELECT SUM(score) FROM comments WHERE score > 0 AND author = ? COLLATE NOCASE", username)
-}
-
-func (s *Storage) GetNegativeKarma(ctx context.Context, username string) (int64, error) {
-	return s.getKarma(ctx, "SELECT SUM(score) FROM comments WHERE score < 0 AND author = ? COLLATE NOCASE", username)
-}
-
-func (s *Storage) getKarma(ctx context.Context, sql, username string) (int64, error) {
-	var score int64
+func (s *Storage) GetKarma(ctx context.Context, username string) (int64, int64, error) {
+	sql := `
+		SELECT SUM(score), SUM(CASE WHEN score < 0 THEN score ELSE 0 END)
+		FROM comments WHERE author = ? COLLATE NOCASE`
+	var total int64
+	var negative int64
+	var err error
 	cb := func(stmt *sqlite.Stmt) error {
-		value, ok, err := stmt.ColumnInt64(0)
+		// In both cases assume 0 if NULL, as it's not really
+		// useful to gracefully handle this corner case.
+		total, _, err = stmt.ColumnInt64(0)
 		if err != nil {
 			return err
 		}
-		if !ok {
-			return ErrNoComment
-		}
-		score = value
-		return nil
+		negative, _, err = stmt.ColumnInt64(1)
+		return err
 	}
-	err := s.db.Select(ctx, sql, cb, username)
-	return score, err
+	err = s.db.Select(ctx, sql, cb, username)
+	return total, negative, err
 }
 
 func (s *Storage) StatsBetween(ctx context.Context, score int64, since, until time.Time) (UserStatsMap, error) {

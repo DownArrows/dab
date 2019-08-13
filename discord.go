@@ -26,6 +26,7 @@ const (
 	EmojiRainbow       = "\U0001f308"
 	EmojiThumbDown     = "\U0001f44e"
 	EmojiThumbUp       = "\U0001f44d"
+	EmojiWarning       = "\u26a0"
 	EmojiWheelOfDharma = "\u2638"
 	EmojiWhiteFlower   = "\U0001f4ae"
 )
@@ -674,7 +675,7 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 	query := bot.storage.GetUser(bot.ctx, username)
 
 	if !query.Exists {
-		response := fmt.Sprintf("user '%s' not found in the database.", username)
+		response := fmt.Sprintf("user %q not found in the database.", username)
 		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, response)
 	}
 
@@ -728,42 +729,32 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 	username := TrimUsername(msg.Args[0])
 
-	res := bot.storage.GetUser(bot.ctx, username)
-	if res.Error != nil {
-		return res.Error
-	}
-
-	if !res.Exists {
+	user_query := bot.storage.GetUser(bot.ctx, username)
+	if user_query.Error != nil {
+		return user_query.Error
+	} else if !user_query.Exists {
 		reply := fmt.Sprintf("user %s not found.", username)
 		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, reply)
 	}
 
-	embed := &DiscordEmbed{Title: "Karma for /u/" + res.User.Name}
+	user := user_query.User
 
-	var positive int64
-	var negative int64
-	var err error
-
-	positive, err = bot.storage.GetPositiveKarma(bot.ctx, username)
-	if err == ErrNoComment {
-		embed.AddField(DiscordEmbedField{Name: "Positive", Value: "N/A", Inline: true})
-	} else if err != nil {
+	total, negative, err := bot.storage.GetKarma(bot.ctx, user.Name)
+	if err != nil {
 		return err
-	} else {
-		embed.AddField(DiscordEmbedField{Name: "Positive", Value: fmt.Sprintf("%d", positive), Inline: true})
 	}
 
-	negative, err = bot.storage.GetNegativeKarma(bot.ctx, username)
-	if err == ErrNoComment {
-		embed.AddField(DiscordEmbedField{Name: "Negative", Value: "N/A", Inline: true})
-	} else if err != nil {
-		return err
-	} else {
-		embed.AddField(DiscordEmbedField{Name: "Negative", Value: fmt.Sprintf("%d", negative), Inline: true})
+	embed := &DiscordEmbed{
+		Title: "Karma for /u/" + user.Name,
+		Fields: []DiscordEmbedField{
+			{Name: "Positive", Value: fmt.Sprintf("%d", total-negative), Inline: true},
+			{Name: "Negative", Value: fmt.Sprintf("%d", negative), Inline: true},
+			{Name: "Total", Value: fmt.Sprintf("%d", total), Inline: true},
+		},
 	}
-
-	embed.AddField(DiscordEmbedField{Name: "Total", Value: fmt.Sprintf("%d", positive+negative), Inline: true})
-
+	if user.New {
+		embed.Description = EmojiWarning + " _this user hasn't been fully scanned yet._"
+	}
 	return bot.channelEmbedSend(msg.ChannelID, embed)
 }
 

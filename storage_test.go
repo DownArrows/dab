@@ -158,6 +158,14 @@ func TestCRUDComments(t *testing.T) {
 		Sub:       "sub",
 		Created:   time.Now().Round(time.Second).Add(-2 * time.Hour),
 		Body:      "This is the fifth test comment.",
+	}, {
+		ID:        "comment6",
+		Author:    "Author2",
+		Score:     15,
+		Permalink: "https://example.org/comment6",
+		Sub:       "sub",
+		Created:   time.Now().Round(time.Second).Add(-time.Hour),
+		Body:      "This is the sixth test comment.",
 	}}
 
 	start := time.Now().Round(time.Second).Add(-time.Hour)
@@ -169,7 +177,7 @@ func TestCRUDComments(t *testing.T) {
 		if _, err := s.SaveCommentsUpdateUser(ctx, []Comment{comments[0], comments[2]}, author1, max_age); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := s.SaveCommentsUpdateUser(ctx, []Comment{comments[1], comments[3]}, author2, max_age); err != nil {
+		if _, err := s.SaveCommentsUpdateUser(ctx, []Comment{comments[1], comments[3], comments[5]}, author2, max_age); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := s.SaveCommentsUpdateUser(ctx, []Comment{comments[4]}, author3, max_age); err != nil {
@@ -265,16 +273,10 @@ func TestCRUDComments(t *testing.T) {
 	})
 
 	t.Run("get karma", func(t *testing.T) {
-		if _, err := s.GetPositiveKarma(ctx, "Author2"); err != nil {
-			if err != ErrNoComment {
-				t.Fatal(err)
-			}
-		}
-
-		if negative, err := s.GetNegativeKarma(ctx, "Author2"); err != nil {
+		if total, negative, err := s.GetKarma(ctx, "Author2"); err != nil {
 			t.Fatal(err)
-		} else if expected := int64(-70 + -140); negative != expected {
-			t.Errorf("Author1's negative karma should be %d, not %d", expected, negative)
+		} else if expected := int64(-70 + -140); negative != expected || total != negative+15 {
+			t.Errorf("Author2's karma should be %d/%d, not %d/%d", expected, expected+15, negative, total)
 		}
 	})
 
