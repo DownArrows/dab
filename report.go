@@ -2,27 +2,24 @@ package main
 
 import (
 	"context"
-	"html"
-	"math"
-	"strings"
 	"time"
 )
 
 type ReportFactory struct {
 	cutOff   int64         // Max acceptable comment score for inclusion in the report
 	leeway   time.Duration // Shift of the report's start and end date
-	nbTop    uint          // Number of items to summarize the weeks with statistics
+	NbTop    uint          // Number of items to summarize the weeks with statistics
 	storage  ReportFactoryStorage
-	timezone *time.Location // Timezone used to compute weeks, years and corresponding start/end dates
+	Timezone *time.Location // Timezone used to compute weeks, years and corresponding start/end dates
 }
 
 func NewReportFactory(storage ReportFactoryStorage, conf ReportConf) ReportFactory {
 	return ReportFactory{
 		storage:  storage,
 		leeway:   conf.Leeway.Value,
-		timezone: conf.Timezone.Value,
+		Timezone: conf.Timezone.Value,
 		cutOff:   conf.CutOff,
-		nbTop:    conf.NbTop,
+		NbTop:    conf.NbTop,
 	}
 }
 
@@ -55,8 +52,8 @@ func (rf ReportFactory) Report(ctx context.Context, start, end time.Time) (Repor
 		Stats:             stats,
 		Start:             start,
 		End:               end,
-		MaxStatsSummaries: rf.nbTop,
-		Timezone:          rf.timezone,
+		MaxStatsSummaries: rf.NbTop,
+		Timezone:          rf.Timezone,
 		CutOff:            rf.cutOff,
 		Version:           Version,
 	}
@@ -84,13 +81,13 @@ func (rf ReportFactory) WeekNumToStartDate(week_num uint8, year int) time.Time {
 }
 
 func (rf ReportFactory) StartOfFirstWeek(year int) time.Time {
-	in_first_week := time.Date(year, 1, 4, 0, 0, 0, 0, rf.timezone)
+	in_first_week := time.Date(year, 1, 4, 0, 0, 0, 0, rf.Timezone)
 	day_position := (in_first_week.Weekday() + 6) % 7
 	return in_first_week.AddDate(0, 0, -int(day_position))
 }
 
 func (rf ReportFactory) Now() time.Time {
-	return time.Now().In(rf.timezone)
+	return time.Now().In(rf.Timezone)
 }
 
 // Report data structures
@@ -107,7 +104,7 @@ type Report struct {
 	CutOff            int64          // Max score of the comments included in the report
 	Version           SemVer         // Version of the software with which the report was made
 
-	CommentBodyConverter func(ReportComment) (interface{}, error) // Optionnal function to convert comments' body to anything
+	CommentBodyConverter CommentBodyConverter // Optionnal function to convert comments' body to anything
 }
 
 func (r Report) Head() ReportHead {
@@ -135,16 +132,9 @@ func (r Report) Comments() []ReportComment {
 func (r Report) Comment(i int) ReportComment {
 	comment := r.RawComments[i]
 	stats := r.Stats[comment.Author]
-	return ReportComment{
-		Number:    i + 1,
-		Average:   int64(math.Round(stats.Average)),
-		Author:    comment.Author,
-		Created:   comment.Created.In(r.Timezone),
-		Score:     comment.Score,
-		Sub:       comment.Sub,
-		Body:      html.UnescapeString(comment.Body),
-		Permalink: comment.Permalink,
-	}
+	rc := ReportComment{Average: stats.Average}
+	rc.CommentView = comment.ToView(uint(i+1), r.Timezone, r.CommentBodyConverter)
+	return rc
 }
 
 func (r Report) Len() int {
@@ -161,25 +151,6 @@ type ReportHead struct {
 }
 
 type ReportComment struct {
-	Number    int       // Position of the comment in the report
-	Average   int64     // Average karma for that user
-	Author    string    // User name
-	Created   time.Time // Date of creation of the comment
-	Score     int64     // Score of the comment
-	Sub       string    // Subreddit in which the comment was posted
-	Permalink string    // Path on reddit to the comment
-	Body      string    // Body of the comment as it was typed (in reddit-flavored markdown)
-
-	BodyConverter func(ReportComment) (interface{}, error)
-}
-
-func (rc ReportComment) BodyLines() []string {
-	return strings.Split(rc.Body, "\n")
-}
-
-func (rc ReportComment) BodyConvert() (interface{}, error) {
-	if rc.BodyConverter != nil {
-		return rc.BodyConverter(rc)
-	}
-	return rc.Body, nil
+	CommentView
+	Average Float64 // Average karma for that user
 }

@@ -27,7 +27,7 @@ by [/u/{{.Name}}](https://www.reddit.com/user/{{.Name}})
 {{range .Comments -}}
 # \#{{.Number}}
 
-Author: [/u/{{.Author}}](https://www.reddit.com/user/{{.Author}}) ({{.Average}} week average)
+Author: [/u/{{.Author}}](https://www.reddit.com/user/{{.Author}}) ({{.Average.Round}} week average)
 
 Date: {{.Created.Format "Monday 02 January 15:04 MST"}}
 
@@ -85,7 +85,7 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 	<table>
 	<tr>
 		<td>Author</td>
-		<td><a href="https://www.reddit.com/user/{{.Author}}">/u/{{.Author}}</a> ({{.Average}} week average)</td>
+		<td><a href="https://www.reddit.com/user/{{.Author}}">/u/{{.Author}}</a> ({{.Average.Round}} week average)</td>
 	</tr>
 	<tr>
 		<td>Date</td>
@@ -154,7 +154,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 		</tr>
 		<tr>
 			<td>Average per comment<td>
-			<td><strong>{{.Summary.KarmaPerComment}}</strong>, and <strong>{{.SummaryNegative.KarmaPerComment}}</strong> if negative only<td>
+			<td><strong>{{.Summary.KarmaPerComment.Round}}</strong>, and <strong>{{.SummaryNegative.KarmaPerComment.Round}}</strong> if negative only<td>
 		</tr>
 	</table>
 </article>
@@ -164,12 +164,12 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 
 <section>
 <h1 id="top">Most downvoted</h1>
-{{if (.TopComments | len) gt 1}}
-<p>First {{.TopComments | len}} comments.</p>
+{{if (.RawTopComments | len) gt 1}}
+<p>First {{.RawTopComments | len}} comments.</p>
 {{end}}
 {{range .TopComments}}
 <article class="comment">
-	<h2>#TODO</h2>
+	<h2># {{.Number}}</h2>
 	<table>
 	<tr>
 		<td>Author</td>
@@ -190,7 +190,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	</table>
 
 	<blockquote>
-	<p>[Comment body here]</p>
+{{.BodyConvert}}
 	</blockquote>
 </article>
 {{end}}
@@ -199,7 +199,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 
 <section>
 <h1 id="subs">Per sub</h1>
-<table>
+<table class="subs">
 <tr>
 	<th><strong>Rank</strong></th>
 	<th><strong>Sub</strong></th>
@@ -210,11 +210,11 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 </tr>
 {{range .All}}
 <tr>
-	<td>TODO</td>
+	<td>{{.Number}}</td>
 	<td><a href="https://www.reddit.com/r/{{.Sub}}/">{{.Sub}}</a></td>
 	<td>{{.Count}}</td>
 	<td>{{.Karma}}</td>
-	<td>{{.Average}}</td>
+	<td>{{.Average.Round}}</td>
 	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
 </tr>
 {{end}}
@@ -224,7 +224,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 
 <section>
 <h1 id="subs-negative">Negative per sub</h1>
-<table>
+<table class="subs">
 <tr>
 	<th><strong>Rank</strong></th>
 	<th><strong>Sub</strong></th>
@@ -235,11 +235,11 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 </tr>
 {{range .Negative}}
 <tr>
-	<td>TODO</td>
+	<td>{{.Number}}</td>
 	<td><a href="https://www.reddit.com/r/{{.Sub}}/">{{.Sub}}</a></td>
 	<td>{{.Count}}</td>
 	<td>{{.Karma}}</td>
-	<td>{{.Average}}</td>
+	<td>{{.Average.Round}}</td>
 	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
 </tr>
 {{end}}
@@ -334,8 +334,7 @@ header {
 
 main {
 	margin-bottom: 1em;
-}
-`
+}`
 
 const CSSReports = `
 aside.md-link {
@@ -356,6 +355,8 @@ aside.md-link a::after {
 	padding: calc(var(--spacing)/2);
 	margin: calc(var(--spacing)/2);
 	font-size: smaller;
-}
+}`
 
-`
+const CSSCompendium = `table.subs {
+	border-spacing: calc(2*var(--spacing));
+}`

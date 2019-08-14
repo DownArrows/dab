@@ -413,12 +413,15 @@ func (s *Storage) StatsBetween(ctx context.Context, score int64, since, until ti
 //}
 
 func (s *Storage) CompendiumUserStats(ctx context.Context, max_top uint, user User) (CompendiumUserStats, error) {
-	stats := NewCompendiumUserStats()
-	stats.User = user
-	stats.Version = Version
+	stats := CompendiumUserStats{
+		NbTop:   max_top,
+		User:    user,
+		Version: Version,
+	}
 
 	err := s.db.WithTx(ctx, func(conn *SQLiteConn) error {
 		var sql string
+		var count uint
 		var cb func(stmt *sqlite.Stmt) error
 
 		// All per sub
@@ -428,8 +431,11 @@ func (s *Storage) CompendiumUserStats(ctx context.Context, max_top uint, user Us
 		FROM comments WHERE author = ?
 		GROUP BY sub
 		ORDER BY karma ASC`
+		count = 1
 		cb = func(stmt *sqlite.Stmt) error {
 			detail := &CompendiumUserStatsDetailsPerSub{}
+			detail.Number = count
+			count += 1
 			if err := detail.FromDB(stmt); err != nil {
 				return err
 			}
@@ -446,8 +452,11 @@ func (s *Storage) CompendiumUserStats(ctx context.Context, max_top uint, user Us
 		FROM comments WHERE author = ? AND score < 0
 		GROUP BY sub
 		ORDER BY karma ASC`
+		count = 1
 		cb = func(stmt *sqlite.Stmt) error {
 			detail := &CompendiumUserStatsDetailsPerSub{}
+			detail.Number = count
+			count += 1
 			if err := detail.FromDB(stmt); err != nil {
 				return err
 			}
@@ -465,27 +474,10 @@ func (s *Storage) CompendiumUserStats(ctx context.Context, max_top uint, user Us
 			if err := comment.FromDB(stmt); err != nil {
 				return err
 			}
-			stats.TopComments = append(stats.TopComments, *comment)
+			stats.RawTopComments = append(stats.RawTopComments, *comment)
 			return nil
 		}
 		if err := conn.Select(sql, cb, user.Name, int(max_top)); err != nil {
-			return err
-		}
-
-		// Comments per sub
-		sql = `
-		SELECT id, author, MIN(score), permalink, sub, created, body
-		FROM comments WHERE author = ?
-		GROUP BY sub`
-		cb = func(stmt *sqlite.Stmt) error {
-			comment := &Comment{}
-			if err := comment.FromDB(stmt); err != nil {
-				return err
-			}
-			stats.CommentsPerSub[comment.Sub] = *comment
-			return nil
-		}
-		if err := conn.Select(sql, cb, user.Name); err != nil {
 			return err
 		}
 

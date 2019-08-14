@@ -156,6 +156,8 @@ func (wsrv *WebServer) CSS(w http.ResponseWriter, r *http.Request) {
 		css = CSSMain
 	case "/css/reports":
 		css = CSSReports
+	case "/css/compendium":
+		css = CSSCompendium
 	default:
 		http.NotFound(w, r)
 		return
@@ -205,7 +207,7 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	report.CommentBodyConverter = func(src ReportComment) (interface{}, error) {
+	report.CommentBodyConverter = func(src CommentView) (interface{}, error) {
 		html := blackfriday.Run([]byte(src.Body), wsrv.markdownOptions)
 		return template.HTML(html), nil
 	}
@@ -243,16 +245,17 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats, err := wsrv.storage.CompendiumUserStats(r.Context(), 5, query.User)
+	stats, err := wsrv.storage.CompendiumUserStats(r.Context(), wsrv.reports.NbTop, query.User)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	stats.Timezone = wsrv.reports.Timezone
 
-	//	report.CommentBodyConverter = func(src ReportComment) (interface{}, error) {
-	//		html := blackfriday.Run([]byte(src.Body), wsrv.markdownOptions)
-	//		return template.HTML(html), nil
-	//	}
+	stats.CommentBodyConverter = func(src CommentView) (interface{}, error) {
+		html := blackfriday.Run([]byte(src.Body), wsrv.markdownOptions)
+		return template.HTML(html), nil
+	}
 
 	w.Header().Set("Content-Type", "text/html")
 	if err := HTMLCompendiumUserPage.Execute(w, stats); err != nil {

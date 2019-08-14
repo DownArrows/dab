@@ -2,6 +2,7 @@ package main
 
 import (
 	sqlite "github.com/bvinc/go-sqlite-lite/sqlite3"
+	"html"
 	"math"
 	"sort"
 	"strconv"
@@ -84,9 +85,44 @@ func (c *Comment) FromDB(stmt *sqlite.Stmt) error {
 		c.Created = time.Unix(timestamp, 0)
 	}
 
-	c.Body, _, err = stmt.ColumnText(6)
+	if body, _, err := stmt.ColumnText(6); err != nil {
+		return err
+	} else {
+		c.Body = html.UnescapeString(body)
+	}
 
 	return err
+}
+
+func (c Comment) ToView(n uint, timezone *time.Location, cbc CommentBodyConverter) CommentView {
+	view := CommentView{
+		Number:        n,
+		BodyConverter: cbc,
+	}
+	view.Comment = c
+	if timezone != nil {
+		view.Created = view.Created.In(timezone)
+	}
+	return view
+}
+
+type CommentBodyConverter func(CommentView) (interface{}, error)
+
+type CommentView struct {
+	Comment
+	BodyConverter CommentBodyConverter
+	Number        uint
+}
+
+func (cv CommentView) BodyLines() []string {
+	return strings.Split(cv.Body, "\n")
+}
+
+func (cv CommentView) BodyConvert() (interface{}, error) {
+	if cv.BodyConverter != nil {
+		return cv.BodyConverter(cv)
+	}
+	return cv.Body, nil
 }
 
 type User struct {
@@ -237,7 +273,7 @@ func (uq UserQuery) String() string {
 
 type UserStats struct {
 	Name    string  // User name
-	Average float64 // Average karma for the time span considered
+	Average Float64 // Average karma for the time span considered
 	Delta   int64   // Karma loss for the time span considered
 	Count   uint64  // Number of comments made by that user
 }
@@ -249,8 +285,10 @@ func (us *UserStats) FromDB(stmt *sqlite.Stmt) error {
 		return err
 	}
 
-	if us.Average, _, err = stmt.ColumnDouble(1); err != nil {
+	if average, _, err := stmt.ColumnDouble(1); err != nil {
 		return err
+	} else {
+		us.Average = Float64(average)
 	}
 
 	if us.Delta, _, err = stmt.ColumnInt64(2); err != nil {
@@ -273,7 +311,7 @@ func (usm UserStatsMap) DeltasToSummaries() StatsSummaries {
 }
 
 func (usm UserStatsMap) AveragesToSummaries() StatsSummaries {
-	return usm.toSummaries(func(us UserStats) int64 { return int64(math.Round(us.Average)) })
+	return usm.toSummaries(func(us UserStats) int64 { return us.Average.Round() })
 }
 
 func (usm UserStatsMap) toSummaries(summary func(UserStats) int64) StatsSummaries {
@@ -326,30 +364,44 @@ func (s StatsSummaries) Sort() StatsSummaries {
 }
 
 type CompendiumUserStats struct {
-	All             []CompendiumUserStatsDetailsPerSub
-	CommentsPerSub  map[string]Comment
-	Negative        []CompendiumUserStatsDetailsPerSub
-	Summary         CompendiumUserStatsDetails
-	SummaryNegative CompendiumUserStatsDetails
-	TopComments     []Comment
-	User            User
-	Version         SemVer
-}
-
-func NewCompendiumUserStats() CompendiumUserStats {
-	return CompendiumUserStats{CommentsPerSub: make(map[string]Comment)}
+	All                  []CompendiumUserStatsDetailsPerSub
+	CommentBodyConverter CommentBodyConverter
+	NbTop                uint
+	Negative             []CompendiumUserStatsDetailsPerSub
+	RawTopComments       []Comment
+	Summary              CompendiumUserStatsDetails
+	SummaryNegative      CompendiumUserStatsDetails
+	Timezone             *time.Location
+	User                 User
+	Version              SemVer
 }
 
 func (stats CompendiumUserStats) PercentageNegative() int64 {
 	return int64(math.Round(100 * float64(stats.SummaryNegative.Count) / float64(stats.Summary.Count)))
 }
 
+func (stats CompendiumUserStats) TopComments() []CommentView {
+	views := make([]CommentView, 0, len(stats.RawTopComments))
+	for i, comment := range stats.RawTopComments {
+		view := comment.ToView(uint(i+1), stats.Timezone, stats.CommentBodyConverter)
+		views = append(views, view)
+	}
+	return views
+}
+
+type Float64 float64
+
+func (f Float64) Round() int64 {
+	return int64(math.Round(float64(f)))
+}
+
 type CompendiumUserStatsDetails struct {
-	Average float64
+	Average Float64
 	Count   int64
 	First   time.Time
-	Latest  time.Time
 	Karma   int64
+	Latest  time.Time
+	Number  uint
 }
 
 func (detail *CompendiumUserStatsDetails) FromDB(stmt *sqlite.Stmt) error {
@@ -359,8 +411,10 @@ func (detail *CompendiumUserStatsDetails) FromDB(stmt *sqlite.Stmt) error {
 		return err
 	}
 
-	if detail.Average, _, err = stmt.ColumnDouble(1); err != nil {
+	if average, _, err := stmt.ColumnDouble(1); err != nil {
 		return err
+	} else {
+		detail.Average = Float64(average)
 	}
 
 	if detail.Karma, _, err = stmt.ColumnInt64(2); err != nil {
@@ -382,8 +436,8 @@ func (detail *CompendiumUserStatsDetails) FromDB(stmt *sqlite.Stmt) error {
 	return nil
 }
 
-func (detail CompendiumUserStatsDetails) KarmaPerComment() int64 {
-	return int64(math.Round(float64(detail.Karma) / float64(detail.Count)))
+func (detail CompendiumUserStatsDetails) KarmaPerComment() Float64 {
+	return Float64(float64(detail.Karma) / float64(detail.Count))
 }
 
 func (detail CompendiumUserStatsDetails) Interval() time.Duration {
