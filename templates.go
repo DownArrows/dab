@@ -127,8 +127,8 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	<ul>
 		<li><a href="/compendium/user/{{.User.Name}}#summary">Summary</a></li>
 		<li><a href="/compendium/user/{{.User.Name}}#top">Most downvoted</a></li>
-		<li><a href="/compendium/user/{{.User.Name}}#subs">Per sub</a></li>
 		<li><a href="/compendium/user/{{.User.Name}}#subs-negative">Negative per sub</a></li>
+		<li><a href="/compendium/user/{{.User.Name}}#subs">Per sub</a></li>
 	</ul>
 </nav>
 
@@ -207,31 +207,6 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 </section>
 
 <section>
-<h1 id="subs">Per sub</h1>
-<table class="subs">
-<tr><th>Rank</th>
-	<th>Sub</th>
-	<th>Count</th>
-	<th>Karma</th>
-	<th>Average</th>
-	<th>Last commented</th>
-</tr>
-{{range .All -}}
-<tr>
-	<td class="rank">{{.Number}}</td>
-	<td class="sub"><a href="https://www.reddit.com/r/{{.Sub}}/">{{.Sub}}</a></td>
-	<td class="count">{{.Count}}</td>
-	<td class="karma">{{.Karma}}</td>
-	<td class="average">{{.Average}}</td>
-	<td class="latest">{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
-</tr>
-{{end -}}
-</table>
-<p><em>NB: comments from after a sub has been quarantined aren't saved, but comments deleted by the user are kept.</em></p>
-<footer><a href="#title">back to top</a></footer>
-</section>
-
-<section>
 <h1 id="subs-negative">Negative per sub</h1>
 <table class="subs">
 <tr>
@@ -256,6 +231,32 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 <p><em>NB: comments from after a sub has been quarantined aren't saved, but comments deleted by the user are kept.</em></p>
 <footer><a href="#title">back to top</a></footer>
 </section>
+
+<section>
+<h1 id="subs">Per sub</h1>
+<table class="subs">
+<tr><th>Rank</th>
+	<th>Sub</th>
+	<th>Count</th>
+	<th>Karma</th>
+	<th>Average</th>
+	<th>Last commented</th>
+</tr>
+{{range .All -}}
+<tr>
+	<td class="rank">{{.Number}}</td>
+	<td class="sub"><a href="https://www.reddit.com/r/{{.Sub}}/">{{.Sub}}</a></td>
+	<td class="count">{{.Count}}</td>
+	<td class="karma">{{.Karma}}</td>
+	<td class="average">{{.Average}}</td>
+	<td class="latest">{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
+</tr>
+{{end -}}
+</table>
+<p><em>NB: comments from after a sub has been quarantined aren't saved, but comments deleted by the user are kept.</em></p>
+<footer><a href="#title">back to top</a></footer>
+</section>
+
 </main>
 </body>`))
 
