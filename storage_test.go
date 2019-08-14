@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -353,6 +354,63 @@ func TestCRUDComments(t *testing.T) {
 
 		if expected_total != total || expected_negative != negative {
 			t.Errorf("karma for %s should be %d/%d, not %d/%d", users[1].Name, expected_negative, expected_total, negative, total)
+		}
+	})
+
+	t.Run("single user's compendium data", func(t *testing.T) {
+		user := users[0]
+		nb_top := uint(1)
+
+		stats, err := s.CompendiumUserStats(ctx, nb_top, user)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expected_count := len(data[user])
+		if stats.Summary.Count != int64(expected_count) {
+			t.Errorf("compendium data for %s should have a count summary of %d instead of %d", user.Name, expected_count, stats.Summary.Count)
+		}
+
+		var expected_nb_all int
+		var expected_nb_negative int
+		for _, comment := range data[user] {
+			expected_nb_all++
+			if comment.Score < 0 {
+				expected_nb_negative++
+			}
+		}
+
+		if len(stats.Negative) != expected_nb_negative {
+			t.Errorf("compendium data for %s should have %d negative comments instead of %d", user.Name, expected_nb_negative, len(stats.Negative))
+		}
+
+		if len(stats.All) != expected_nb_all {
+			t.Errorf("compendium data for %s should have %d negative comments instead of %d", user.Name, expected_nb_all, len(stats.All))
+		}
+
+		top := make(map[string]Comment)
+		for _, comment := range data[user] {
+			sub := comment.Sub
+			if _, ok := top[sub]; !ok {
+				top[sub] = Comment{Score: math.MaxInt64}
+			}
+			if comment.Score < top[sub].Score {
+				top[comment.Sub] = comment
+			}
+		}
+
+		if len(stats.CommentsPerSub) != len(top) {
+			t.Fatalf("top comments by sub for %s should be %d instead of %d", user.Name, len(top), len(stats.CommentsPerSub))
+		}
+
+		for sub, comment := range stats.CommentsPerSub {
+			if comment != top[sub] {
+				t.Errorf("top comment for sub %s should be %+v instead of %+v", sub, top[sub], comment)
+			}
+		}
+
+		if uint(len(stats.TopComments)) != nb_top {
+			t.Fatalf("top comments for %s should be %d instead of %d", user.Name, len(top), len(stats.TopComments))
 		}
 	})
 

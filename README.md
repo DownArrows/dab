@@ -406,6 +406,6 @@ They communicate together through channels that are passed either via a closure 
 
  - better browsability of the web reports
  - compendium:
-   - per sub table: count, avgerage per comment, minimum score, last commented date
-   - header: weekly, monthly and yearly totals, top X comments
+	- index: SQL queries done
+	- user pages: do the view
  - replace blackfriday with snudown

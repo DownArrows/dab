@@ -42,6 +42,12 @@ type ReportFactoryStorage interface {
 	StatsBetween(context.Context, int64, time.Time, time.Time) (UserStatsMap, error)
 }
 
+type WebServerStorage interface {
+	BackupStorage
+	GetUser(context.Context, string) UserQuery
+	CompendiumUserStats(context.Context, uint, User) (CompendiumUserStats, error)
+}
+
 type BackupStorage interface {
 	Backup(context.Context) error
 	BackupPath() string
@@ -343,7 +349,7 @@ func (s *Storage) GetCommentsBelowBetween(ctx context.Context, score int64, sinc
 
 func (s *Storage) GetKarma(ctx context.Context, username string) (int64, int64, error) {
 	sql := `
-		SELECT SUM(score), SUM(CASE WHEN score < 0 THEN score ELSE 0 END)
+		SELECT SUM(score), SUM(CASE WHEN score < 0 THEN score ELSE NULL END)
 		FROM comments WHERE author = ? COLLATE NOCASE`
 	var total int64
 	var negative int64
@@ -388,5 +394,111 @@ func (s *Storage) StatsBetween(ctx context.Context, score int64, since, until ti
 	}
 
 	err := s.db.Select(ctx, sql, cb, since.Unix(), until.Unix(), score)
+	return stats, err
+}
+
+//func (s *Storage) CompendiumStats(ctx context.Context) (CompendiumStats, error) {
+//	// TODO data structures
+//	sql_all_per_user := `
+//		SELECT author, COUNT(id), AVG(score), SUM(score) AS karma
+//		FROM comments
+//		GROUP BY author
+//		ORDER BY karma ASC`
+//	sql_negative_per_user := `
+//		SELECT author, COUNT(id), AVG(score), SUM(score) AS karma
+//		FROM comments WHERE score < 0
+//		GROUP BY author
+//		ORDER BY karma ASC`
+//	sql_comment := "SELECT id, author, MIN(score), permalink, sub, created, body FROM comments"
+//}
+
+func (s *Storage) CompendiumUserStats(ctx context.Context, max_top uint, user User) (CompendiumUserStats, error) {
+	stats := NewCompendiumUserStats()
+	stats.User = user
+	stats.Version = Version
+
+	err := s.db.WithTx(ctx, func(conn *SQLiteConn) error {
+		var sql string
+		var cb func(stmt *sqlite.Stmt) error
+
+		// All per sub
+		sql = `
+		SELECT
+			COUNT(score), AVG(score), SUM(score) AS karma, MAX(created), MIN(created), sub
+		FROM comments WHERE author = ?
+		GROUP BY sub
+		ORDER BY karma ASC`
+		cb = func(stmt *sqlite.Stmt) error {
+			detail := &CompendiumUserStatsDetailsPerSub{}
+			if err := detail.FromDB(stmt); err != nil {
+				return err
+			}
+			stats.All = append(stats.All, *detail)
+			return nil
+		}
+		if err := conn.Select(sql, cb, user.Name); err != nil {
+			return err
+		}
+
+		// Negative per sub
+		sql = `
+		SELECT COUNT(score), AVG(score), SUM(score) AS karma, MAX(created), MIN(created), sub
+		FROM comments WHERE author = ? AND score < 0
+		GROUP BY sub
+		ORDER BY karma ASC`
+		cb = func(stmt *sqlite.Stmt) error {
+			detail := &CompendiumUserStatsDetailsPerSub{}
+			if err := detail.FromDB(stmt); err != nil {
+				return err
+			}
+			stats.Negative = append(stats.Negative, *detail)
+			return nil
+		}
+		if err := conn.Select(sql, cb, user.Name); err != nil {
+			return err
+		}
+
+		// Comments
+		sql = "SELECT * FROM comments WHERE author = ? ORDER BY score ASC LIMIT ?"
+		cb = func(stmt *sqlite.Stmt) error {
+			comment := &Comment{}
+			if err := comment.FromDB(stmt); err != nil {
+				return err
+			}
+			stats.TopComments = append(stats.TopComments, *comment)
+			return nil
+		}
+		if err := conn.Select(sql, cb, user.Name, int(max_top)); err != nil {
+			return err
+		}
+
+		// Comments per sub
+		sql = `
+		SELECT id, author, MIN(score), permalink, sub, created, body
+		FROM comments WHERE author = ?
+		GROUP BY sub`
+		cb = func(stmt *sqlite.Stmt) error {
+			comment := &Comment{}
+			if err := comment.FromDB(stmt); err != nil {
+				return err
+			}
+			stats.CommentsPerSub[comment.Sub] = *comment
+			return nil
+		}
+		if err := conn.Select(sql, cb, user.Name); err != nil {
+			return err
+		}
+
+		// Summary
+		sql = "SELECT COUNT(score), AVG(score), SUM(score), MAX(created), MIN(created) FROM comments WHERE author = ?"
+		if err := conn.Select(sql, (&stats.Summary).FromDB, user.Name); err != nil {
+			return err
+		}
+
+		// Summary negative
+		sql = "SELECT COUNT(score), AVG(score), SUM(score), MAX(created), MIN(created) FROM comments WHERE author = ? AND score < 0"
+		return conn.Select(sql, (&stats.SummaryNegative).FromDB, user.Name)
+	})
+
 	return stats, err
 }

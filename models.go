@@ -324,3 +324,82 @@ func (s StatsSummaries) Sort() StatsSummaries {
 	sort.Sort(s)
 	return s
 }
+
+type CompendiumUserStats struct {
+	All             []CompendiumUserStatsDetailsPerSub
+	CommentsPerSub  map[string]Comment
+	Negative        []CompendiumUserStatsDetailsPerSub
+	Summary         CompendiumUserStatsDetails
+	SummaryNegative CompendiumUserStatsDetails
+	TopComments     []Comment
+	User            User
+	Version         SemVer
+}
+
+func NewCompendiumUserStats() CompendiumUserStats {
+	return CompendiumUserStats{CommentsPerSub: make(map[string]Comment)}
+}
+
+func (stats CompendiumUserStats) PercentageNegative() int64 {
+	return int64(math.Round(100 * float64(stats.SummaryNegative.Count) / float64(stats.Summary.Count)))
+}
+
+type CompendiumUserStatsDetails struct {
+	Average float64
+	Count   int64
+	First   time.Time
+	Latest  time.Time
+	Karma   int64
+}
+
+func (detail *CompendiumUserStatsDetails) FromDB(stmt *sqlite.Stmt) error {
+	var err error
+
+	if detail.Count, _, err = stmt.ColumnInt64(0); err != nil {
+		return err
+	}
+
+	if detail.Average, _, err = stmt.ColumnDouble(1); err != nil {
+		return err
+	}
+
+	if detail.Karma, _, err = stmt.ColumnInt64(2); err != nil {
+		return err
+	}
+
+	if latest, _, err := stmt.ColumnInt64(3); err != nil {
+		return err
+	} else {
+		detail.Latest = time.Unix(latest, 0)
+	}
+
+	if first, _, err := stmt.ColumnInt64(4); err != nil {
+		return err
+	} else {
+		detail.First = time.Unix(first, 0)
+	}
+
+	return nil
+}
+
+func (detail CompendiumUserStatsDetails) KarmaPerComment() int64 {
+	return int64(math.Round(float64(detail.Karma) / float64(detail.Count)))
+}
+
+func (detail CompendiumUserStatsDetails) Interval() time.Duration {
+	return detail.First.Sub(detail.Latest)
+}
+
+type CompendiumUserStatsDetailsPerSub struct {
+	CompendiumUserStatsDetails
+	Sub string
+}
+
+func (detail *CompendiumUserStatsDetailsPerSub) FromDB(stmt *sqlite.Stmt) error {
+	if err := detail.CompendiumUserStatsDetails.FromDB(stmt); err != nil {
+		return err
+	}
+	sub, _, err := stmt.ColumnText(5)
+	detail.Sub = sub
+	return err
+}
