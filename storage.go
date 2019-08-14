@@ -357,7 +357,7 @@ func (s *Storage) GetCommentsBelowBetween(conn *SQLiteConn, score int64, since, 
 }
 
 func (s *Storage) UserTopComments(conn *SQLiteConn, username string, limit uint) ([]Comment, error) {
-	sql := "SELECT * FROM comments WHERE author = ? ORDER BY score ASC LIMIT ?"
+	sql := "SELECT * FROM comments WHERE author = ? AND score < 0 ORDER BY score ASC LIMIT ?"
 
 	var comments []Comment
 
