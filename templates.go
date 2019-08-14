@@ -228,6 +228,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 </tr>
 {{end -}}
 </table>
+<p><em>NB: comments from after a sub has been quarantined aren't saved, but comments deleted by the user are kept.</em></p>
 <footer><a href="#title">back to top</a></footer>
 </section>
 
@@ -253,6 +254,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 </tr>
 {{end -}}
 </table>
+<p><em>NB: comments from after a sub has been quarantined aren't saved, but comments deleted by the user are kept.</em></p>
 <footer><a href="#title">back to top</a></footer>
 </section>
 </main>
