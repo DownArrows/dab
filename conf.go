@@ -78,14 +78,19 @@ type WatchSubmissions struct {
 }
 
 type RedditUsersConf struct {
-	Compendium               CompendiumConf `json:"compendium"`
-	CompendiumUpdateInterval Duration       `json:"compendium_update_interval"` // Deprecated
-	UnsuspensionInterval     Duration       `json:"unsuspension_interval"`
+	Compendium               WatchCompendiumConf `json:"compendium"`
+	CompendiumUpdateInterval Duration            `json:"compendium_update_interval"` // Deprecated
+	UnsuspensionInterval     Duration            `json:"unsuspension_interval"`
+}
+
+type WatchCompendiumConf struct {
+	Sub            string   `json:"sub"`             // Deprecated
+	UpdateInterval Duration `json:"update_interval"` // Deprecated
 }
 
 type CompendiumConf struct {
-	Sub            string   `json:"sub"`             // Deprecated
-	UpdateInterval Duration `json:"update_interval"` // Deprecated
+	NbTop    uint     `json:"nb_top"`
+	Timezone Timezone `json:"-"`
 }
 
 type ReportConf struct {
@@ -131,7 +136,8 @@ type Configuration struct {
 		WatchSubmissions []WatchSubmissions `json:"watch_submissions"` // Deprecated
 	}
 
-	Report ReportConf
+	Compendium CompendiumConf `json:"-"`
+	Report     ReportConf
 
 	Discord struct {
 		DiscordBotConf
@@ -162,7 +168,11 @@ func NewConfiguration(path string) (Configuration, error) {
 	}
 
 	conf.Report.Timezone = conf.Timezone
+	conf.Compendium.Timezone = conf.Timezone
 	conf.Discord.Timezone = conf.Timezone
+
+	conf.Compendium.NbTop = conf.Report.NbTop
+
 	conf.Reddit.RedditScannerConf.HighScoreThreshold = conf.Discord.HighScoreThreshold
 	if conf.Discord.DiscordBotConf.HidePrefix == "" {
 		conf.Discord.DiscordBotConf.HidePrefix = conf.HidePrefix
@@ -218,7 +228,7 @@ func (conf Configuration) Deprecations() []string {
 		msgs = append(msgs, "reddit.compendium_update_interval is deprecated")
 	}
 
-	empty_compendium_conf := CompendiumConf{}
+	empty_compendium_conf := WatchCompendiumConf{}
 	if conf.Reddit.Compendium != empty_compendium_conf {
 		msgs = append(msgs, "reddit.compendium is deprecated")
 	}

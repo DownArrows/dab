@@ -356,42 +356,6 @@ func TestCRUDComments(t *testing.T) {
 		}
 	})
 
-	t.Run("single user's compendium data", func(t *testing.T) {
-		user := users[0]
-		nb_top := uint(1)
-
-		stats, err := s.CompendiumUserStats(ctx, nb_top, user)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		expected_count := len(data[user])
-		if stats.Summary.Count != int64(expected_count) {
-			t.Errorf("compendium data for %s should have a count summary of %d instead of %d", user.Name, expected_count, stats.Summary.Count)
-		}
-
-		var expected_nb_all int
-		var expected_nb_negative int
-		for _, comment := range data[user] {
-			expected_nb_all++
-			if comment.Score < 0 {
-				expected_nb_negative++
-			}
-		}
-
-		if len(stats.Negative) != expected_nb_negative {
-			t.Errorf("compendium data for %s should have %d negative comments instead of %d", user.Name, expected_nb_negative, len(stats.Negative))
-		}
-
-		if len(stats.All) != expected_nb_all {
-			t.Errorf("compendium data for %s should have %d negative comments instead of %d", user.Name, expected_nb_all, len(stats.All))
-		}
-
-		if uint(len(stats.TopComments())) != nb_top {
-			t.Fatalf("top comments for %s should be %d instead of %d", user.Name, nb_top, len(stats.TopComments()))
-		}
-	})
-
 	// Leave that test case at the end so as not to complicate the previous ones.
 	t.Run("purge", func(t *testing.T) {
 		err := s.PurgeUser(ctx, users[0].Name)

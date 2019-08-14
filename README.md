@@ -235,6 +235,7 @@ and <http://golang.localhost/pkg/text/template/>.
     - `leeway` *duration* (12h): shift back the time window for comments' inclusion in the report
       to include those that were made late; cannot be negative
     - `nb_top` *int* (5): maximum number of users to include in the list of statistics for the report
+      (also used for the top in the compendium)
  - `web`
     - `listen` *string* (*none*): `hostname:port` or `ip:port` or `:port` (all interfaces)
       specification for the webserver to listen to; leave out to disable
@@ -407,4 +408,5 @@ They communicate together through channels that are passed either via a closure 
  - better browsability of the web reports
  - compendium:
 	- index: SQL queries done
+	- user page: tests
  - replace blackfriday with snudown

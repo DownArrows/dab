@@ -100,9 +100,7 @@ func (c Comment) ToView(n uint, timezone *time.Location, cbc CommentBodyConverte
 		BodyConverter: cbc,
 	}
 	view.Comment = c
-	if timezone != nil {
-		view.Created = view.Created.In(timezone)
-	}
+	view.Created = view.Created.In(timezone)
 	return view
 }
 
@@ -168,6 +166,13 @@ func (u User) InitializationQueries() []SQLQuery {
 func (u User) ToDB() []interface{} {
 	return []interface{}{u.Name, u.Created.Unix(), u.NotFound, u.Suspended, u.Added.Unix(),
 		int(u.BatchSize), u.Hidden, u.Inactive, u.LastScan.Unix(), u.New, u.Position}
+}
+
+func (u User) InTimezone(timezone *time.Location) User {
+	u.Created = u.Created.In(timezone)
+	u.Added = u.Added.In(timezone)
+	u.LastScan = u.LastScan.In(timezone)
+	return u
 }
 
 func (u *User) FromDB(stmt *sqlite.Stmt) error {
@@ -273,7 +278,7 @@ func (uq UserQuery) String() string {
 
 type UserStats struct {
 	Name    string  // User name
-	Average Float64 // Average karma for the time span considered
+	Average float64 // Average karma for the time span considered
 	Delta   int64   // Karma loss for the time span considered
 	Count   uint64  // Number of comments made by that user
 }
@@ -285,10 +290,8 @@ func (us *UserStats) FromDB(stmt *sqlite.Stmt) error {
 		return err
 	}
 
-	if average, _, err := stmt.ColumnDouble(1); err != nil {
+	if us.Average, _, err = stmt.ColumnDouble(1); err != nil {
 		return err
-	} else {
-		us.Average = Float64(average)
 	}
 
 	if us.Delta, _, err = stmt.ColumnInt64(2); err != nil {
@@ -311,7 +314,7 @@ func (usm UserStatsMap) DeltasToSummaries() StatsSummaries {
 }
 
 func (usm UserStatsMap) AveragesToSummaries() StatsSummaries {
-	return usm.toSummaries(func(us UserStats) int64 { return us.Average.Round() })
+	return usm.toSummaries(func(us UserStats) int64 { return int64(math.Round(us.Average)) })
 }
 
 func (usm UserStatsMap) toSummaries(summary func(UserStats) int64) StatsSummaries {
@@ -364,23 +367,27 @@ func (s StatsSummaries) Sort() StatsSummaries {
 }
 
 type CompendiumUserStats struct {
-	All                  []CompendiumUserStatsDetailsPerSub
+	All                  []*CompendiumUserStatsDetailsPerSub
 	CommentBodyConverter CommentBodyConverter
 	NbTop                uint
-	Negative             []CompendiumUserStatsDetailsPerSub
+	Negative             []*CompendiumUserStatsDetailsPerSub
 	RawTopComments       []Comment
-	Summary              CompendiumUserStatsDetails
-	SummaryNegative      CompendiumUserStatsDetails
+	Summary              *CompendiumUserStatsDetails
+	SummaryNegative      *CompendiumUserStatsDetails
 	Timezone             *time.Location
 	User                 User
 	Version              SemVer
 }
 
-func (stats CompendiumUserStats) PercentageNegative() int64 {
+func (stats *CompendiumUserStats) PercentageNegative() int64 {
 	return int64(math.Round(100 * float64(stats.SummaryNegative.Count) / float64(stats.Summary.Count)))
 }
 
-func (stats CompendiumUserStats) TopComments() []CommentView {
+func (stats *CompendiumUserStats) NbTopComments() int {
+	return len(stats.RawTopComments)
+}
+
+func (stats *CompendiumUserStats) TopComments() []CommentView {
 	views := make([]CommentView, 0, len(stats.RawTopComments))
 	for i, comment := range stats.RawTopComments {
 		view := comment.ToView(uint(i+1), stats.Timezone, stats.CommentBodyConverter)
@@ -389,14 +396,8 @@ func (stats CompendiumUserStats) TopComments() []CommentView {
 	return views
 }
 
-type Float64 float64
-
-func (f Float64) Round() int64 {
-	return int64(math.Round(float64(f)))
-}
-
 type CompendiumUserStatsDetails struct {
-	Average Float64
+	Average float64
 	Count   int64
 	First   time.Time
 	Karma   int64
@@ -404,44 +405,42 @@ type CompendiumUserStatsDetails struct {
 	Number  uint
 }
 
-func (detail *CompendiumUserStatsDetails) FromDB(stmt *sqlite.Stmt) error {
+func (details *CompendiumUserStatsDetails) FromDB(stmt *sqlite.Stmt) error {
 	var err error
 
-	if detail.Count, _, err = stmt.ColumnInt64(0); err != nil {
+	if details.Count, _, err = stmt.ColumnInt64(0); err != nil {
 		return err
 	}
 
-	if average, _, err := stmt.ColumnDouble(1); err != nil {
+	if details.Average, _, err = stmt.ColumnDouble(1); err != nil {
 		return err
-	} else {
-		detail.Average = Float64(average)
 	}
 
-	if detail.Karma, _, err = stmt.ColumnInt64(2); err != nil {
+	if details.Karma, _, err = stmt.ColumnInt64(2); err != nil {
 		return err
 	}
 
 	if latest, _, err := stmt.ColumnInt64(3); err != nil {
 		return err
 	} else {
-		detail.Latest = time.Unix(latest, 0)
+		details.Latest = time.Unix(latest, 0)
 	}
 
 	if first, _, err := stmt.ColumnInt64(4); err != nil {
 		return err
 	} else {
-		detail.First = time.Unix(first, 0)
+		details.First = time.Unix(first, 0)
 	}
 
 	return nil
 }
 
-func (detail CompendiumUserStatsDetails) KarmaPerComment() Float64 {
-	return Float64(float64(detail.Karma) / float64(detail.Count))
+func (details *CompendiumUserStatsDetails) KarmaPerComment() float64 {
+	return float64(math.Round(float64(details.Karma) / float64(details.Count)))
 }
 
-func (detail CompendiumUserStatsDetails) Interval() time.Duration {
-	return detail.First.Sub(detail.Latest)
+func (details *CompendiumUserStatsDetails) Interval() time.Duration {
+	return details.First.Sub(details.Latest)
 }
 
 type CompendiumUserStatsDetailsPerSub struct {
@@ -449,11 +448,11 @@ type CompendiumUserStatsDetailsPerSub struct {
 	Sub string
 }
 
-func (detail *CompendiumUserStatsDetailsPerSub) FromDB(stmt *sqlite.Stmt) error {
-	if err := detail.CompendiumUserStatsDetails.FromDB(stmt); err != nil {
+func (details *CompendiumUserStatsDetailsPerSub) FromDB(stmt *sqlite.Stmt) error {
+	if err := details.CompendiumUserStatsDetails.FromDB(stmt); err != nil {
 		return err
 	}
 	sub, _, err := stmt.ColumnText(5)
-	detail.Sub = sub
+	details.Sub = sub
 	return err
 }

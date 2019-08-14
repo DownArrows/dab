@@ -95,21 +95,23 @@ func immutableCache(handler func(http.ResponseWriter, *http.Request)) func(http.
 
 // Component
 type WebServer struct {
-	storage         WebServerStorage
+	compendium      Compendium
 	done            chan error
 	markdownOptions blackfriday.Option
 	reports         ReportFactory
 	server          *http.Server
+	storage         WebServerStorage
 }
 
-func NewWebServer(conf WebConf, reports ReportFactory, storage WebServerStorage) *WebServer {
+func NewWebServer(conf WebConf, storage WebServerStorage, reports ReportFactory, compendium Compendium) *WebServer {
 	md_exts := blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis
 
 	wsrv := &WebServer{
-		reports:         reports,
-		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(md_exts)),
-		storage:         storage,
+		compendium:      compendium,
 		done:            make(chan error),
+		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(md_exts)),
+		reports:         reports,
+		storage:         storage,
 	}
 
 	mux := NewServeMux()
@@ -245,12 +247,11 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats, err := wsrv.storage.CompendiumUserStats(r.Context(), wsrv.reports.NbTop, query.User)
+	stats, err := wsrv.compendium.UserStats(r.Context(), query.User)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stats.Timezone = wsrv.reports.Timezone
 
 	stats.CommentBodyConverter = func(src CommentView) (interface{}, error) {
 		html := blackfriday.Run([]byte(src.Body), wsrv.markdownOptions)

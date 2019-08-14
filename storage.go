@@ -45,7 +45,15 @@ type ReportFactoryStorage interface {
 type WebServerStorage interface {
 	BackupStorage
 	GetUser(context.Context, string) UserQuery
-	CompendiumUserStats(context.Context, uint, User) (CompendiumUserStats, error)
+}
+
+type CompendiumStorage interface {
+	CompendiumUserStatsPerSub(*SQLiteConn, string) ([]*CompendiumUserStatsDetailsPerSub, error)
+	CompendiumUserStatsPerSubNegative(*SQLiteConn, string) ([]*CompendiumUserStatsDetailsPerSub, error)
+	CompendiumUserStatsSummary(*SQLiteConn, string) (*CompendiumUserStatsDetails, error)
+	CompendiumUserStatsSummaryNegative(*SQLiteConn, string) (*CompendiumUserStatsDetails, error)
+	UserTopComments(*SQLiteConn, string, uint) ([]Comment, error)
+	WithTx(context.Context, func(*SQLiteConn) error) error
 }
 
 type BackupStorage interface {
@@ -106,6 +114,10 @@ func (s *Storage) initTables(ctx context.Context) error {
 
 func (s *Storage) KV() *KeyValueStore {
 	return s.kv
+}
+
+func (s *Storage) WithTx(ctx context.Context, cb func(*SQLiteConn) error) error {
+	return s.db.WithTx(ctx, cb)
 }
 
 /***********
@@ -343,6 +355,25 @@ func (s *Storage) GetCommentsBelowBetween(ctx context.Context, score int64, sinc
 	return comments, err
 }
 
+func (s *Storage) UserTopComments(conn *SQLiteConn, username string, limit uint) ([]Comment, error) {
+	sql := "SELECT * FROM comments WHERE author = ? ORDER BY score ASC LIMIT ?"
+
+	var comments []Comment
+
+	cb := func(stmt *sqlite.Stmt) error {
+		comment := &Comment{}
+		if err := comment.FromDB(stmt); err != nil {
+			return err
+		}
+		comments = append(comments, *comment)
+		return nil
+	}
+
+	err := conn.Select(sql, cb, username, int(limit))
+
+	return comments, err
+}
+
 /**********
  Statistics
 ***********/
@@ -412,85 +443,64 @@ func (s *Storage) StatsBetween(ctx context.Context, score int64, since, until ti
 //	sql_comment := "SELECT id, author, MIN(score), permalink, sub, created, body FROM comments"
 //}
 
-func (s *Storage) CompendiumUserStats(ctx context.Context, max_top uint, user User) (CompendiumUserStats, error) {
-	stats := CompendiumUserStats{
-		NbTop:   max_top,
-		User:    user,
-		Version: Version,
-	}
-
-	err := s.db.WithTx(ctx, func(conn *SQLiteConn) error {
-		var sql string
-		var count uint
-		var cb func(stmt *sqlite.Stmt) error
-
-		// All per sub
-		sql = `
+func (s *Storage) CompendiumUserStatsPerSub(conn *SQLiteConn, username string) ([]*CompendiumUserStatsDetailsPerSub, error) {
+	sql := `
 		SELECT
 			COUNT(score), AVG(score), SUM(score) AS karma, MAX(created), MIN(created), sub
 		FROM comments WHERE author = ?
 		GROUP BY sub
 		ORDER BY karma ASC`
-		count = 1
-		cb = func(stmt *sqlite.Stmt) error {
-			detail := &CompendiumUserStatsDetailsPerSub{}
-			detail.Number = count
-			count += 1
-			if err := detail.FromDB(stmt); err != nil {
-				return err
-			}
-			stats.All = append(stats.All, *detail)
-			return nil
-		}
-		if err := conn.Select(sql, cb, user.Name); err != nil {
+
+	var stats []*CompendiumUserStatsDetailsPerSub
+
+	cb := func(stmt *sqlite.Stmt) error {
+		detail := &CompendiumUserStatsDetailsPerSub{}
+		if err := detail.FromDB(stmt); err != nil {
 			return err
 		}
+		stats = append(stats, detail)
+		return nil
+	}
 
-		// Negative per sub
-		sql = `
-		SELECT COUNT(score), AVG(score), SUM(score) AS karma, MAX(created), MIN(created), sub
+	err := conn.Select(sql, cb, username)
+
+	return stats, err
+}
+
+func (s *Storage) CompendiumUserStatsPerSubNegative(conn *SQLiteConn, username string) ([]*CompendiumUserStatsDetailsPerSub, error) {
+	sql := `
+		SELECT
+			COUNT(score), AVG(score), SUM(score) AS karma, MAX(created), MIN(created), sub
 		FROM comments WHERE author = ? AND score < 0
 		GROUP BY sub
 		ORDER BY karma ASC`
-		count = 1
-		cb = func(stmt *sqlite.Stmt) error {
-			detail := &CompendiumUserStatsDetailsPerSub{}
-			detail.Number = count
-			count += 1
-			if err := detail.FromDB(stmt); err != nil {
-				return err
-			}
-			stats.Negative = append(stats.Negative, *detail)
-			return nil
-		}
-		if err := conn.Select(sql, cb, user.Name); err != nil {
+
+	var stats []*CompendiumUserStatsDetailsPerSub
+
+	cb := func(stmt *sqlite.Stmt) error {
+		detail := &CompendiumUserStatsDetailsPerSub{}
+		if err := detail.FromDB(stmt); err != nil {
 			return err
 		}
+		stats = append(stats, detail)
+		return nil
+	}
 
-		// Comments
-		sql = "SELECT * FROM comments WHERE author = ? ORDER BY score ASC LIMIT ?"
-		cb = func(stmt *sqlite.Stmt) error {
-			comment := &Comment{}
-			if err := comment.FromDB(stmt); err != nil {
-				return err
-			}
-			stats.RawTopComments = append(stats.RawTopComments, *comment)
-			return nil
-		}
-		if err := conn.Select(sql, cb, user.Name, int(max_top)); err != nil {
-			return err
-		}
+	err := conn.Select(sql, cb, username)
 
-		// Summary
-		sql = "SELECT COUNT(score), AVG(score), SUM(score), MAX(created), MIN(created) FROM comments WHERE author = ?"
-		if err := conn.Select(sql, (&stats.Summary).FromDB, user.Name); err != nil {
-			return err
-		}
+	return stats, err
+}
 
-		// Summary negative
-		sql = "SELECT COUNT(score), AVG(score), SUM(score), MAX(created), MIN(created) FROM comments WHERE author = ? AND score < 0"
-		return conn.Select(sql, (&stats.SummaryNegative).FromDB, user.Name)
-	})
+func (s *Storage) CompendiumUserStatsSummary(conn *SQLiteConn, username string) (*CompendiumUserStatsDetails, error) {
+	sql := "SELECT COUNT(score), AVG(score), SUM(score), MAX(created), MIN(created) FROM comments WHERE author = ?"
+	stats := &CompendiumUserStatsDetails{}
+	err := conn.Select(sql, stats.FromDB, username)
+	return stats, err
+}
 
+func (s *Storage) CompendiumUserStatsSummaryNegative(conn *SQLiteConn, username string) (*CompendiumUserStatsDetails, error) {
+	sql := "SELECT COUNT(score), AVG(score), SUM(score), MAX(created), MIN(created) FROM comments WHERE author = ? AND score < 0"
+	stats := &CompendiumUserStatsDetails{}
+	err := conn.Select(sql, stats.FromDB, username)
 	return stats, err
 }

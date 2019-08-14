@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"math"
 	"time"
 )
 
@@ -132,7 +133,7 @@ func (r Report) Comments() []ReportComment {
 func (r Report) Comment(i int) ReportComment {
 	comment := r.RawComments[i]
 	stats := r.Stats[comment.Author]
-	rc := ReportComment{Average: stats.Average}
+	rc := ReportComment{Average: int64(math.Round(stats.Average))}
 	rc.CommentView = comment.ToView(uint(i+1), r.Timezone, r.CommentBodyConverter)
 	return rc
 }
@@ -152,5 +153,5 @@ type ReportHead struct {
 
 type ReportComment struct {
 	CommentView
-	Average Float64 // Average karma for that user
+	Average int64 // Average karma for that user
 }

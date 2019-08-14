@@ -34,8 +34,9 @@ type DownArrowsBot struct {
 	conf Configuration
 
 	layers struct {
-		Storage *Storage
-		Report  ReportFactory
+		Storage    *Storage
+		Report     ReportFactory
+		Compendium Compendium
 		// RedditAPI is also a layer but is passed around as an argument instead
 	}
 
@@ -110,12 +111,14 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return dab.userAdd(ctx)
 	}
 
+	dab.layers.Compendium = NewCompendium(dab.layers.Storage, dab.conf.Compendium)
+
 	tasks := NewTaskGroup(ctx)
 
 	dab.logger.Info(dab.components.ConfState)
 
 	if dab.components.ConfState.Web.Enabled {
-		dab.components.Web = NewWebServer(dab.conf.Web, dab.layers.Report, dab.layers.Storage)
+		dab.components.Web = NewWebServer(dab.conf.Web, dab.layers.Storage, dab.layers.Report, dab.layers.Compendium)
 		tasks.SpawnCtx(dab.components.Web.Run)
 	}
 

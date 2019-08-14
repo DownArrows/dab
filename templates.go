@@ -27,7 +27,7 @@ by [/u/{{.Name}}](https://www.reddit.com/user/{{.Name}})
 {{range .Comments -}}
 # \#{{.Number}}
 
-Author: [/u/{{.Author}}](https://www.reddit.com/user/{{.Author}}) ({{.Average.Round}} week average)
+Author: [/u/{{.Author}}](https://www.reddit.com/user/{{.Author}}) ({{.Average}} week average)
 
 Date: {{.Created.Format "Monday 02 January 15:04 MST"}}
 
@@ -85,7 +85,7 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 	<table>
 	<tr>
 		<td>Author</td>
-		<td><a href="https://www.reddit.com/user/{{.Author}}">/u/{{.Author}}</a> ({{.Average.Round}} week average)</td>
+		<td><a href="https://www.reddit.com/user/{{.Author}}">/u/{{.Author}}</a> ({{.Average}} week average)</td>
 	</tr>
 	<tr>
 		<td>Date</td>
@@ -138,23 +138,27 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	<table>
 		<tr>
 			<td>Account created<td>
-			<td>{{.User.Created.Format "02 January 2006 15:04 MST"}}<td>
+			<td>{{.User.Created.Format "Monday 02 January 2006 15:04 MST"}}<td>
 		</tr>
 		<tr>
 			<td>Tracked since<td>
-			<td>{{.User.Added.Format "02 January 2006 15:04 MST"}}<td>
+			<td>{{.User.Added.Format "Monday 02 January 2006 15:04 MST"}}<td>
 		</tr>
 		<tr>
 			<td>Last scanned<td>
-			<td>{{.User.LastScan.Format "02 January 2006 15:04 MST"}}<td>
+			<td>{{.User.LastScan.Format "Monday 02 January 2006 15:04 MST"}}<td>
 		</tr>
 		<tr>
 			<td>Number of comments<td>
 			<td><strong>{{.Summary.Count}}</strong>, with <strong>{{.SummaryNegative.Count}}</strong> negative (<strong>{{.PercentageNegative}}%</strong>)<td>
 		</tr>
 		<tr>
+			<td>Total karma<td>
+			<td><strong>{{.Summary.Karma}}</strong>, and <strong>{{.SummaryNegative.Karma}}</strong> if negative only<td>
+		</tr>
+		<tr>
 			<td>Average per comment<td>
-			<td><strong>{{.Summary.KarmaPerComment.Round}}</strong>, and <strong>{{.SummaryNegative.KarmaPerComment.Round}}</strong> if negative only<td>
+			<td><strong>{{.Summary.KarmaPerComment}}</strong>, and <strong>{{.SummaryNegative.KarmaPerComment}}</strong> if negative only<td>
 		</tr>
 	</table>
 </article>
@@ -164,8 +168,8 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 
 <section>
 <h1 id="top">Most downvoted</h1>
-{{if (.RawTopComments | len) gt 1}}
-<p>First {{.RawTopComments | len}} comments.</p>
+{{if (.NbTopComments) gt 1}}
+<p>First {{.NbTopComments}} comments.</p>
 {{end}}
 {{range .TopComments}}
 <article class="comment">
@@ -214,7 +218,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	<td><a href="https://www.reddit.com/r/{{.Sub}}/">{{.Sub}}</a></td>
 	<td>{{.Count}}</td>
 	<td>{{.Karma}}</td>
-	<td>{{.Average.Round}}</td>
+	<td>{{.Average}}</td>
 	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
 </tr>
 {{end}}
@@ -239,7 +243,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	<td><a href="https://www.reddit.com/r/{{.Sub}}/">{{.Sub}}</a></td>
 	<td>{{.Count}}</td>
 	<td>{{.Karma}}</td>
-	<td>{{.Average.Round}}</td>
+	<td>{{.Average}}</td>
 	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
 </tr>
 {{end}}
