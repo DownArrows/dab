@@ -121,6 +121,15 @@ func (s *Storage) WithTx(ctx context.Context, cb func(*SQLiteConn) error) error 
 	return s.db.WithTx(ctx, cb)
 }
 
+func (s *Storage) WithConn(ctx context.Context, cb func(*SQLiteConn) error) error {
+	conn, err := s.db.GetConn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	return cb(conn)
+}
+
 /***********
 Maintenance
 ***********/
@@ -152,7 +161,7 @@ func (s *Storage) Backup(ctx context.Context) error {
 }
 
 /*****
- Users
+Users
 ******/
 
 // Read
@@ -169,20 +178,34 @@ func (s *Storage) GetUser(ctx context.Context, username string) UserQuery {
 }
 
 func (s *Storage) ListUsers(ctx context.Context) ([]User, error) {
-	return s.anyListUsers(ctx, "SELECT * FROM users WHERE suspended IS FALSE AND not_found IS FALSE ORDER BY last_scan")
+	return s.usersCtx(ctx, "SELECT * FROM users WHERE suspended IS FALSE AND not_found IS FALSE ORDER BY last_scan")
 }
 
 func (s *Storage) ListSuspendedAndNotFound(ctx context.Context) ([]User, error) {
-	return s.anyListUsers(ctx, "SELECT * FROM users WHERE suspended IS TRUE OR not_found IS TRUE ORDER BY last_scan")
+	return s.usersCtx(ctx, "SELECT * FROM users WHERE suspended IS TRUE OR not_found IS TRUE ORDER BY last_scan")
 }
 
 func (s *Storage) ListActiveUsers(ctx context.Context) ([]User, error) {
-	return s.anyListUsers(ctx, "SELECT * FROM users WHERE inactive IS FALSE AND suspended IS FALSE AND not_found IS FALSE ORDER BY last_scan")
+	return s.usersCtx(ctx, "SELECT * FROM users WHERE inactive IS FALSE AND suspended IS FALSE AND not_found IS FALSE ORDER BY last_scan")
 }
 
-func (s *Storage) anyListUsers(ctx context.Context, sql string) ([]User, error) {
+func (s *Storage) ListRegisteredUsers(conn *SQLiteConn) ([]User, error) {
+	return s.users(conn, "SELECT * FROM users ORDER BY last_scan")
+}
+
+func (s *Storage) usersCtx(ctx context.Context, sql string) ([]User, error) {
 	var users []User
-	err := s.db.Select(ctx, sql, func(stmt *sqlite.Stmt) error {
+	var err error
+	err = s.WithConn(ctx, func(conn *SQLiteConn) error {
+		users, err = s.users(conn, sql)
+		return err
+	})
+	return users, err
+}
+
+func (s *Storage) users(conn *SQLiteConn, sql string) ([]User, error) {
+	var users []User
+	err := conn.Select(sql, func(stmt *sqlite.Stmt) error {
 		user := &User{}
 		if err := user.FromDB(stmt); err != nil {
 			return err
@@ -243,18 +266,15 @@ func (s *Storage) PurgeUser(ctx context.Context, username string) error {
 }
 
 func (s *Storage) simpleEditUser(ctx context.Context, sql, username string) error {
-	conn, err := s.db.GetConn(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	if err := conn.Exec(sql, username); err != nil {
-		return err
-	}
-	if conn.TotalChanges() == 0 {
-		return fmt.Errorf("no user named %q", username)
-	}
-	return nil
+	return s.WithConn(ctx, func(conn *SQLiteConn) error {
+		if err := conn.Exec(sql, username); err != nil {
+			return err
+		}
+		if conn.TotalChanges() == 0 {
+			return fmt.Errorf("no user named %q", username)
+		}
+		return nil
+	})
 }
 
 /********
@@ -422,22 +442,19 @@ func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.
 	return stats, err
 }
 
-//func (s *Storage) CompendiumSummary(conn *SQLiteConn, username string) (CompendiumDetailsTagged, error) {
-//	// TODO last scan, number of users, number who have posted in the last X hours
-//}
-//
-//func (s *Storage) CompendiumPerUser(conn *SQLiteConn, username string) (CompendiumDetailsTagged, error) {
+//func (s *Storage) CompendiumPerUser(conn *SQLiteConn, username string) ([]*CompendiumDetailsTagged, error) {
 //	return s.compendiumDetailsTagged(conn, `
-//		SELECT COUNT(id), AVG(score), SUM(score) AS karma, author
+//		SELECT COUNT(id), AVG(score), SUM(score) AS karma, MAX(created), author
 //		FROM comments
 //		GROUP BY author
 //		ORDER BY karma ASC`)
 //}
 //
-//func (s *Storage) CompendiumPerUserNegative(conn *SQLiteConn, username string) (CompendiumDetailsTagged, error) {
+//func (s *Storage) CompendiumPerUserNegative(conn *SQLiteConn, username string) ([]*CompendiumDetailsTagged, error) {
 //	return s.compendiumDetailsTagged(conn, `
-//		SELECT author, COUNT(id), AVG(score), SUM(score) AS karma, author
-//		FROM comments WHERE score < 0
+//		SELECT COUNT(id), AVG(score), SUM(score) AS karma, MAX(created), author
+//		FROM comments
+//		WHERE score < 0
 //		GROUP BY author
 //		ORDER BY karma ASC`)
 //}
