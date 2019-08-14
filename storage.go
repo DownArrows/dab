@@ -429,19 +429,28 @@ func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.
 	return stats, err
 }
 
-//func (s *Storage) CompendiumStats(ctx context.Context) (CompendiumStats, error) {
-//	// TODO data structures
-//	sql_all_per_user := `
-//		SELECT author, COUNT(id), AVG(score), SUM(score) AS karma
+//func (s *Storage) CompendiumStatsSummary(conn *SQLiteConn, username string) (CompendiumStats, error) {
+//	// TODO last scan, number of users, number who have posted in the last X hours
+//}
+//
+//func (s *Storage) CompendiumStatsPerUser(conn *SQLiteConn, username string) (CompendiumStats, error) {
+//	sql := `
+//		SELECT COUNT(id), AVG(score), SUM(score) AS karma, author
 //		FROM comments
 //		GROUP BY author
 //		ORDER BY karma ASC`
-//	sql_negative_per_user := `
+//}
+//
+//func (s *Storage) CompendiumStatsPerUserNegative(conn *SQLiteConn, username string) (CompendiumStats, error) {
+//	sql := `
 //		SELECT author, COUNT(id), AVG(score), SUM(score) AS karma
 //		FROM comments WHERE score < 0
 //		GROUP BY author
 //		ORDER BY karma ASC`
-//	sql_comment := "SELECT id, author, MIN(score), permalink, sub, created, body FROM comments"
+//}
+//
+//func (s *Storage) CompendiumStatsTopComments(conn *SQLiteConn, limit uint) (CompendiumStats, error) {
+//	sql := "SELECT * FROM comments WHERE score < 0 ORDER BY score ASC LIMIT ?"
 //}
 
 func (s *Storage) CompendiumUserStatsPerSub(conn *SQLiteConn, username string) ([]*CompendiumUserStatsDetailsPerSub, error) {
