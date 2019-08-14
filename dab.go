@@ -243,14 +243,20 @@ func (dab *DownArrowsBot) userAdd(ctx context.Context) error {
 		return err
 	}
 
+	if err := ra.Connect(ctx); err != nil {
+		return err
+	}
+
 	ru := NewRedditUsers(dab.logger, dab.layers.Storage, ra, dab.conf.Reddit.RedditUsersConf)
 
 	usernames := dab.flagSet.Args()
 	for _, username := range usernames {
 		hidden := strings.HasPrefix(username, dab.conf.HidePrefix)
 		username = strings.TrimPrefix(username, dab.conf.HidePrefix)
-		if res := ru.AddUser(ctx, username, hidden, true); res.Error != nil && !res.Exists {
-			return res.Error
+		if res := ru.AddUser(ctx, username, hidden, true); res.Error != nil {
+			dab.logger.Errorf("error when trying to register %q: %v", username, res.Error)
+		} else if !res.Exists {
+			dab.logger.Errorf("reddit user %q doesn't exist", username)
 		}
 	}
 	return nil

@@ -65,18 +65,13 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 	if query.Error != nil {
 		return query
 	} else if query.Exists {
-		template := "%q already exists"
-		ru.logger.Errorf(template, username)
-		query.Error = fmt.Errorf(template, username)
+		query.Error = fmt.Errorf("%q already exists", username)
+		ru.logger.Error(query.Error)
 		return query
 	}
 
 	query = ru.api.AboutUser(ctx, username)
-	if query.Error != nil {
-		return query
-	}
-
-	if !query.Exists {
+	if query.Error != nil || !query.Exists {
 		return query
 	}
 
@@ -89,6 +84,12 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 
 	if err := ru.storage.AddUser(ctx, query.User.Name, hidden, query.User.Created); err != nil {
 		query.Error = err
+	}
+
+	if query.User.Suspended {
+		if err := ru.storage.SuspendUser(ctx, query.User.Name); err != nil {
+			query.Error = err
+		}
 	}
 
 	return query

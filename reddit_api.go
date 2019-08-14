@@ -252,7 +252,7 @@ func (ra *RedditAPI) getListing(ctx context.Context, path, position string, nb u
 		return nil, position, res.Status, res.Error
 	}
 
-	if strings.HasPrefix(path, "/u/") && (res.Status == 403 || res.Status == 404) {
+	if (res.Status == 403 || res.Status == 404) && strings.HasPrefix(path, "/u/") {
 		return nil, position, res.Status, res.Error
 	}
 
