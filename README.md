@@ -407,5 +407,5 @@ They communicate together through channels that are passed either via a closure 
  - better browsability of the web reports
  - compendium:
 	- index: SQL queries done
-	- user pages: do the view
+	- user pages: counting ranks from 1, timezone, parametrize the number of top comments, comments' bodies, round averages from SQLite
  - replace blackfriday with snudown

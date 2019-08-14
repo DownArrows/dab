@@ -95,20 +95,20 @@ func immutableCache(handler func(http.ResponseWriter, *http.Request)) func(http.
 
 // Component
 type WebServer struct {
-	backupStorage   BackupStorage
+	storage         WebServerStorage
 	done            chan error
 	markdownOptions blackfriday.Option
 	reports         ReportFactory
 	server          *http.Server
 }
 
-func NewWebServer(conf WebConf, reports ReportFactory, bs BackupStorage) *WebServer {
+func NewWebServer(conf WebConf, reports ReportFactory, storage WebServerStorage) *WebServer {
 	md_exts := blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis
 
 	wsrv := &WebServer{
 		reports:         reports,
 		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(md_exts)),
-		backupStorage:   bs,
+		storage:         storage,
 		done:            make(chan error),
 	}
 
@@ -119,6 +119,7 @@ func NewWebServer(conf WebConf, reports ReportFactory, bs BackupStorage) *WebSer
 	mux.HandleFunc("/reports/current", wsrv.ReportCurrent)
 	mux.HandleFunc("/reports/lastweek", wsrv.ReportLatest)
 	mux.HandleFunc("/reports/source/", wsrv.ReportSource)
+	mux.HandleFunc("/compendium/user/", wsrv.CompendiumUser)
 	mux.HandleFunc("/backup", wsrv.Backup)
 
 	wsrv.server = &http.Server{Addr: conf.Listen, Handler: mux}
@@ -225,13 +226,47 @@ func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
 	redirectToReport(week, year, w, r)
 }
 
+func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
+	args := ignoreTrailing(subPath("/compendium/user/", r))
+	if len(args) != 1 {
+		http.Error(w, "invalid URL, use \"/compendium/user/username\" to view the page about \"username\"", http.StatusBadRequest)
+		return
+	}
+	username := args[0]
+
+	query := wsrv.storage.GetUser(r.Context(), username)
+	if !query.Exists {
+		http.Error(w, fmt.Sprintf("user %q doesn't exist", username), http.StatusNotFound)
+		return
+	} else if query.Error != nil {
+		http.Error(w, query.Error.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	stats, err := wsrv.storage.CompendiumUserStats(r.Context(), 5, query.User)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	//	report.CommentBodyConverter = func(src ReportComment) (interface{}, error) {
+	//		html := blackfriday.Run([]byte(src.Body), wsrv.markdownOptions)
+	//		return template.HTML(html), nil
+	//	}
+
+	w.Header().Set("Content-Type", "text/html")
+	if err := HTMLCompendiumUserPage.Execute(w, stats); err != nil {
+		panic(err)
+	}
+}
+
 func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
-	if err := wsrv.backupStorage.Backup(r.Context()); err != nil {
+	if err := wsrv.storage.Backup(r.Context()); err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-sqlite3")
-	http.ServeFile(w, r, wsrv.backupStorage.BackupPath())
+	http.ServeFile(w, r, wsrv.storage.BackupPath())
 }
 
 func redirectToReport(week uint8, year int, w http.ResponseWriter, r *http.Request) {
