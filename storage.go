@@ -53,7 +53,7 @@ type CompendiumStorage interface {
 	CompendiumUserPerSubNegative(*SQLiteConn, string) ([]*CompendiumDetailsTagged, error)
 	CompendiumUserSummary(*SQLiteConn, string) (*CompendiumDetails, error)
 	CompendiumUserSummaryNegative(*SQLiteConn, string) (*CompendiumDetails, error)
-	UserTopComments(*SQLiteConn, string, uint) ([]Comment, error)
+	TopCommentsUser(*SQLiteConn, string, uint) ([]Comment, error)
 	WithTx(context.Context, func(*SQLiteConn) error) error
 }
 
@@ -334,33 +334,28 @@ func (s *Storage) SaveCommentsUpdateUser(ctx context.Context, comments []Comment
 }
 
 func (s *Storage) GetCommentsBelowBetween(conn *SQLiteConn, score int64, since, until time.Time) ([]Comment, error) {
-	sql := `SELECT
-			comments.*
-		FROM users JOIN comments
-		ON comments.author = users.name
-		WHERE
-			comments.score <= ?
-			AND users.hidden IS FALSE
-			AND comments.created BETWEEN ? AND ?
-		ORDER BY comments.score ASC`
-	var comments []Comment
-	cb := func(stmt *sqlite.Stmt) error {
-		comment := &Comment{}
-		if err := comment.FromDB(stmt); err != nil {
-			return err
-		}
-		comments = append(comments, *comment)
-		return nil
-	}
-	err := conn.Select(sql, cb, score, since.Unix(), until.Unix())
-	return comments, err
+	return s.comments(conn, `
+			SELECT comments.*
+			FROM users JOIN comments
+			ON comments.author = users.name
+			WHERE
+				comments.score <= ?
+				AND users.hidden IS FALSE
+				AND comments.created BETWEEN ? AND ?
+			ORDER BY comments.score ASC
+		`, score, since.Unix(), until.Unix())
 }
 
-func (s *Storage) UserTopComments(conn *SQLiteConn, username string, limit uint) ([]Comment, error) {
-	sql := "SELECT * FROM comments WHERE author = ? AND score < 0 ORDER BY score ASC LIMIT ?"
+func (s *Storage) TopComments(conn *SQLiteConn, limit uint) ([]Comment, error) {
+	return s.comments(conn, "SELECT * FROM comments WHERE score < 0 ORDER BY score ASC LIMIT ?", int(limit))
+}
 
+func (s *Storage) TopCommentsUser(conn *SQLiteConn, username string, limit uint) ([]Comment, error) {
+	return s.comments(conn, "SELECT * FROM comments WHERE author = ? AND score < 0 ORDER BY score ASC LIMIT ?", username, int(limit))
+}
+
+func (s *Storage) comments(conn *SQLiteConn, sql string, args ...interface{}) ([]Comment, error) {
 	var comments []Comment
-
 	cb := func(stmt *sqlite.Stmt) error {
 		comment := &Comment{}
 		if err := comment.FromDB(stmt); err != nil {
@@ -369,9 +364,7 @@ func (s *Storage) UserTopComments(conn *SQLiteConn, username string, limit uint)
 		comments = append(comments, *comment)
 		return nil
 	}
-
-	err := conn.Select(sql, cb, username, int(limit))
-
+	err := conn.Select(sql, cb, args...)
 	return comments, err
 }
 
@@ -434,23 +427,19 @@ func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.
 //}
 //
 //func (s *Storage) CompendiumPerUser(conn *SQLiteConn, username string) (CompendiumDetailsTagged, error) {
-//	sql := `
+//	return s.compendiumDetailsTagged(conn, `
 //		SELECT COUNT(id), AVG(score), SUM(score) AS karma, author
 //		FROM comments
 //		GROUP BY author
-//		ORDER BY karma ASC`
+//		ORDER BY karma ASC`)
 //}
 //
 //func (s *Storage) CompendiumPerUserNegative(conn *SQLiteConn, username string) (CompendiumDetailsTagged, error) {
-//	sql := `
+//	return s.compendiumDetailsTagged(conn, `
 //		SELECT author, COUNT(id), AVG(score), SUM(score) AS karma, author
 //		FROM comments WHERE score < 0
 //		GROUP BY author
-//		ORDER BY karma ASC`
-//}
-//
-//func (s *Storage) CompendiumTopComments(conn *SQLiteConn, limit uint) (CompendiumDetailsTagged, error) {
-//	sql := "SELECT * FROM comments WHERE score < 0 ORDER BY score ASC LIMIT ?"
+//		ORDER BY karma ASC`)
 //}
 
 func (s *Storage) CompendiumUserPerSub(conn *SQLiteConn, username string) ([]*CompendiumDetailsTagged, error) {

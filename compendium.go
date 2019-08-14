@@ -43,7 +43,7 @@ func (c CompendiumFactory) User(ctx context.Context, user User) (*CompendiumUser
 			stats.Negative = details
 		}
 
-		if comments, err := c.storage.UserTopComments(conn, stats.User.Name, stats.NbTop); err != nil {
+		if comments, err := c.storage.TopCommentsUser(conn, stats.User.Name, stats.NbTop); err != nil {
 			return err
 		} else {
 			stats.RawTopComments = comments
