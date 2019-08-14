@@ -367,13 +367,13 @@ func (s StatsSummaries) Sort() StatsSummaries {
 }
 
 type CompendiumUserStats struct {
-	All                  []*CompendiumUserStatsDetailsPerSub
+	All                  []*CompendiumStatsDetailsTagged
 	CommentBodyConverter CommentBodyConverter
 	NbTop                uint
-	Negative             []*CompendiumUserStatsDetailsPerSub
+	Negative             []*CompendiumStatsDetailsTagged
 	RawTopComments       []Comment
-	Summary              *CompendiumUserStatsDetails
-	SummaryNegative      *CompendiumUserStatsDetails
+	Summary              *CompendiumStatsDetails
+	SummaryNegative      *CompendiumStatsDetails
 	Timezone             *time.Location
 	User                 User
 	Version              SemVer
@@ -399,7 +399,7 @@ func (stats *CompendiumUserStats) TopComments() []CommentView {
 	return views
 }
 
-type CompendiumUserStatsDetails struct {
+type CompendiumStatsDetails struct {
 	Average float64
 	Count   int64
 	Karma   int64
@@ -407,7 +407,7 @@ type CompendiumUserStatsDetails struct {
 	Number  uint
 }
 
-func (details *CompendiumUserStatsDetails) FromDB(stmt *sqlite.Stmt) error {
+func (details *CompendiumStatsDetails) FromDB(stmt *sqlite.Stmt) error {
 	var err error
 
 	if details.Count, _, err = stmt.ColumnInt64(0); err != nil {
@@ -431,23 +431,23 @@ func (details *CompendiumUserStatsDetails) FromDB(stmt *sqlite.Stmt) error {
 	return nil
 }
 
-func (details *CompendiumUserStatsDetails) KarmaPerComment() float64 {
+func (details *CompendiumStatsDetails) KarmaPerComment() float64 {
 	if details.Count == 0 || details.Karma == 0 {
 		return 0
 	}
 	return float64(math.Round(float64(details.Karma) / float64(details.Count)))
 }
 
-type CompendiumUserStatsDetailsPerSub struct {
-	CompendiumUserStatsDetails
-	Sub string
+type CompendiumStatsDetailsTagged struct {
+	CompendiumStatsDetails
+	Tag string
 }
 
-func (details *CompendiumUserStatsDetailsPerSub) FromDB(stmt *sqlite.Stmt) error {
-	if err := details.CompendiumUserStatsDetails.FromDB(stmt); err != nil {
+func (details *CompendiumStatsDetailsTagged) FromDB(stmt *sqlite.Stmt) error {
+	if err := details.CompendiumStatsDetails.FromDB(stmt); err != nil {
 		return err
 	}
-	sub, _, err := stmt.ColumnText(4)
-	details.Sub = sub
+	tag, _, err := stmt.ColumnText(4)
+	details.Tag = tag
 	return err
 }

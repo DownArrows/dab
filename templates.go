@@ -243,7 +243,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 {{range .Negative -}}
 <tr>
 	<td class="rank">{{.Number}}</td>
-	<td class="sub"><a href="https://www.reddit.com/r/{{.Sub}}/">{{.Sub}}</a></td>
+	<td class="sub"><a href="https://www.reddit.com/r/{{.Tag}}/">{{.Tag}}</a></td>
 	<td class="count">{{.Count}}</td>
 	<td class="karma">{{.Karma}}</td>
 	<td class="average">{{.Average}}</td>
@@ -270,7 +270,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 {{range .All -}}
 <tr>
 	<td class="rank">{{.Number}}</td>
-	<td class="sub"><a href="https://www.reddit.com/r/{{.Sub}}/">{{.Sub}}</a></td>
+	<td class="sub"><a href="https://www.reddit.com/r/{{.Tag}}/">{{.Tag}}</a></td>
 	<td class="count">{{.Count}}</td>
 	<td class="karma">{{.Karma}}</td>
 	<td class="average">{{.Average}}</td>

@@ -23,8 +23,8 @@ func NewCompendium(storage CompendiumStorage, conf CompendiumConf) Compendium {
 func (c Compendium) UserStats(ctx context.Context, user User) (*CompendiumUserStats, error) {
 	stats := &CompendiumUserStats{
 		NbTop:           c.NbTop,
-		Summary:         &CompendiumUserStatsDetails{},
-		SummaryNegative: &CompendiumUserStatsDetails{},
+		Summary:         &CompendiumStatsDetails{},
+		SummaryNegative: &CompendiumStatsDetails{},
 		Timezone:        c.Timezone,
 		User:            user,
 		Version:         Version,
@@ -67,15 +67,15 @@ func (c Compendium) UserStats(ctx context.Context, user User) (*CompendiumUserSt
 		return nil, err
 	}
 
-	c.normalizeUserStatsDetails(stats.Summary, 0)
-	c.normalizeUserStatsDetails(stats.SummaryNegative, 0)
+	c.normalizeStatsDetails(stats.Summary, 0)
+	c.normalizeStatsDetails(stats.SummaryNegative, 0)
 
 	for i, details := range stats.All {
-		c.normalizeUserStatsDetails(&(details.CompendiumUserStatsDetails), i+1)
+		c.normalizeStatsDetails(&(details.CompendiumStatsDetails), i+1)
 	}
 
 	for i, details := range stats.Negative {
-		c.normalizeUserStatsDetails(&(details.CompendiumUserStatsDetails), i+1)
+		c.normalizeStatsDetails(&(details.CompendiumStatsDetails), i+1)
 	}
 
 	stats.User = stats.User.InTimezone(c.Timezone)
@@ -83,7 +83,7 @@ func (c Compendium) UserStats(ctx context.Context, user User) (*CompendiumUserSt
 	return stats, nil
 }
 
-func (c Compendium) normalizeUserStatsDetails(details *CompendiumUserStatsDetails, n int) {
+func (c Compendium) normalizeStatsDetails(details *CompendiumStatsDetails, n int) {
 	details.Average = math.Round(details.Average)
 	details.Latest = details.Latest.In(c.Timezone)
 	details.Number = uint(n)
