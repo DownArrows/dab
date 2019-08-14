@@ -38,8 +38,9 @@ type DiscordBotStorage interface {
 }
 
 type ReportFactoryStorage interface {
-	GetCommentsBelowBetween(context.Context, int64, time.Time, time.Time) ([]Comment, error)
-	StatsBetween(context.Context, int64, time.Time, time.Time) (UserStatsMap, error)
+	GetCommentsBelowBetween(*SQLiteConn, int64, time.Time, time.Time) ([]Comment, error)
+	StatsBetween(*SQLiteConn, int64, time.Time, time.Time) (UserStatsMap, error)
+	WithTx(context.Context, func(*SQLiteConn) error) error
 }
 
 type WebServerStorage interface {
@@ -332,7 +333,7 @@ func (s *Storage) SaveCommentsUpdateUser(ctx context.Context, comments []Comment
 	return user, err
 }
 
-func (s *Storage) GetCommentsBelowBetween(ctx context.Context, score int64, since, until time.Time) ([]Comment, error) {
+func (s *Storage) GetCommentsBelowBetween(conn *SQLiteConn, score int64, since, until time.Time) ([]Comment, error) {
 	sql := `SELECT
 			comments.*
 		FROM users JOIN comments
@@ -351,7 +352,7 @@ func (s *Storage) GetCommentsBelowBetween(ctx context.Context, score int64, sinc
 		comments = append(comments, *comment)
 		return nil
 	}
-	err := s.db.Select(ctx, sql, cb, score, since.Unix(), until.Unix())
+	err := conn.Select(sql, cb, score, since.Unix(), until.Unix())
 	return comments, err
 }
 
@@ -399,7 +400,7 @@ func (s *Storage) GetKarma(ctx context.Context, username string) (int64, int64, 
 	return total, negative, err
 }
 
-func (s *Storage) StatsBetween(ctx context.Context, score int64, since, until time.Time) (UserStatsMap, error) {
+func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.Time) (UserStatsMap, error) {
 	sql := `SELECT
 			comments.author AS author,
 			AVG(comments.score) AS average,
@@ -424,7 +425,7 @@ func (s *Storage) StatsBetween(ctx context.Context, score int64, since, until ti
 		return nil
 	}
 
-	err := s.db.Select(ctx, sql, cb, since.Unix(), until.Unix(), score)
+	err := conn.Select(sql, cb, since.Unix(), until.Unix(), score)
 	return stats, err
 }
 

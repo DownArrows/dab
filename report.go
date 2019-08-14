@@ -36,19 +36,20 @@ func (rf ReportFactory) ReportWeek(ctx context.Context, week_num uint8, year int
 }
 
 func (rf ReportFactory) Report(ctx context.Context, start, end time.Time) (Report, error) {
-	report := Report{}
+	var comments []Comment
+	var stats UserStatsMap
 
-	comments, err := rf.storage.GetCommentsBelowBetween(ctx, rf.cutOff, start, end)
-	if err != nil {
-		return report, err
-	}
+	err := rf.storage.WithTx(ctx, func(conn *SQLiteConn) error {
+		var err error
+		comments, err = rf.storage.GetCommentsBelowBetween(conn, rf.cutOff, start, end)
+		if err != nil {
+			return err
+		}
+		stats, err = rf.storage.StatsBetween(conn, rf.cutOff, start, end)
+		return err
+	})
 
-	stats, err := rf.storage.StatsBetween(ctx, rf.cutOff, start, end)
-	if err != nil {
-		return report, err
-	}
-
-	report = Report{
+	report := Report{
 		RawComments:       comments,
 		Stats:             stats,
 		Start:             start,
@@ -58,7 +59,8 @@ func (rf ReportFactory) Report(ctx context.Context, start, end time.Time) (Repor
 		CutOff:            rf.cutOff,
 		Version:           Version,
 	}
-	return report, nil
+
+	return report, err
 }
 
 func (rf ReportFactory) CurrentWeekCoordinates() (uint8, int) {

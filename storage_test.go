@@ -225,10 +225,13 @@ func TestCRUDComments(t *testing.T) {
 	})
 
 	t.Run("read", func(t *testing.T) {
-		comments, err := s.GetCommentsBelowBetween(ctx, report_cutoff, report_start, report_end)
+		conn, err := s.db.GetConn(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer conn.Close()
+
+		comments, err := s.GetCommentsBelowBetween(conn, report_cutoff, report_start, report_end)
 
 		scores_ok := true
 		for _, comment := range comments {
@@ -262,7 +265,13 @@ func TestCRUDComments(t *testing.T) {
 	})
 
 	t.Run("statistics", func(t *testing.T) {
-		all_stats, err := s.StatsBetween(ctx, report_cutoff, report_start, report_end)
+		conn, err := s.db.GetConn(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+
+		all_stats, err := s.StatsBetween(conn, report_cutoff, report_start, report_end)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -326,7 +335,13 @@ func TestCRUDComments(t *testing.T) {
 			t.Errorf("list of users should be left unchanged, instead of getting %v", active)
 		}
 
-		comments, err := s.GetCommentsBelowBetween(ctx, report_cutoff, report_start, report_end)
+		conn, err := s.db.GetConn(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+
+		comments, err := s.GetCommentsBelowBetween(conn, report_cutoff, report_start, report_end)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -372,7 +387,13 @@ func TestCRUDComments(t *testing.T) {
 			t.Errorf("after purge there should be %d users left, not %d: %+v", len(users)-1, len(active), active)
 		}
 
-		comments, err := s.GetCommentsBelowBetween(ctx, report_cutoff, report_start, report_end)
+		conn, err := s.db.GetConn(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+
+		comments, err := s.GetCommentsBelowBetween(conn, report_cutoff, report_start, report_end)
 		if err != nil {
 			t.Fatal(err)
 		}
