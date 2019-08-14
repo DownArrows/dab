@@ -308,6 +308,8 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 
 <main>
 
+<p>{{.Users | len}} registered users, of which {{.HiddenUsersLen}} are hidden.</p>
+
 <section>
 <h1 id="top">Most downvoted</h1>
 {{if (.TopCommentsLen) gt 1 -}}

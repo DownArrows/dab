@@ -126,6 +126,16 @@ func (c *Compendium) TopComments() []CommentView {
 	return views
 }
 
+func (c *Compendium) HiddenUsersLen() int {
+	var nb int
+	for _, user := range c.Users {
+		if user.Hidden {
+			nb++
+		}
+	}
+	return nb
+}
+
 func (c *Compendium) Normalize() {
 	for i, details := range c.All {
 		details.Normalize(uint(i+1), c.Timezone)
