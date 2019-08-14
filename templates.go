@@ -81,7 +81,7 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 <h1>Comments</h1>
 {{range .Comments -}}
 <article class="comment">
-	<h2>#{{.Number}}</h2>
+	<h2 id="{{.Number}}"><a href="#{{.Number}}">#{{.Number}}</a></h2>
 	<table>
 	<tr>
 		<td>Author</td>
@@ -203,7 +203,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 {{end -}}
 {{range .TopComments -}}
 <article class="comment">
-	<h2># {{.Number}}</h2>
+	<h2 id="{{.Number}}"><a href="#{{.Number}}">#{{.Number}}</a></h2>
 	<table>
 	<tr>
 		<td>Date</td>
@@ -317,7 +317,7 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 {{end -}}
 {{range .TopComments -}}
 <article class="comment">
-	<h2># {{.Number}}</h2>
+	<h2 id="{{.Number}}"><a href="#{{.Number}}">#{{.Number}}</a></h2>
 	<table>
 	<tr>
 		<td>Author</td>
@@ -447,17 +447,6 @@ body {
 	#title { font-size: 2.5em }
 }
 
-#title a, #title a:visited {
-	color: inherit;
-	text-decoration: none;
-}
-
-#title a:hover {
-	color: var(--sec-color);
-	text-decoration: underline;
-}
-
-
 h1, h2 {
 	color: var(--main-color);
 	font-size: 1.175em;
@@ -475,6 +464,17 @@ h1 {
 h2 {
 	font-weight: normal;
 }
+
+#title a, h1 a, h2 a, #title a:visited, h1 a:visited, h2 a:visited {
+	color: inherit;
+	text-decoration: none;
+}
+
+#title a:hover, h1 a:hover, h2 a:hover {
+	color: var(--sec-color);
+	text-decoration: underline;
+}
+
 
 .comment > blockquote {
 	overflow-wrap: break-word;
