@@ -6,38 +6,38 @@ import (
 	"time"
 )
 
-type Compendium struct {
+type CompendiumFactory struct {
 	NbTop    uint
 	storage  CompendiumStorage
 	Timezone *time.Location
 }
 
-func NewCompendium(storage CompendiumStorage, conf CompendiumConf) Compendium {
-	return Compendium{
+func NewCompendiumFactory(storage CompendiumStorage, conf CompendiumConf) CompendiumFactory {
+	return CompendiumFactory{
 		NbTop:    conf.NbTop,
 		storage:  storage,
 		Timezone: conf.Timezone.Value,
 	}
 }
 
-func (c Compendium) UserStats(ctx context.Context, user User) (*CompendiumUserStats, error) {
-	stats := &CompendiumUserStats{
+func (c CompendiumFactory) User(ctx context.Context, user User) (*CompendiumUser, error) {
+	stats := &CompendiumUser{
 		NbTop:           c.NbTop,
-		Summary:         &CompendiumStatsDetails{},
-		SummaryNegative: &CompendiumStatsDetails{},
+		Summary:         &CompendiumDetails{},
+		SummaryNegative: &CompendiumDetails{},
 		Timezone:        c.Timezone,
 		User:            user,
 		Version:         Version,
 	}
 
 	err := c.storage.WithTx(ctx, func(conn *SQLiteConn) error {
-		if details, err := c.storage.CompendiumUserStatsPerSub(conn, stats.User.Name); err != nil {
+		if details, err := c.storage.CompendiumUserPerSub(conn, stats.User.Name); err != nil {
 			return err
 		} else {
 			stats.All = details
 		}
 
-		if details, err := c.storage.CompendiumUserStatsPerSubNegative(conn, stats.User.Name); err != nil {
+		if details, err := c.storage.CompendiumUserPerSubNegative(conn, stats.User.Name); err != nil {
 			return err
 		} else {
 			stats.Negative = details
@@ -49,13 +49,13 @@ func (c Compendium) UserStats(ctx context.Context, user User) (*CompendiumUserSt
 			stats.RawTopComments = comments
 		}
 
-		if details, err := c.storage.CompendiumUserStatsSummary(conn, stats.User.Name); err != nil {
+		if details, err := c.storage.CompendiumUserSummary(conn, stats.User.Name); err != nil {
 			return err
 		} else {
 			stats.Summary = details
 		}
 
-		if details, err := c.storage.CompendiumUserStatsSummaryNegative(conn, stats.User.Name); err != nil {
+		if details, err := c.storage.CompendiumUserSummaryNegative(conn, stats.User.Name); err != nil {
 			return err
 		} else {
 			stats.SummaryNegative = details
@@ -67,15 +67,15 @@ func (c Compendium) UserStats(ctx context.Context, user User) (*CompendiumUserSt
 		return nil, err
 	}
 
-	c.normalizeStatsDetails(stats.Summary, 0)
-	c.normalizeStatsDetails(stats.SummaryNegative, 0)
+	c.normalizeDetails(stats.Summary, 0)
+	c.normalizeDetails(stats.SummaryNegative, 0)
 
 	for i, details := range stats.All {
-		c.normalizeStatsDetails(&(details.CompendiumStatsDetails), i+1)
+		c.normalizeDetails(&(details.CompendiumDetails), i+1)
 	}
 
 	for i, details := range stats.Negative {
-		c.normalizeStatsDetails(&(details.CompendiumStatsDetails), i+1)
+		c.normalizeDetails(&(details.CompendiumDetails), i+1)
 	}
 
 	stats.User = stats.User.InTimezone(c.Timezone)
@@ -83,7 +83,7 @@ func (c Compendium) UserStats(ctx context.Context, user User) (*CompendiumUserSt
 	return stats, nil
 }
 
-func (c Compendium) normalizeStatsDetails(details *CompendiumStatsDetails, n int) {
+func (c CompendiumFactory) normalizeDetails(details *CompendiumDetails, n int) {
 	details.Average = math.Round(details.Average)
 	details.Latest = details.Latest.In(c.Timezone)
 	details.Number = uint(n)

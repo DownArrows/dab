@@ -95,7 +95,7 @@ func immutableCache(handler func(http.ResponseWriter, *http.Request)) func(http.
 
 // Component
 type WebServer struct {
-	compendium      Compendium
+	compendium      CompendiumFactory
 	done            chan error
 	markdownOptions blackfriday.Option
 	reports         ReportFactory
@@ -103,7 +103,7 @@ type WebServer struct {
 	storage         WebServerStorage
 }
 
-func NewWebServer(conf WebConf, storage WebServerStorage, reports ReportFactory, compendium Compendium) *WebServer {
+func NewWebServer(conf WebConf, storage WebServerStorage, reports ReportFactory, compendium CompendiumFactory) *WebServer {
 	md_exts := blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis
 
 	wsrv := &WebServer{
@@ -247,7 +247,7 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats, err := wsrv.compendium.UserStats(r.Context(), query.User)
+	stats, err := wsrv.compendium.User(r.Context(), query.User)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

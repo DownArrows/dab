@@ -36,7 +36,7 @@ type DownArrowsBot struct {
 	layers struct {
 		Storage    *Storage
 		Report     ReportFactory
-		Compendium Compendium
+		Compendium CompendiumFactory
 		// RedditAPI is also a layer but is passed around as an argument instead
 	}
 
@@ -111,7 +111,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return dab.userAdd(ctx)
 	}
 
-	dab.layers.Compendium = NewCompendium(dab.layers.Storage, dab.conf.Compendium)
+	dab.layers.Compendium = NewCompendiumFactory(dab.layers.Storage, dab.conf.Compendium)
 
 	tasks := NewTaskGroup(ctx)
 

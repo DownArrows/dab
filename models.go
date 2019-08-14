@@ -366,31 +366,31 @@ func (s StatsSummaries) Sort() StatsSummaries {
 	return s
 }
 
-type CompendiumUserStats struct {
-	All                  []*CompendiumStatsDetailsTagged
+type CompendiumUser struct {
+	All                  []*CompendiumDetailsTagged
 	CommentBodyConverter CommentBodyConverter
 	NbTop                uint
-	Negative             []*CompendiumStatsDetailsTagged
+	Negative             []*CompendiumDetailsTagged
 	RawTopComments       []Comment
-	Summary              *CompendiumStatsDetails
-	SummaryNegative      *CompendiumStatsDetails
+	Summary              *CompendiumDetails
+	SummaryNegative      *CompendiumDetails
 	Timezone             *time.Location
 	User                 User
 	Version              SemVer
 }
 
-func (stats *CompendiumUserStats) PercentageNegative() int64 {
+func (stats *CompendiumUser) PercentageNegative() int64 {
 	if stats.Summary.Count == 0 || stats.SummaryNegative.Count == 0 {
 		return 0
 	}
 	return int64(math.Round(100 * float64(stats.SummaryNegative.Count) / float64(stats.Summary.Count)))
 }
 
-func (stats *CompendiumUserStats) NbTopComments() int {
+func (stats *CompendiumUser) NbTopComments() int {
 	return len(stats.RawTopComments)
 }
 
-func (stats *CompendiumUserStats) TopComments() []CommentView {
+func (stats *CompendiumUser) TopComments() []CommentView {
 	views := make([]CommentView, 0, len(stats.RawTopComments))
 	for i, comment := range stats.RawTopComments {
 		view := comment.ToView(uint(i+1), stats.Timezone, stats.CommentBodyConverter)
@@ -399,7 +399,7 @@ func (stats *CompendiumUserStats) TopComments() []CommentView {
 	return views
 }
 
-type CompendiumStatsDetails struct {
+type CompendiumDetails struct {
 	Average float64
 	Count   int64
 	Karma   int64
@@ -407,7 +407,7 @@ type CompendiumStatsDetails struct {
 	Number  uint
 }
 
-func (details *CompendiumStatsDetails) FromDB(stmt *sqlite.Stmt) error {
+func (details *CompendiumDetails) FromDB(stmt *sqlite.Stmt) error {
 	var err error
 
 	if details.Count, _, err = stmt.ColumnInt64(0); err != nil {
@@ -431,20 +431,20 @@ func (details *CompendiumStatsDetails) FromDB(stmt *sqlite.Stmt) error {
 	return nil
 }
 
-func (details *CompendiumStatsDetails) KarmaPerComment() float64 {
+func (details *CompendiumDetails) KarmaPerComment() float64 {
 	if details.Count == 0 || details.Karma == 0 {
 		return 0
 	}
 	return float64(math.Round(float64(details.Karma) / float64(details.Count)))
 }
 
-type CompendiumStatsDetailsTagged struct {
-	CompendiumStatsDetails
+type CompendiumDetailsTagged struct {
+	CompendiumDetails
 	Tag string
 }
 
-func (details *CompendiumStatsDetailsTagged) FromDB(stmt *sqlite.Stmt) error {
-	if err := details.CompendiumStatsDetails.FromDB(stmt); err != nil {
+func (details *CompendiumDetailsTagged) FromDB(stmt *sqlite.Stmt) error {
+	if err := details.CompendiumDetails.FromDB(stmt); err != nil {
 		return err
 	}
 	tag, _, err := stmt.ColumnText(4)

@@ -49,10 +49,10 @@ type WebServerStorage interface {
 }
 
 type CompendiumStorage interface {
-	CompendiumUserStatsPerSub(*SQLiteConn, string) ([]*CompendiumStatsDetailsTagged, error)
-	CompendiumUserStatsPerSubNegative(*SQLiteConn, string) ([]*CompendiumStatsDetailsTagged, error)
-	CompendiumUserStatsSummary(*SQLiteConn, string) (*CompendiumStatsDetails, error)
-	CompendiumUserStatsSummaryNegative(*SQLiteConn, string) (*CompendiumStatsDetails, error)
+	CompendiumUserPerSub(*SQLiteConn, string) ([]*CompendiumDetailsTagged, error)
+	CompendiumUserPerSubNegative(*SQLiteConn, string) ([]*CompendiumDetailsTagged, error)
+	CompendiumUserSummary(*SQLiteConn, string) (*CompendiumDetails, error)
+	CompendiumUserSummaryNegative(*SQLiteConn, string) (*CompendiumDetails, error)
 	UserTopComments(*SQLiteConn, string, uint) ([]Comment, error)
 	WithTx(context.Context, func(*SQLiteConn) error) error
 }
@@ -429,11 +429,11 @@ func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.
 	return stats, err
 }
 
-//func (s *Storage) CompendiumStatsSummary(conn *SQLiteConn, username string) (CompendiumStatsDetailsPerUser, error) {
+//func (s *Storage) CompendiumSummary(conn *SQLiteConn, username string) (CompendiumDetailsTagged, error) {
 //	// TODO last scan, number of users, number who have posted in the last X hours
 //}
 //
-//func (s *Storage) CompendiumStatsPerUser(conn *SQLiteConn, username string) (CompendiumStatsDetailsPerUser, error) {
+//func (s *Storage) CompendiumPerUser(conn *SQLiteConn, username string) (CompendiumDetailsTagged, error) {
 //	sql := `
 //		SELECT COUNT(id), AVG(score), SUM(score) AS karma, author
 //		FROM comments
@@ -441,7 +441,7 @@ func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.
 //		ORDER BY karma ASC`
 //}
 //
-//func (s *Storage) CompendiumStatsPerUserNegative(conn *SQLiteConn, username string) (CompendiumStats, error) {
+//func (s *Storage) CompendiumPerUserNegative(conn *SQLiteConn, username string) (CompendiumDetailsTagged, error) {
 //	sql := `
 //		SELECT author, COUNT(id), AVG(score), SUM(score) AS karma, author
 //		FROM comments WHERE score < 0
@@ -449,12 +449,12 @@ func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.
 //		ORDER BY karma ASC`
 //}
 //
-//func (s *Storage) CompendiumStatsTopComments(conn *SQLiteConn, limit uint) (CompendiumStats, error) {
+//func (s *Storage) CompendiumTopComments(conn *SQLiteConn, limit uint) (CompendiumDetailsTagged, error) {
 //	sql := "SELECT * FROM comments WHERE score < 0 ORDER BY score ASC LIMIT ?"
 //}
 
-func (s *Storage) CompendiumUserStatsPerSub(conn *SQLiteConn, username string) ([]*CompendiumStatsDetailsTagged, error) {
-	return s.compendiumStatsDetailsTagged(conn, `
+func (s *Storage) CompendiumUserPerSub(conn *SQLiteConn, username string) ([]*CompendiumDetailsTagged, error) {
+	return s.compendiumDetailsTagged(conn, `
 		SELECT
 			COUNT(score), AVG(score), SUM(score) AS karma, MAX(created), sub
 		FROM comments WHERE author = ?
@@ -462,8 +462,8 @@ func (s *Storage) CompendiumUserStatsPerSub(conn *SQLiteConn, username string) (
 		ORDER BY karma ASC`, username)
 }
 
-func (s *Storage) CompendiumUserStatsPerSubNegative(conn *SQLiteConn, username string) ([]*CompendiumStatsDetailsTagged, error) {
-	return s.compendiumStatsDetailsTagged(conn, `
+func (s *Storage) CompendiumUserPerSubNegative(conn *SQLiteConn, username string) ([]*CompendiumDetailsTagged, error) {
+	return s.compendiumDetailsTagged(conn, `
 		SELECT
 			COUNT(score), AVG(score), SUM(score) AS karma, MAX(created), sub
 		FROM comments WHERE author = ? AND score < 0
@@ -471,24 +471,24 @@ func (s *Storage) CompendiumUserStatsPerSubNegative(conn *SQLiteConn, username s
 		ORDER BY karma ASC`, username)
 }
 
-func (s *Storage) CompendiumUserStatsSummary(conn *SQLiteConn, username string) (*CompendiumStatsDetails, error) {
+func (s *Storage) CompendiumUserSummary(conn *SQLiteConn, username string) (*CompendiumDetails, error) {
 	sql := "SELECT COUNT(score), AVG(score), SUM(score), MAX(created) FROM comments WHERE author = ?"
-	stats := &CompendiumStatsDetails{}
+	stats := &CompendiumDetails{}
 	err := conn.Select(sql, stats.FromDB, username)
 	return stats, err
 }
 
-func (s *Storage) CompendiumUserStatsSummaryNegative(conn *SQLiteConn, username string) (*CompendiumStatsDetails, error) {
+func (s *Storage) CompendiumUserSummaryNegative(conn *SQLiteConn, username string) (*CompendiumDetails, error) {
 	sql := "SELECT COUNT(score), AVG(score), SUM(score), MAX(created) FROM comments WHERE author = ? AND score < 0"
-	stats := &CompendiumStatsDetails{}
+	stats := &CompendiumDetails{}
 	err := conn.Select(sql, stats.FromDB, username)
 	return stats, err
 }
 
-func (s *Storage) compendiumStatsDetailsTagged(conn *SQLiteConn, sql string, args ...interface{}) ([]*CompendiumStatsDetailsTagged, error) {
-	var stats []*CompendiumStatsDetailsTagged
+func (s *Storage) compendiumDetailsTagged(conn *SQLiteConn, sql string, args ...interface{}) ([]*CompendiumDetailsTagged, error) {
+	var stats []*CompendiumDetailsTagged
 	cb := func(stmt *sqlite.Stmt) error {
-		detail := &CompendiumStatsDetailsTagged{}
+		detail := &CompendiumDetailsTagged{}
 		if err := detail.FromDB(stmt); err != nil {
 			return err
 		}
