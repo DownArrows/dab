@@ -186,7 +186,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	</tr>
 	<tr>
 		<td>Date</td>
-		<td>{{.Created.Format "Monday 02 January 15:04 MST"}}</td>
+		<td>{{.Created.Format "Monday 02 January 2006 15:04 MST"}}</td>
 	</tr>
 	<tr>
 		<td>Score</td>
@@ -209,22 +209,21 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 <section>
 <h1 id="subs">Per sub</h1>
 <table class="subs">
-<tr>
-	<th><strong>Rank</strong></th>
-	<th><strong>Sub</strong></th>
-	<th><strong>Count</strong></th>
-	<th><strong>Karma</strong></th>
-	<th><strong>Average</strong></th>
-	<th><strong>Last commented</strong></th>
+<tr><th>Rank</th>
+	<th>Sub</th>
+	<th>Count</th>
+	<th>Karma</th>
+	<th>Average</th>
+	<th>Last commented</th>
 </tr>
 {{range .All -}}
 <tr>
-	<td>{{.Number}}</td>
-	<td><a href="https://www.reddit.com/r/{{.Sub}}/">{{.Sub}}</a></td>
-	<td>{{.Count}}</td>
-	<td>{{.Karma}}</td>
-	<td>{{.Average}}</td>
-	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
+	<td class="rank">{{.Number}}</td>
+	<td class="sub"><a href="https://www.reddit.com/r/{{.Sub}}/">{{.Sub}}</a></td>
+	<td class="count">{{.Count}}</td>
+	<td class="karma">{{.Karma}}</td>
+	<td class="average">{{.Average}}</td>
+	<td class="latest">{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
 </tr>
 {{end -}}
 </table>
@@ -245,12 +244,12 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 </tr>
 {{range .Negative -}}
 <tr>
-	<td>{{.Number}}</td>
-	<td><a href="https://www.reddit.com/r/{{.Sub}}/">{{.Sub}}</a></td>
-	<td>{{.Count}}</td>
-	<td>{{.Karma}}</td>
-	<td>{{.Average}}</td>
-	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
+	<td class="rank">{{.Number}}</td>
+	<td class="sub"><a href="https://www.reddit.com/r/{{.Sub}}/">{{.Sub}}</a></td>
+	<td class="count">{{.Count}}</td>
+	<td class="karma">{{.Karma}}</td>
+	<td class="average">{{.Average}}</td>
+	<td class="latest">{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
 </tr>
 {{end -}}
 </table>
@@ -289,7 +288,7 @@ body {
 	margin: 1rem auto;
 }
 
-@media (min-width: 40rem) {
+@media (min-width: 50rem) {
 	body { font-size: 1em }
 }
 
@@ -298,7 +297,7 @@ body {
 	font-size: 1.5em;
 }
 
-@media (min-width: 40rem) {
+@media (min-width: 50rem) {
 	#title { font-size: 2.5em }
 }
 
@@ -307,7 +306,7 @@ h1, h2 {
 	font-size: 1.175em;
 }
 
-@media (min-width: 30em) {
+@media (min-width: 50em) {
 	h1 { font-size: 1.5em }
 	h2 { font-size: 1.25em }
 }
@@ -369,7 +368,53 @@ aside.md-link a::after {
 }`
 
 const CSSCompendium = `table.subs {
-	border-spacing: calc(2*var(--spacing));
+	border-spacing: 0;
+}
+
+table.subs th {
+	font-weight: bold;
+}
+
+table.subs tr {
+	display: table-row;
+}
+
+@media (max-width: 30rem) {
+	table.subs tr {
+		display: flex;
+		flex-wrap: wrap;
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: stretch;
+	}
+
+
+	table.subs td:not(:first-child), table.subs th:not(:first-child) {
+		padding-left: calc(2*var(--spacing));
+	}
+
+	table.subs tr {
+		border-bottom: dotted 1px var(--fg);
+	}
+
+	table.subs td::after {
+		font-weight: bold;
+	}
+
+	table.subs .rank { font-weight: bold }
+
+	table.subs .count::after { content: "C" }
+	table.subs .karma::after { content: "K" }
+	table.subs .average::after { content: "A" }
+}
+
+@media(max-width: 40rem) {
+}
+
+@media (min-width: 40rem) {
+	table.subs {
+		border-spacing: calc(2*var(--spacing));
+	}
 }
 
 .suspended {
