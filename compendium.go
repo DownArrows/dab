@@ -51,7 +51,6 @@ func (c CompendiumFactory) Compendium(ctx context.Context) (*Compendium, error) 
 		return nil, err
 	}
 
-	stats.makeTopCommentsViews()
 	stats.Normalize()
 
 	return stats, nil
@@ -98,7 +97,6 @@ func (c CompendiumFactory) User(ctx context.Context, user User) (*CompendiumUser
 		return nil, err
 	}
 
-	stats.makeTopCommentsViews()
 	stats.Normalize()
 
 	return stats, nil
@@ -110,19 +108,22 @@ type Compendium struct {
 	NbTop                uint
 	Negative             []*CompendiumDetailsTagged
 	rawTopComments       []Comment
-	TopComments          []CommentView
 	Timezone             *time.Location
 	Users                []User
 	Version              SemVer
 }
 
-func (c *Compendium) makeTopCommentsViews() {
+func (c *Compendium) TopCommentsLen() int {
+	return len(c.rawTopComments)
+}
+
+func (c *Compendium) TopComments() []CommentView {
 	views := make([]CommentView, 0, len(c.rawTopComments))
 	for i, comment := range c.rawTopComments {
 		view := comment.ToView(uint(i+1), c.Timezone, c.CommentBodyConverter)
 		views = append(views, view)
 	}
-	c.TopComments = views
+	return views
 }
 
 func (c *Compendium) Normalize() {

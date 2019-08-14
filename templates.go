@@ -127,7 +127,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 <nav>
 	<ul>
 		<li><a href="/compendium/user/{{.User.Name}}#summary">Summary</a></li>
-		{{if (.TopComments | len) gt 0 -}}
+		{{if (.TopCommentsLen) gt 0 -}}
 		<li><a href="/compendium/user/{{.User.Name}}#top">Most downvoted</a></li>
 		{{- end}}
 		{{if (.Negative | len) gt 0 -}}
@@ -195,11 +195,11 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 
 <main>
 
-{{if (.TopComments | len) gt 0 -}}
+{{if (.TopCommentsLen) gt 0 -}}
 <section>
 <h1 id="top">Most downvoted</h1>
-{{if (.TopComments | len) gt 1 -}}
-<p>First {{.TopComments | len}} comments.</p>
+{{if (.TopCommentsLen) gt 1 -}}
+<p>First {{.TopCommentsLen}} comments.</p>
 {{end -}}
 {{range .TopComments -}}
 <article class="comment">
@@ -310,8 +310,8 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 
 <section>
 <h1 id="top">Most downvoted</h1>
-{{if (.TopComments | len) gt 1 -}}
-<p>Top {{.TopComments | len}} most downvoted comments.</p>
+{{if (.TopCommentsLen) gt 1 -}}
+<p>Top {{.TopCommentsLen}} most downvoted comments.</p>
 {{end -}}
 {{range .TopComments -}}
 <article class="comment">
