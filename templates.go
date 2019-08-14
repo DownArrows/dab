@@ -64,14 +64,14 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 	<h2>Top {{.Delta | len}} total negative karma change for this week</h2>
 	<ol>
 	{{- range .Delta}}
-	<li><strong>{{.Summary}}</strong> with {{.Count}} posts, by <a href="https://www.reddit.com/user/{{.Name}}">/u/{{.Name}}</a></li>
+	<li><strong>{{.Summary}}</strong> with {{.Count}} posts, by <a href="/compendium/user/{{.Name}}">{{.Name}}</a></li>
 	{{- end}}
 	</ol>
 
 	<h2>Top {{.Average | len}} lowest average karma per comment</h2>
 	<ol>
 	{{- range .Average}}
-	<li><strong>{{.Summary}}</strong> with {{.Count}} posts, by <a href="https://www.reddit.com/user/{{.Name}}">/u/{{.Name}}</a></li>
+	<li><strong>{{.Summary}}</strong> with {{.Count}} posts, by <a href="/compendium/user/{{.Name}}">{{.Name}}</a></li>
 	{{- end}}
 	</ol>
 {{- end -}}
@@ -85,7 +85,7 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 	<table>
 	<tr>
 		<td>Author</td>
-		<td><a href="https://www.reddit.com/user/{{.Author}}">/u/{{.Author}}</a> ({{.Average}} week average)</td>
+		<td><a href="/compendium/user/{{.Author}}">{{.Author}}</a> ({{.Average}} week average)</td>
 	</tr>
 	<tr>
 		<td>Date</td>
@@ -121,7 +121,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	<link rel="stylesheet" href="/css/compendium?version={{.Version}}">
 </head>
 <body>
-<div id="title">Compendium for {{.User.Name}}</div>
+<div id="title"><a href="/compendium">Compendium for {{.User.Name}}</a></div>
 
 {{if (.Summary.Count) gt 0 -}}
 <nav>
@@ -131,10 +131,10 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 		<li><a href="/compendium/user/{{.User.Name}}#top">Most downvoted</a></li>
 		{{- end}}
 		{{if (.Negative | len) gt 0 -}}
-		<li><a href="/compendium/user/{{.User.Name}}#subs-negative">Negative per sub</a></li>
+		<li><a href="/compendium/user/{{.User.Name}}#tags-negative">Negative per sub</a></li>
 		{{- end}}
 		{{if (.All | len) gt 0 -}}
-		<li><a href="/compendium/user/{{.User.Name}}#subs">Per sub</a></li>
+		<li><a href="/compendium/user/{{.User.Name}}#tags">Per sub</a></li>
 		{{- end}}
 	</ul>
 </nav>
@@ -149,6 +149,10 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 		<p><strong>Account deleted</strong></p>
 	{{end -}}
 	<table>
+		<tr>
+			<td>Link<td>
+			<td><a href="https://www.reddit.com/u/{{.User.Name}}">/r/{{.User.Name}}</a><td>
+		</tr>
 		<tr>
 			<td>Account created<td>
 			<td>{{.User.Created.Format "Monday 02 January 2006 15:04 MST"}}<td>
@@ -202,10 +206,6 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	<h2># {{.Number}}</h2>
 	<table>
 	<tr>
-		<td>Author</td>
-		<td><a href="https://www.reddit.com/user/{{.Author}}">/u/{{.Author}}</a></td>
-	</tr>
-	<tr>
 		<td>Date</td>
 		<td>{{.Created.Format "Monday 02 January 2006 15:04 MST"}}</td>
 	</tr>
@@ -230,8 +230,8 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 
 {{if (.Negative | len) gt 0 -}}
 <section>
-<h1 id="subs-negative">Negative per sub</h1>
-<table class="subs">
+<h1 id="tags-negative">Negative per sub</h1>
+<table class="tags">
 <tr>
 	<th><strong>Rank</strong></th>
 	<th><strong>Sub</strong></th>
@@ -258,8 +258,8 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 
 {{if (.All | len) gt 0 -}}
 <section>
-<h1 id="subs">Per sub</h1>
-<table class="subs">
+<h1 id="tags">Per sub</h1>
+<table class="tags">
 <tr><th>Rank</th>
 	<th>Sub</th>
 	<th>Count</th>
@@ -284,6 +284,123 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 {{- end}}
 
 </main>
+</body>`))
+
+var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
+<head>
+	<meta charset="utf-8"/>
+	<meta name="viewport" content="initial-scale=1"/>
+	<title>Compendium</title>
+	<link rel="stylesheet" href="/css/main?version={{.Version}}">
+	<link rel="stylesheet" href="/css/compendium?version={{.Version}}">
+</head>
+<body>
+<div id="title">Compendium</div>
+
+{{- if (.Negative | len) gt 0}}
+<nav>
+	<ul>
+		<li><a href="/compendium#top">Most downvoted</a></li>
+		<li><a href="/compendium#tags-negative">Negative karma per user</a></li>
+		<li><a href="/compendium#tags">Karma per user</a></li>
+	</ul>
+</nav>
+
+<main>
+
+<section>
+<h1 id="top">Most downvoted</h1>
+{{if (.TopComments | len) gt 1 -}}
+<p>Top {{.TopComments | len}} most downvoted comments.</p>
+{{end -}}
+{{range .TopComments -}}
+<article class="comment">
+	<h2># {{.Number}}</h2>
+	<table>
+	<tr>
+		<td>Author</td>
+		<td><a href="/compendium/user/{{.Author}}">{{.Author}}</a></td>
+	</tr>
+	<tr>
+		<td>Date</td>
+		<td>{{.Created.Format "Monday 02 January 2006 15:04 MST"}}</td>
+	</tr>
+	<tr>
+		<td>Score</td>
+		<td>{{.Score}}</td>
+	</tr>
+	<tr>
+		<td>Link</td>
+		<td><a href="https://www.reddit.com{{.Permalink}}">{{.Permalink}}</a></td>
+	</tr>
+	</table>
+
+	<blockquote>
+{{.BodyConvert}}
+	</blockquote>
+</article>
+{{end -}}
+<footer><a href="#title">back to top</a></footer>
+</section>
+
+{{if (.Negative | len) gt 0 -}}
+<section>
+<h1 id="tags-negative">Negative karma per user</h1>
+<table class="tags">
+<tr>
+	<th><strong>Rank</strong></th>
+	<th><strong>Sub</strong></th>
+	<th><strong>Count</strong></th>
+	<th><strong>Karma</strong></th>
+	<th><strong>Average</strong></th>
+	<th><strong>Last commented</strong></th>
+</tr>
+{{range .Negative -}}
+<tr>
+	<td class="rank">{{.Number}}</td>
+	<td class="user"><a href="/compendium/user/{{.Tag}}">{{.Tag}}</a></td>
+	<td class="count">{{.Count}}</td>
+	<td class="karma">{{.Karma}}</td>
+	<td class="average">{{.Average}}</td>
+	<td class="latest">{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
+</tr>
+{{end -}}
+</table>
+<footer><a href="#title">back to top</a></footer>
+</section>
+{{- end}}
+
+{{if (.All | len) gt 0 -}}
+<section>
+<h1 id="tags">Per sub</h1>
+<table class="tags">
+<tr><th>Rank</th>
+	<th>Sub</th>
+	<th>Count</th>
+	<th>Karma</th>
+	<th>Average</th>
+	<th>Last commented</th>
+</tr>
+{{range .All -}}
+<tr>
+	<td class="rank">{{.Number}}</td>
+	<td class="sub"><a href="https://www.reddit.com/r/{{.Tag}}">{{.Tag}}</a></td>
+	<td class="count">{{.Count}}</td>
+	<td class="karma">{{.Karma}}</td>
+	<td class="average">{{.Average}}</td>
+	<td class="latest">{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
+</tr>
+{{end -}}
+</table>
+<footer><a href="#title">back to top</a></footer>
+</section>
+{{- end}}
+
+</main>
+{{- else}}
+<p>No comment with negative karma yet.</p>
+{{end -}}
+
 </body>`))
 
 const CSSMain = `:root {
@@ -327,6 +444,17 @@ body {
 @media (min-width: 50rem) {
 	#title { font-size: 2.5em }
 }
+
+#title a, #title a:visited {
+	color: inherit;
+	text-decoration: none;
+}
+
+#title a:hover {
+	color: var(--sec-color);
+	text-decoration: underline;
+}
+
 
 h1, h2 {
 	color: var(--main-color);
@@ -394,20 +522,20 @@ aside.md-link a::after {
 	font-size: smaller;
 }`
 
-const CSSCompendium = `table.subs {
+const CSSCompendium = `table.tags {
 	border-spacing: 0;
 }
 
-table.subs th {
+table.tags th {
 	font-weight: bold;
 }
 
-table.subs tr {
+table.tags tr {
 	display: table-row;
 }
 
 @media (max-width: 30rem) {
-	table.subs tr {
+	table.tags tr {
 		display: flex;
 		flex-wrap: wrap;
 		flex-direction: row;
@@ -416,30 +544,30 @@ table.subs tr {
 	}
 
 
-	table.subs td:not(:first-child), table.subs th:not(:first-child) {
+	table.tags td:not(:first-child), table.tags th:not(:first-child) {
 		padding-left: calc(2*var(--spacing));
 	}
 
-	table.subs tr {
+	table.tags tr {
 		border-bottom: dotted 1px var(--fg);
 	}
 
-	table.subs td::after {
+	table.tags td::after {
 		font-weight: bold;
 	}
 
-	table.subs .rank { font-weight: bold }
+	table.tags .rank { font-weight: bold }
 
-	table.subs .count::after { content: "C" }
-	table.subs .karma::after { content: "K" }
-	table.subs .average::after { content: "A" }
+	table.tags .count::after { content: "C" }
+	table.tags .karma::after { content: "K" }
+	table.tag .average::after { content: "A" }
 }
 
 @media(max-width: 40rem) {
 }
 
 @media (min-width: 40rem) {
-	table.subs {
+	table.tags {
 		border-spacing: calc(2*var(--spacing));
 	}
 }

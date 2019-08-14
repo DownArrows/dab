@@ -406,7 +406,4 @@ They communicate together through channels that are passed either via a closure 
 ### TODO
 
  - better browsability of the web reports
- - compendium:
-	- index: SQL queries done
-	- user page: tests
  - replace blackfriday with snudown

@@ -121,6 +121,7 @@ func NewWebServer(conf WebConf, storage WebServerStorage, reports ReportFactory,
 	mux.HandleFunc("/reports/current", wsrv.ReportCurrent)
 	mux.HandleFunc("/reports/lastweek", wsrv.ReportLatest)
 	mux.HandleFunc("/reports/source/", wsrv.ReportSource)
+	mux.HandleFunc("/compendium", wsrv.CompendiumIndex)
 	mux.HandleFunc("/compendium/user/", wsrv.CompendiumUser)
 	mux.HandleFunc("/backup", wsrv.Backup)
 
@@ -209,10 +210,7 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	report.CommentBodyConverter = func(src CommentView) (interface{}, error) {
-		html := blackfriday.Run([]byte(src.Body), wsrv.markdownOptions)
-		return template.HTML(html), nil
-	}
+	report.CommentBodyConverter = wsrv.CommentBodyConverter
 
 	w.Header().Set("Content-Type", "text/html")
 	if err := HTMLReportPage.Execute(w, report); err != nil {
@@ -228,6 +226,21 @@ func (wsrv *WebServer) ReportCurrent(w http.ResponseWriter, r *http.Request) {
 func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
 	week, year := wsrv.reports.LastWeekCoordinates()
 	redirectToReport(week, year, w, r)
+}
+
+func (wsrv *WebServer) CompendiumIndex(w http.ResponseWriter, r *http.Request) {
+	stats, err := wsrv.compendium.Compendium(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	stats.CommentBodyConverter = wsrv.CommentBodyConverter
+
+	w.Header().Set("Content-Type", "text/html")
+	if err := HTMLCompendium.Execute(w, stats); err != nil {
+		panic(err)
+	}
 }
 
 func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
@@ -253,10 +266,7 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats.CommentBodyConverter = func(src CommentView) (interface{}, error) {
-		html := blackfriday.Run([]byte(src.Body), wsrv.markdownOptions)
-		return template.HTML(html), nil
-	}
+	stats.CommentBodyConverter = wsrv.CommentBodyConverter
 
 	w.Header().Set("Content-Type", "text/html")
 	if err := HTMLCompendiumUserPage.Execute(w, stats); err != nil {
@@ -271,6 +281,11 @@ func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/x-sqlite3")
 	http.ServeFile(w, r, wsrv.storage.BackupPath())
+}
+
+func (wsrv *WebServer) CommentBodyConverter(src CommentView) (interface{}, error) {
+	html := blackfriday.Run([]byte(src.Body), wsrv.markdownOptions)
+	return template.HTML(html), nil
 }
 
 func redirectToReport(week uint8, year int, w http.ResponseWriter, r *http.Request) {

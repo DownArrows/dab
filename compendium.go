@@ -51,6 +51,7 @@ func (c CompendiumFactory) Compendium(ctx context.Context) (*Compendium, error) 
 		return nil, err
 	}
 
+	stats.makeTopCommentsViews()
 	stats.Normalize()
 
 	return stats, nil

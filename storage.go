@@ -197,7 +197,7 @@ func (s *Storage) ListActiveUsers(ctx context.Context) ([]User, error) {
 }
 
 func (s *Storage) ListRegisteredUsers(conn *SQLiteConn) ([]User, error) {
-	return s.users(conn, "SELECT * FROM users ORDER BY last_scan")
+	return s.users(conn, "SELECT * FROM users")
 }
 
 func (s *Storage) usersCtx(ctx context.Context, sql string) ([]User, error) {
@@ -455,9 +455,9 @@ func (s *Storage) CompendiumPerUser(conn *SQLiteConn) ([]*CompendiumDetailsTagge
 			COUNT(comments.id),
 			AVG(comments.score),
 			SUM(comments.score) AS karma,
-			user.LastScan,
+			MAX(comments.created),
 			comments.author
-		FROM users JOIN users
+		FROM users JOIN comments
 		ON comments.author = users.name
 		WHERE users.hidden IS FALSE
 		GROUP BY author
@@ -470,7 +470,7 @@ func (s *Storage) CompendiumPerUserNegative(conn *SQLiteConn) ([]*CompendiumDeta
 			COUNT(comments.id),
 			AVG(comments.score),
 			SUM(comments.score) AS karma,
-			user.LastScan,
+			MAX(comments.created),
 			comments.author
 		FROM users JOIN comments
 		ON comments.author = users.name
