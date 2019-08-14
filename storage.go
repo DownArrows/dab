@@ -374,7 +374,7 @@ func (s *Storage) GetCommentsBelowBetween(conn *SQLiteConn, score int64, since, 
 }
 
 func (s *Storage) TopComments(conn *SQLiteConn, limit uint) ([]Comment, error) {
-	return s.comments(conn, "SELECT * FROM comments WHERE score < 0 ORDER BY score ASC LIMIT ?", int(limit))
+	return s.comments(conn, "SELECT * FROM comments WHERE hidden IS FALSE AND score < 0 ORDER BY score ASC LIMIT ?", int(limit))
 }
 
 func (s *Storage) TopCommentsUser(conn *SQLiteConn, username string, limit uint) ([]Comment, error) {

@@ -693,7 +693,7 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 			Value:  user.Added.In(bot.timezone).Format(time.RFC850),
 			Inline: true,
 		}, {
-			Name:   "Hidden from reports",
+			Name:   "Hidden",
 			Value:  fmt.Sprintf("%t", user.Hidden),
 			Inline: true,
 		}, {
