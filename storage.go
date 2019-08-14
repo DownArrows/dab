@@ -96,8 +96,8 @@ func NewStorage(ctx context.Context, logger LevelLogger, conf StorageConf) (*Sto
 
 func (s *Storage) initTables(ctx context.Context) error {
 	var queries []SQLQuery
-	queries = append(queries, (&User{}).InitializationQueries()...)
-	queries = append(queries, (&Comment{}).InitializationQueries()...)
+	queries = append(queries, User{}.InitializationQueries()...)
+	queries = append(queries, Comment{}.InitializationQueries()...)
 	if err := s.db.MultiExec(ctx, queries); err != nil {
 		return err
 	}
@@ -276,7 +276,7 @@ func (s *Storage) SaveCommentsUpdateUser(ctx context.Context, comments []Comment
 		defer stmt.Close()
 
 		for _, comment := range comments {
-			if err := stmt.Exec((&comment).ToDB()...); err != nil {
+			if err := stmt.Exec(comment.ToDB()...); err != nil {
 				return err
 			}
 			if err := stmt.ClearBindings(); err != nil {

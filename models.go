@@ -31,7 +31,7 @@ type Comment struct {
 	Body      string
 }
 
-func (c *Comment) InitializationQueries() []SQLQuery {
+func (c Comment) InitializationQueries() []SQLQuery {
 	return []SQLQuery{
 		{SQL: `CREATE TABLE IF NOT EXISTS comments (
 			id TEXT PRIMARY KEY,
@@ -51,7 +51,7 @@ func (c *Comment) InitializationQueries() []SQLQuery {
 	}
 }
 
-func (c *Comment) ToDB() []interface{} {
+func (c Comment) ToDB() []interface{} {
 	return []interface{}{c.ID, c.Author, c.Score, c.Permalink, c.Sub, c.Created.Unix(), c.Body}
 }
 
@@ -105,7 +105,7 @@ type User struct {
 	Position  string
 }
 
-func (u *User) InitializationQueries() []SQLQuery {
+func (u User) InitializationQueries() []SQLQuery {
 	return []SQLQuery{
 		{SQL: `CREATE TABLE IF NOT EXISTS user_archive (
 			name TEXT PRIMARY KEY,
@@ -129,7 +129,7 @@ func (u *User) InitializationQueries() []SQLQuery {
 	}
 }
 
-func (u *User) ToDB() []interface{} {
+func (u User) ToDB() []interface{} {
 	return []interface{}{u.Name, u.Created.Unix(), u.NotFound, u.Suspended, u.Added.Unix(),
 		int(u.BatchSize), u.Hidden, u.Inactive, u.LastScan.Unix(), u.New, u.Position}
 }
