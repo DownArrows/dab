@@ -366,39 +366,6 @@ func (s StatsSummaries) Sort() StatsSummaries {
 	return s
 }
 
-type CompendiumUser struct {
-	All                  []*CompendiumDetailsTagged
-	CommentBodyConverter CommentBodyConverter
-	NbTop                uint
-	Negative             []*CompendiumDetailsTagged
-	RawTopComments       []Comment
-	Summary              *CompendiumDetails
-	SummaryNegative      *CompendiumDetails
-	Timezone             *time.Location
-	User                 User
-	Version              SemVer
-}
-
-func (stats *CompendiumUser) PercentageNegative() int64 {
-	if stats.Summary.Count == 0 || stats.SummaryNegative.Count == 0 {
-		return 0
-	}
-	return int64(math.Round(100 * float64(stats.SummaryNegative.Count) / float64(stats.Summary.Count)))
-}
-
-func (stats *CompendiumUser) NbTopComments() int {
-	return len(stats.RawTopComments)
-}
-
-func (stats *CompendiumUser) TopComments() []CommentView {
-	views := make([]CommentView, 0, len(stats.RawTopComments))
-	for i, comment := range stats.RawTopComments {
-		view := comment.ToView(uint(i+1), stats.Timezone, stats.CommentBodyConverter)
-		views = append(views, view)
-	}
-	return views
-}
-
 type CompendiumDetails struct {
 	Average float64
 	Count   int64
@@ -429,6 +396,12 @@ func (details *CompendiumDetails) FromDB(stmt *sqlite.Stmt) error {
 	}
 
 	return nil
+}
+
+func (details *CompendiumDetails) Normalize(n uint, timezone *time.Location) {
+	details.Average = math.Round(details.Average)
+	details.Latest = details.Latest.In(timezone)
+	details.Number = n
 }
 
 func (details *CompendiumDetails) KarmaPerComment() float64 {

@@ -49,11 +49,18 @@ type WebServerStorage interface {
 }
 
 type CompendiumStorage interface {
+	// Index
+	CompendiumPerUser(*SQLiteConn) ([]*CompendiumDetailsTagged, error)
+	CompendiumPerUserNegative(*SQLiteConn) ([]*CompendiumDetailsTagged, error)
+	ListRegisteredUsers(*SQLiteConn) ([]User, error)
+	TopComments(*SQLiteConn, uint) ([]Comment, error)
+	// User pages
 	CompendiumUserPerSub(*SQLiteConn, string) ([]*CompendiumDetailsTagged, error)
 	CompendiumUserPerSubNegative(*SQLiteConn, string) ([]*CompendiumDetailsTagged, error)
 	CompendiumUserSummary(*SQLiteConn, string) (*CompendiumDetails, error)
 	CompendiumUserSummaryNegative(*SQLiteConn, string) (*CompendiumDetails, error)
 	TopCommentsUser(*SQLiteConn, string, uint) ([]Comment, error)
+	// Other
 	WithTx(context.Context, func(*SQLiteConn) error) error
 }
 
@@ -442,22 +449,37 @@ func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.
 	return stats, err
 }
 
-//func (s *Storage) CompendiumPerUser(conn *SQLiteConn, username string) ([]*CompendiumDetailsTagged, error) {
-//	return s.compendiumDetailsTagged(conn, `
-//		SELECT COUNT(id), AVG(score), SUM(score) AS karma, MAX(created), author
-//		FROM comments
-//		GROUP BY author
-//		ORDER BY karma ASC`)
-//}
-//
-//func (s *Storage) CompendiumPerUserNegative(conn *SQLiteConn, username string) ([]*CompendiumDetailsTagged, error) {
-//	return s.compendiumDetailsTagged(conn, `
-//		SELECT COUNT(id), AVG(score), SUM(score) AS karma, MAX(created), author
-//		FROM comments
-//		WHERE score < 0
-//		GROUP BY author
-//		ORDER BY karma ASC`)
-//}
+func (s *Storage) CompendiumPerUser(conn *SQLiteConn) ([]*CompendiumDetailsTagged, error) {
+	return s.compendiumDetailsTagged(conn, `
+		SELECT
+			COUNT(comments.id),
+			AVG(comments.score),
+			SUM(comments.score) AS karma,
+			user.LastScan,
+			comments.author
+		FROM users JOIN users
+		ON comments.author = users.name
+		WHERE users.hidden IS FALSE
+		GROUP BY author
+		ORDER BY karma ASC`)
+}
+
+func (s *Storage) CompendiumPerUserNegative(conn *SQLiteConn) ([]*CompendiumDetailsTagged, error) {
+	return s.compendiumDetailsTagged(conn, `
+		SELECT
+			COUNT(comments.id),
+			AVG(comments.score),
+			SUM(comments.score) AS karma,
+			user.LastScan,
+			comments.author
+		FROM users JOIN comments
+		ON comments.author = users.name
+		WHERE
+			users.hidden IS FALSE
+			AND comments.score < 0
+		GROUP BY author
+		ORDER BY karma ASC`)
+}
 
 func (s *Storage) CompendiumUserPerSub(conn *SQLiteConn, username string) ([]*CompendiumDetailsTagged, error) {
 	return s.compendiumDetailsTagged(conn, `
