@@ -1,0 +1,48 @@
+# GNU Makefile to develop DAB
+#
+# Assumes amd64 linux and that the following are installed:
+#  - coreutils
+#  - git
+#  - hub (github's command line tool)
+#  - musl
+#  - pandoc
+#  - rsync
+#  - systemd (on remote host)
+#  - xz
+#  Feel free to adapt to your needs.
+HOST = # user@your.server
+LAST_TAG = $$(git tag --list --sort="v:refname" | tail -1)
+ARCHIVE_URL = # URL where to get the up to date database
+
+dab: *.go
+	CC=musl-gcc go build -tags netgo -ldflags '-linkmode external -extldflags "-s -static"'
+	sed -i "s/$$USER/$$(echo $$USER | sed 's/./x/g')/g" dab
+
+debug: dab
+	./dab -log Debug
+
+dab.db: dab.db.xz
+	unxz -k dab.db.xz
+
+dab.db.xz:
+	wget $(ARCHIVE_URL)
+
+test:
+	go test
+	go vet
+
+README.html: README.md
+	pandoc $< --self-contained -t html > $@
+
+release: dab LICENSE README.md
+	tar cJf dab.$(LAST_TAG).linux-amd64.tar.xz $^
+	hub push origin HEAD:master
+	hub push origin HEAD:master --tags
+	hub release create $(LAST_TAG) -a dab.$(LAST_TAG).linux-amd64.tar.xz
+
+deploy: dab
+	rsync -z --progress ./dab $(HOST):/usr/local/bin
+	ssh $(HOST) 'systemctl restart dab'
+
+clean:
+	rm -f dab dab.*linux*tar.xz dab.db dab.db-shm dab.db-wal README.html dab.db.backup
