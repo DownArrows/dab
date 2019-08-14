@@ -79,7 +79,7 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 
 <main>
 <h1>Comments</h1>
-{{range .Comments}}
+{{range .Comments -}}
 <article class="comment">
 	<h2>#{{.Number}}</h2>
 	<table>
@@ -102,10 +102,10 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 	</table>
 
 	<blockquote>
-{{.BodyConvert}}
+{{.BodyConvert -}}
 	</blockquote>
 </article>
-{{end}}
+{{end -}}
 </main>
 
 <footer><a href="#title">back to top</a></footer>
@@ -135,6 +135,11 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 <header>
 <article>
 <h1 id="summary">Summary</h1>
+	{{if .User.Suspended -}}
+		<p class="suspended"><strong>Account suspended</strong></p>
+	{{else if .User.NotFound -}}
+		<p><strong>Account deleted</strong></p>
+	{{end -}}
 	<table>
 		<tr>
 			<td>Account created<td>
@@ -168,10 +173,10 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 
 <section>
 <h1 id="top">Most downvoted</h1>
-{{if (.NbTopComments) gt 1}}
+{{if (.NbTopComments) gt 1 -}}
 <p>First {{.NbTopComments}} comments.</p>
-{{end}}
-{{range .TopComments}}
+{{end -}}
+{{range .TopComments -}}
 <article class="comment">
 	<h2># {{.Number}}</h2>
 	<table>
@@ -197,7 +202,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 {{.BodyConvert}}
 	</blockquote>
 </article>
-{{end}}
+{{end -}}
 <footer><a href="#title">back to top</a></footer>
 </section>
 
@@ -212,7 +217,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	<th><strong>Average</strong></th>
 	<th><strong>Last commented</strong></th>
 </tr>
-{{range .All}}
+{{range .All -}}
 <tr>
 	<td>{{.Number}}</td>
 	<td><a href="https://www.reddit.com/r/{{.Sub}}/">{{.Sub}}</a></td>
@@ -221,7 +226,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	<td>{{.Average}}</td>
 	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
 </tr>
-{{end}}
+{{end -}}
 </table>
 <footer><a href="#title">back to top</a></footer>
 </section>
@@ -237,7 +242,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	<th><strong>Average</strong></th>
 	<th><strong>Last commented</strong></th>
 </tr>
-{{range .Negative}}
+{{range .Negative -}}
 <tr>
 	<td>{{.Number}}</td>
 	<td><a href="https://www.reddit.com/r/{{.Sub}}/">{{.Sub}}</a></td>
@@ -246,7 +251,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	<td>{{.Average}}</td>
 	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
 </tr>
-{{end}}
+{{end -}}
 </table>
 <footer><a href="#title">back to top</a></footer>
 </section>
@@ -363,4 +368,8 @@ aside.md-link a::after {
 
 const CSSCompendium = `table.subs {
 	border-spacing: calc(2*var(--spacing));
+}
+
+.suspended {
+	color: crimson;
 }`
