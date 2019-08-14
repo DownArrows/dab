@@ -456,7 +456,7 @@ func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.
 func (s *Storage) CompendiumUserStatsPerSub(conn *SQLiteConn, username string) ([]*CompendiumUserStatsDetailsPerSub, error) {
 	sql := `
 		SELECT
-			COUNT(score), AVG(score), SUM(score) AS karma, MAX(created), MIN(created), sub
+			COUNT(score), AVG(score), SUM(score) AS karma, MAX(created), sub
 		FROM comments WHERE author = ?
 		GROUP BY sub
 		ORDER BY karma ASC`
@@ -480,7 +480,7 @@ func (s *Storage) CompendiumUserStatsPerSub(conn *SQLiteConn, username string) (
 func (s *Storage) CompendiumUserStatsPerSubNegative(conn *SQLiteConn, username string) ([]*CompendiumUserStatsDetailsPerSub, error) {
 	sql := `
 		SELECT
-			COUNT(score), AVG(score), SUM(score) AS karma, MAX(created), MIN(created), sub
+			COUNT(score), AVG(score), SUM(score) AS karma, MAX(created), sub
 		FROM comments WHERE author = ? AND score < 0
 		GROUP BY sub
 		ORDER BY karma ASC`
@@ -502,14 +502,14 @@ func (s *Storage) CompendiumUserStatsPerSubNegative(conn *SQLiteConn, username s
 }
 
 func (s *Storage) CompendiumUserStatsSummary(conn *SQLiteConn, username string) (*CompendiumUserStatsDetails, error) {
-	sql := "SELECT COUNT(score), AVG(score), SUM(score), MAX(created), MIN(created) FROM comments WHERE author = ?"
+	sql := "SELECT COUNT(score), AVG(score), SUM(score), MAX(created) FROM comments WHERE author = ?"
 	stats := &CompendiumUserStatsDetails{}
 	err := conn.Select(sql, stats.FromDB, username)
 	return stats, err
 }
 
 func (s *Storage) CompendiumUserStatsSummaryNegative(conn *SQLiteConn, username string) (*CompendiumUserStatsDetails, error) {
-	sql := "SELECT COUNT(score), AVG(score), SUM(score), MAX(created), MIN(created) FROM comments WHERE author = ? AND score < 0"
+	sql := "SELECT COUNT(score), AVG(score), SUM(score), MAX(created) FROM comments WHERE author = ? AND score < 0"
 	stats := &CompendiumUserStatsDetails{}
 	err := conn.Select(sql, stats.FromDB, username)
 	return stats, err

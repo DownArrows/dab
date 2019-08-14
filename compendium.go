@@ -85,7 +85,6 @@ func (c Compendium) UserStats(ctx context.Context, user User) (*CompendiumUserSt
 
 func (c Compendium) normalizeUserStatsDetails(details *CompendiumUserStatsDetails, n int) {
 	details.Average = math.Round(details.Average)
-	details.First = details.First.In(c.Timezone)
 	details.Latest = details.Latest.In(c.Timezone)
 	details.Number = uint(n)
 }

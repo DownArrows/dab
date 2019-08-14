@@ -402,7 +402,6 @@ func (stats *CompendiumUserStats) TopComments() []CommentView {
 type CompendiumUserStatsDetails struct {
 	Average float64
 	Count   int64
-	First   time.Time
 	Karma   int64
 	Latest  time.Time
 	Number  uint
@@ -429,12 +428,6 @@ func (details *CompendiumUserStatsDetails) FromDB(stmt *sqlite.Stmt) error {
 		details.Latest = time.Unix(latest, 0)
 	}
 
-	if first, _, err := stmt.ColumnInt64(4); err != nil {
-		return err
-	} else {
-		details.First = time.Unix(first, 0)
-	}
-
 	return nil
 }
 
@@ -443,10 +436,6 @@ func (details *CompendiumUserStatsDetails) KarmaPerComment() float64 {
 		return 0
 	}
 	return float64(math.Round(float64(details.Karma) / float64(details.Count)))
-}
-
-func (details *CompendiumUserStatsDetails) Interval() time.Duration {
-	return details.First.Sub(details.Latest)
 }
 
 type CompendiumUserStatsDetailsPerSub struct {
@@ -458,7 +447,7 @@ func (details *CompendiumUserStatsDetailsPerSub) FromDB(stmt *sqlite.Stmt) error
 	if err := details.CompendiumUserStatsDetails.FromDB(stmt); err != nil {
 		return err
 	}
-	sub, _, err := stmt.ColumnText(5)
+	sub, _, err := stmt.ColumnText(4)
 	details.Sub = sub
 	return err
 }
