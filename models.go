@@ -380,6 +380,9 @@ type CompendiumUserStats struct {
 }
 
 func (stats *CompendiumUserStats) PercentageNegative() int64 {
+	if stats.Summary.Count == 0 || stats.SummaryNegative.Count == 0 {
+		return 0
+	}
 	return int64(math.Round(100 * float64(stats.SummaryNegative.Count) / float64(stats.Summary.Count)))
 }
 
@@ -436,6 +439,9 @@ func (details *CompendiumUserStatsDetails) FromDB(stmt *sqlite.Stmt) error {
 }
 
 func (details *CompendiumUserStatsDetails) KarmaPerComment() float64 {
+	if details.Count == 0 || details.Karma == 0 {
+		return 0
+	}
 	return float64(math.Round(float64(details.Karma) / float64(details.Count)))
 }
 

@@ -123,14 +123,22 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 <body>
 <div id="title">Compendium for {{.User.Name}}</div>
 
+{{if (.Summary.Count) gt 0 -}}
 <nav>
 	<ul>
 		<li><a href="/compendium/user/{{.User.Name}}#summary">Summary</a></li>
+		{{if (.NbTopComments) gt 0 -}}
 		<li><a href="/compendium/user/{{.User.Name}}#top">Most downvoted</a></li>
+		{{- end}}
+		{{if (.Negative | len) gt 0 -}}
 		<li><a href="/compendium/user/{{.User.Name}}#subs-negative">Negative per sub</a></li>
+		{{- end}}
+		{{if (.All | len) gt 0 -}}
 		<li><a href="/compendium/user/{{.User.Name}}#subs">Per sub</a></li>
+		{{- end}}
 	</ul>
 </nav>
+{{- end}}
 
 <header>
 <article>
@@ -145,14 +153,25 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 			<td>Account created<td>
 			<td>{{.User.Created.Format "Monday 02 January 2006 15:04 MST"}}<td>
 		</tr>
+		{{if (.Summary.Count) gt 0 -}}
+		<tr>
+			<td>Last commented<td>
+			<td>{{.Summary.Latest.Format "Monday 02 January 2006 15:04 MST"}}<td>
+		</tr>
+		{{end -}}
 		<tr>
 			<td>Tracked since<td>
 			<td>{{.User.Added.Format "Monday 02 January 2006 15:04 MST"}}<td>
 		</tr>
 		<tr>
 			<td>Last scanned<td>
+			{{if .User.New -}}
+			<td>Not fully scanned yet</td>
+			{{else -}}
 			<td>{{.User.LastScan.Format "Monday 02 January 2006 15:04 MST"}}<td>
+			{{end -}}
 		</tr>
+		{{- if (.Summary.Count) gt 0}}
 		<tr>
 			<td>Number of comments<td>
 			<td><strong>{{.Summary.Count}}</strong>, with <strong>{{.SummaryNegative.Count}}</strong> negative (<strong>{{.PercentageNegative}}%</strong>)<td>
@@ -165,12 +184,14 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 			<td>Average per comment<td>
 			<td><strong>{{.Summary.KarmaPerComment}}</strong>, and <strong>{{.SummaryNegative.KarmaPerComment}}</strong> if negative only<td>
 		</tr>
+		{{- end}}
 	</table>
 </article>
 </header>
 
 <main>
 
+{{if (.NbTopComments) gt 0 -}}
 <section>
 <h1 id="top">Most downvoted</h1>
 {{if (.NbTopComments) gt 1 -}}
@@ -205,7 +226,9 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 {{end -}}
 <footer><a href="#title">back to top</a></footer>
 </section>
+{{- end}}
 
+{{if (.Negative | len) gt 0 -}}
 <section>
 <h1 id="subs-negative">Negative per sub</h1>
 <table class="subs">
@@ -231,7 +254,9 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 <p><em>NB: comments from after a sub has been quarantined aren't saved, but comments deleted by the user are kept.</em></p>
 <footer><a href="#title">back to top</a></footer>
 </section>
+{{- end}}
 
+{{if (.All | len) gt 0 -}}
 <section>
 <h1 id="subs">Per sub</h1>
 <table class="subs">
@@ -256,6 +281,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 <p><em>NB: comments from after a sub has been quarantined aren't saved, but comments deleted by the user are kept.</em></p>
 <footer><a href="#title">back to top</a></footer>
 </section>
+{{- end}}
 
 </main>
 </body>`))
