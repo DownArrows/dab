@@ -9,7 +9,7 @@ import (
 	"text/template"
 )
 
-var Version = SemVer{1, 13, 1}
+var Version = SemVer{1, 13, 3}
 
 const DefaultChannelSize = 100
 

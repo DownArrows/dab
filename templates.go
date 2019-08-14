@@ -242,12 +242,12 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 </tr>
 {{range .Negative -}}
 <tr>
-	<td class="rank">{{.Number}}</td>
-	<td class="sub"><a href="https://www.reddit.com/r/{{.Tag}}/">{{.Tag}}</a></td>
-	<td class="count">{{.Count}}</td>
-	<td class="karma">{{.Karma}}</td>
-	<td class="average">{{.Average}}</td>
-	<td class="latest">{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
+	<td>{{.Number}}</td>
+	<td><a href="https://www.reddit.com/r/{{.Tag}}/">{{.Tag}}</a></td>
+	<td>{{.Count}}</td>
+	<td>{{.Karma}}</td>
+	<td>{{.Average}}</td>
+	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
 </tr>
 {{end -}}
 </table>
@@ -269,12 +269,12 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 </tr>
 {{range .All -}}
 <tr>
-	<td class="rank">{{.Number}}</td>
-	<td class="sub"><a href="https://www.reddit.com/r/{{.Tag}}/">{{.Tag}}</a></td>
-	<td class="count">{{.Count}}</td>
-	<td class="karma">{{.Karma}}</td>
-	<td class="average">{{.Average}}</td>
-	<td class="latest">{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
+	<td>{{.Number}}</td>
+	<td><a href="https://www.reddit.com/r/{{.Tag}}/">{{.Tag}}</a></td>
+	<td>{{.Count}}</td>
+	<td>{{.Karma}}</td>
+	<td>{{.Average}}</td>
+	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
 </tr>
 {{end -}}
 </table>
@@ -359,12 +359,12 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 </tr>
 {{range .Negative -}}
 <tr>
-	<td class="rank">{{.Number}}</td>
-	<td class="user"><a href="/compendium/user/{{.Tag}}">{{.Tag}}</a></td>
-	<td class="count">{{.Count}}</td>
-	<td class="karma">{{.Karma}}</td>
-	<td class="average">{{.Average}}</td>
-	<td class="latest">{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
+	<td>{{.Number}}</td>
+	<td><a href="/compendium/user/{{.Tag}}">{{.Tag}}</a></td>
+	<td>{{.Count}}</td>
+	<td>{{.Karma}}</td>
+	<td>{{.Average}}</td>
+	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
 </tr>
 {{end -}}
 </table>
@@ -385,12 +385,12 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 </tr>
 {{range .All -}}
 <tr>
-	<td class="rank">{{.Number}}</td>
-	<td class="sub"><a href="https://www.reddit.com/r/{{.Tag}}">{{.Tag}}</a></td>
-	<td class="count">{{.Count}}</td>
-	<td class="karma">{{.Karma}}</td>
-	<td class="average">{{.Average}}</td>
-	<td class="latest">{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
+	<td>{{.Number}}</td>
+	<td><a href="https://www.reddit.com/r/{{.Tag}}">{{.Tag}}</a></td>
+	<td>{{.Count}}</td>
+	<td>{{.Karma}}</td>
+	<td>{{.Average}}</td>
+	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
 </tr>
 {{end -}}
 </table>
@@ -558,14 +558,11 @@ table.tags tr {
 		font-weight: bold;
 	}
 
-	table.tags .rank { font-weight: bold }
+	table.tags td:first-child { font-weight: bold }
 
-	table.tags .count::after { content: "C" }
-	table.tags .karma::after { content: "K" }
-	table.tag .average::after { content: "A" }
-}
-
-@media(max-width: 40rem) {
+	table.tags td:nth-child(3)::after { content: "C" }
+	table.tags td:nth-child(4)::after { content: "K" }
+	table.tags td:nth-child(5)::after { content: "A" }
 }
 
 @media (min-width: 40rem) {
