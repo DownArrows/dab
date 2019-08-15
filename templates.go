@@ -429,40 +429,28 @@ a:visited {
 
 body {
 	color: var(--fg);
+	max-width: 62.5em;
+	margin: 1em auto;
 	font-size: 0.75em;
-	max-width: 63rem;
-	margin: 1rem auto;
-}
-
-@media (min-width: 50rem) {
-	body { font-size: 1em }
 }
 
 #title {
 	text-align: center;
-	font-size: 1.5em;
-}
-
-@media (min-width: 50rem) {
-	#title { font-size: 2.5em }
+	font-size: 2em;
 }
 
 h1, h2 {
 	color: var(--main-color);
-	font-size: 1.175em;
-}
-
-@media (min-width: 50em) {
-	h1 { font-size: 1.5em }
-	h2 { font-size: 1.25em }
 }
 
 h1 {
 	font-weight: bold;
+	font-size: 1.5em;
 }
 
 h2 {
 	font-weight: normal;
+	font-size: 1.25em;
 }
 
 #title a, h1 a, h2 a, #title a:visited, h1 a:visited, h2 a:visited {
@@ -474,7 +462,6 @@ h2 {
 	color: var(--sec-color);
 	text-decoration: underline;
 }
-
 
 .comment > blockquote {
 	overflow-wrap: break-word;
@@ -501,16 +488,21 @@ header {
 
 main {
 	margin-bottom: 1em;
+}
+
+@media ((max-resolution: 96dpi) and (min-width: 50em)) or ((min-resolution: 192dpi) and (min-width: 100em)) {
+	body { font-size: 1em }
 }`
 
 const CSSReports = `
 aside.md-link {
 	font-weight: bold;
 	margin-right: 1em;
+	float: right;
 }
 
-@media (min-width: 40rem) {
-	aside.md-link { float: right }
+@media (max-width: 50em) and (max-resolution: 96dpi) {
+	aside.md-link { float: none }
 }
 
 aside.md-link a::after {
@@ -525,7 +517,7 @@ aside.md-link a::after {
 }`
 
 const CSSCompendium = `table.tags {
-	border-spacing: 0;
+	border-spacing: calc(2*var(--spacing));
 }
 
 table.tags th {
@@ -536,7 +528,7 @@ table.tags tr {
 	display: table-row;
 }
 
-@media (max-width: 30rem) {
+@media (max-width: 35em) and (max-resolution: 96dpi) {
 	table.tags tr {
 		display: flex;
 		flex-wrap: wrap;
@@ -545,13 +537,12 @@ table.tags tr {
 		align-items: stretch;
 	}
 
-
 	table.tags td:not(:first-child), table.tags th:not(:first-child) {
 		padding-left: calc(2*var(--spacing));
 	}
 
 	table.tags tr {
-		border-bottom: dotted 1px var(--fg);
+		border-bottom: dotted 0.063em var(--fg);
 	}
 
 	table.tags td::after {
@@ -563,12 +554,6 @@ table.tags tr {
 	table.tags td:nth-child(3)::after { content: "C" }
 	table.tags td:nth-child(4)::after { content: "K" }
 	table.tags td:nth-child(5)::after { content: "A" }
-}
-
-@media (min-width: 40rem) {
-	table.tags {
-		border-spacing: calc(2*var(--spacing));
-	}
 }
 
 .suspended {
