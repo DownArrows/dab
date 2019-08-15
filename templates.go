@@ -351,7 +351,7 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 <table class="tags">
 <tr>
 	<th><strong>Rank</strong></th>
-	<th><strong>Sub</strong></th>
+	<th><strong>Name</strong></th>
 	<th><strong>Count</strong></th>
 	<th><strong>Karma</strong></th>
 	<th><strong>Average</strong></th>
@@ -374,10 +374,10 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 
 {{if (.All | len) gt 0 -}}
 <section>
-<h1 id="tags">Per sub</h1>
+<h1 id="tags">Karma per user</h1>
 <table class="tags">
 <tr><th>Rank</th>
-	<th>Sub</th>
+	<th>Name</th>
 	<th>Count</th>
 	<th>Karma</th>
 	<th>Average</th>
