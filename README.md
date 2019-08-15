@@ -406,5 +406,16 @@ They communicate together through channels that are passed either via a closure 
 
 ### TODO
 
- - better browsability of the web reports
- - replace blackfriday with snudown
+ 1. post reports on a subreddit and keep them up to date for a little while
+ 1. database corrections from DTB's
+ 1. better browsability of the web reports
+ 1. backup discord messages
+ 1. ability to use multiple reddit accounts and proxies
+ 1. get data from pushshift.io
+ 1. replace blackfriday with snudown
+ 1. fix -useradd + -log
+ 1. serve files from a directory from the root URL
+ 1. https support and auto renewal of certificates with letsencrypt
+ 1. wiki with discord authentication
+ 1. cleanup the config file
+ 1. deprecate useless command line options
