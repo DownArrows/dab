@@ -151,7 +151,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	<table>
 		<tr>
 			<td>Link<td>
-			<td><a href="https://www.reddit.com/u/{{.User.Name}}">/r/{{.User.Name}}</a><td>
+			<td><a href="https://www.reddit.com/u/{{.User.Name}}">/u/{{.User.Name}}</a><td>
 		</tr>
 		<tr>
 			<td>Account created<td>
@@ -415,7 +415,7 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 {{range .All -}}
 <tr>
 	<td>{{.Number}}</td>
-	<td><a href="https://www.reddit.com/r/{{.Tag}}">{{.Tag}}</a></td>
+	<td><a href="/compendium/user/{{.Tag}}">{{.Tag}}</a></td>
 	<td>{{.Karma}}</td>
 	<td>{{.Count}}</td>
 	<td>{{.Average}}</td>
