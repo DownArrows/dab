@@ -315,6 +315,7 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 {{- if (.Negative | len) gt 0}}
 <nav>
 	<ul>
+		<li><a href="/compendium#summary">Summary</a></li>
 		<li><a href="/compendium#top">Most downvoted</a></li>
 		<li><a href="/compendium#tags-negative">Negative karma per user</a></li>
 		<li><a href="/compendium#tags">Karma per user</a></li>
@@ -323,7 +324,19 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 
 <main>
 
-<p>{{.Users | len}} registered users, of which {{.HiddenUsersLen}} are hidden.</p>
+<article>
+<h1 id="summary">Summary</h1>
+	<table>
+		<tr><td>Registered</td><td>{{.Users | len}}</td></tr>
+		<tr><td>Hidden</td><td>{{.HiddenUsersLen}}</td></tr>
+		{{- with $user := (index .Users 0)}}
+		<tr>
+			<td>Last scanned</td>
+			<td><a href="/compendium/user/{{$user.Name}}">{{$user.Name}}</a> at {{$user.LastScan.Format "15:04 2006-01-02 MST"}}</td>
+		</tr>
+		{{- end}}
+	</table>
+</article>
 
 <section>
 <h1 id="top">Most downvoted</h1>

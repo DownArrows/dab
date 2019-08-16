@@ -197,7 +197,7 @@ func (s *Storage) ListActiveUsers(ctx context.Context) ([]User, error) {
 }
 
 func (s *Storage) ListRegisteredUsers(conn *SQLiteConn) ([]User, error) {
-	return s.users(conn, "SELECT * FROM users")
+	return s.users(conn, "SELECT * FROM users ORDER BY last_scan DESC")
 }
 
 func (s *Storage) usersCtx(ctx context.Context, sql string) ([]User, error) {
