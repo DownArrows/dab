@@ -449,6 +449,7 @@ a {
 	color: var(--sec-color);
 	text-decoration: none;
 	overflow-wrap: break-word;
+	word-break: break-all;
 }
 
 a:hover {
