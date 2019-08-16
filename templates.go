@@ -450,6 +450,7 @@ const CSSMain = `:root {
 a {
 	color: var(--sec-color);
 	text-decoration: none;
+	overflow-wrap: break-word;
 }
 
 a:hover {
