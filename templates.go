@@ -54,7 +54,7 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 
 <aside class="md-link"><a href="/reports/source/{{.Year}}/{{.Week}}">source</a></aside>
 
-<article id="report-head">
+<article>
 <h1>Summary</h1>
 {{- with .Head}}
 	<p>{{.Number}} comments under {{.CutOff}} from {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}</p>
