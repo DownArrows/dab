@@ -29,8 +29,6 @@ by [/u/{{.Name}}](https://www.reddit.com/user/{{.Name}})
 
 Author: [/u/{{.Author}}](https://www.reddit.com/user/{{.Author}}) ({{.Average}} week average)
 
-Date: {{.Created.Format "Monday 02 January 15:04 MST"}}
-
 Score: **{{.Score}}**
 
 Link: [{{.Permalink}}](https://np.reddit.com{{.Permalink}})
