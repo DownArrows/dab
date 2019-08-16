@@ -232,6 +232,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 <section>
 <h1 id="tags-negative">Negative per sub</h1>
 <table class="tags">
+<thead>
 <tr>
 	<th><strong>Rank</strong></th>
 	<th><strong>Sub</strong></th>
@@ -240,6 +241,8 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	<th><strong>Average</strong></th>
 	<th><strong>Last commented</strong></th>
 </tr>
+</thead>
+<tbody>
 {{range .Negative -}}
 <tr>
 	<td>{{.Number}}</td>
@@ -247,9 +250,14 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	<td>{{.Count}}</td>
 	<td>{{.Karma}}</td>
 	<td>{{.Average}}</td>
-	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
+	<td>
+		<span class="detail">{{.Latest.Format "15:04"}}</span>
+		<span>{{.Latest.Format "2006-01-02"}}</span>
+		<span class="detail">{{.Latest.Format "MST"}}</span>
+	</td>
 </tr>
 {{end -}}
+</tbody>
 </table>
 <p><em>NB: comments from after a sub has been quarantined aren't saved, but comments deleted by the user are kept.</em></p>
 <footer><a href="#title">back to top</a></footer>
@@ -260,13 +268,17 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 <section>
 <h1 id="tags">Per sub</h1>
 <table class="tags">
-<tr><th>Rank</th>
+<thead>
+<tr>
+	<th>Rank</th>
 	<th>Sub</th>
 	<th>Count</th>
 	<th>Karma</th>
 	<th>Average</th>
 	<th>Last commented</th>
 </tr>
+</thead>
+<tbody>
 {{range .All -}}
 <tr>
 	<td>{{.Number}}</td>
@@ -274,9 +286,14 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 	<td>{{.Count}}</td>
 	<td>{{.Karma}}</td>
 	<td>{{.Average}}</td>
-	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
+	<td>
+		<span class="detail">{{.Latest.Format "15:04"}}</span>
+		<span>{{.Latest.Format "2006-01-02"}}</span>
+		<span class="detail">{{.Latest.Format "MST"}}</span>
+	</td>
 </tr>
 {{end -}}
+</tbody>
 </table>
 <p><em>NB: comments from after a sub has been quarantined aren't saved, but comments deleted by the user are kept.</em></p>
 <footer><a href="#title">back to top</a></footer>
@@ -349,6 +366,7 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 <section>
 <h1 id="tags-negative">Negative karma per user</h1>
 <table class="tags">
+<thead>
 <tr>
 	<th><strong>Rank</strong></th>
 	<th><strong>Name</strong></th>
@@ -357,6 +375,8 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 	<th><strong>Average</strong></th>
 	<th><strong>Last commented</strong></th>
 </tr>
+</thead>
+<tbody>
 {{range .Negative -}}
 <tr>
 	<td>{{.Number}}</td>
@@ -364,9 +384,14 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 	<td>{{.Count}}</td>
 	<td>{{.Karma}}</td>
 	<td>{{.Average}}</td>
-	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
+	<td>
+		<span class="detail">{{.Latest.Format "15:04"}}</span>
+		<span>{{.Latest.Format "2006-01-02"}}</span>
+		<span class="detail">{{.Latest.Format "MST"}}</span>
+	</td>
 </tr>
 {{end -}}
+</tbody>
 </table>
 <footer><a href="#title">back to top</a></footer>
 </section>
@@ -376,13 +401,17 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 <section>
 <h1 id="tags">Karma per user</h1>
 <table class="tags">
-<tr><th>Rank</th>
+<thead>
+<tr>
+	<th>Rank</th>
 	<th>Name</th>
 	<th>Count</th>
 	<th>Karma</th>
 	<th>Average</th>
 	<th>Last commented</th>
 </tr>
+</thead>
+<tbody>
 {{range .All -}}
 <tr>
 	<td>{{.Number}}</td>
@@ -390,9 +419,14 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 	<td>{{.Count}}</td>
 	<td>{{.Karma}}</td>
 	<td>{{.Average}}</td>
-	<td>{{.Latest.Format "15:04 2006-01-02 MST"}}</td>
+	<td>
+		<span class="detail">{{.Latest.Format "15:04"}}</span>
+		<span>{{.Latest.Format "2006-01-02"}}</span>
+		<span class="detail">{{.Latest.Format "MST"}}</span>
+	</td>
 </tr>
 {{end -}}
+</tbody>
 </table>
 <footer><a href="#title">back to top</a></footer>
 </section>
@@ -490,7 +524,7 @@ main {
 	margin-bottom: 1em;
 }
 
-@media ((max-resolution: 96dpi) and (min-width: 50em)) or ((min-resolution: 192dpi) and (min-width: 100em)) {
+@media (min-width: 50em) {
 	body { font-size: 1em }
 }`
 
@@ -499,10 +533,6 @@ aside.md-link {
 	font-weight: bold;
 	margin-right: 1em;
 	float: right;
-}
-
-@media (max-width: 50em) and (max-resolution: 96dpi) {
-	aside.md-link { float: none }
 }
 
 aside.md-link a::after {
@@ -528,32 +558,26 @@ table.tags tr {
 	display: table-row;
 }
 
-@media (max-width: 35em) and (max-resolution: 96dpi) {
-	table.tags tr {
-		display: flex;
-		flex-wrap: wrap;
-		flex-direction: row;
-		justify-content: space-between;
-		align-items: stretch;
-	}
+@media (max-width: 35em) {
+	.detail { display: none }
+}
 
-	table.tags td:not(:first-child), table.tags th:not(:first-child) {
-		padding-left: calc(2*var(--spacing));
-	}
+@media (max-width: 28em) {
+	table.tags thead { display: flex }
+	table.tags { display: block }
+	table.tags tbody { display: table }
+}
 
-	table.tags tr {
-		border-bottom: dotted 0.063em var(--fg);
-	}
+@media (max-width: 25em) {
+	table.tags { font-size: 0.9em }
+}
 
-	table.tags td::after {
-		font-weight: bold;
-	}
+@media (max-width: 22.5em) {
+	table.tags { font-size: 0.85em }
+}
 
-	table.tags td:first-child { font-weight: bold }
-
-	table.tags td:nth-child(3)::after { content: "C" }
-	table.tags td:nth-child(4)::after { content: "K" }
-	table.tags td:nth-child(5)::after { content: "A" }
+@media (max-width: 21em) {
+	table.tags { font-size: 0.8em }
 }
 
 .suspended {
