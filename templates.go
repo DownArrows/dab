@@ -236,8 +236,8 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 <tr>
 	<th><strong>Rank</strong></th>
 	<th><strong>Sub</strong></th>
-	<th><strong>Count</strong></th>
 	<th><strong>Karma</strong></th>
+	<th><strong>Count</strong></th>
 	<th><strong>Average</strong></th>
 	<th><strong>Last commented</strong></th>
 </tr>
@@ -247,8 +247,8 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 <tr>
 	<td>{{.Number}}</td>
 	<td><a href="https://www.reddit.com/r/{{.Tag}}/">{{.Tag}}</a></td>
-	<td>{{.Count}}</td>
 	<td>{{.Karma}}</td>
+	<td>{{.Count}}</td>
 	<td>{{.Average}}</td>
 	<td>
 		<span class="detail">{{.Latest.Format "15:04"}}</span>
@@ -272,8 +272,8 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 <tr>
 	<th>Rank</th>
 	<th>Sub</th>
-	<th>Count</th>
 	<th>Karma</th>
+	<th>Count</th>
 	<th>Average</th>
 	<th>Last commented</th>
 </tr>
@@ -283,8 +283,8 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 <tr>
 	<td>{{.Number}}</td>
 	<td><a href="https://www.reddit.com/r/{{.Tag}}/">{{.Tag}}</a></td>
-	<td>{{.Count}}</td>
 	<td>{{.Karma}}</td>
+	<td>{{.Count}}</td>
 	<td>{{.Average}}</td>
 	<td>
 		<span class="detail">{{.Latest.Format "15:04"}}</span>
@@ -370,8 +370,8 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 <tr>
 	<th><strong>Rank</strong></th>
 	<th><strong>Name</strong></th>
-	<th><strong>Count</strong></th>
 	<th><strong>Karma</strong></th>
+	<th><strong>Count</strong></th>
 	<th><strong>Average</strong></th>
 	<th><strong>Last commented</strong></th>
 </tr>
@@ -381,8 +381,8 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 <tr>
 	<td>{{.Number}}</td>
 	<td><a href="/compendium/user/{{.Tag}}">{{.Tag}}</a></td>
-	<td>{{.Count}}</td>
 	<td>{{.Karma}}</td>
+	<td>{{.Count}}</td>
 	<td>{{.Average}}</td>
 	<td>
 		<span class="detail">{{.Latest.Format "15:04"}}</span>
@@ -405,8 +405,8 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 <tr>
 	<th>Rank</th>
 	<th>Name</th>
-	<th>Count</th>
 	<th>Karma</th>
+	<th>Count</th>
 	<th>Average</th>
 	<th>Last commented</th>
 </tr>
@@ -416,8 +416,8 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 <tr>
 	<td>{{.Number}}</td>
 	<td><a href="https://www.reddit.com/r/{{.Tag}}">{{.Tag}}</a></td>
-	<td>{{.Count}}</td>
 	<td>{{.Karma}}</td>
+	<td>{{.Count}}</td>
 	<td>{{.Average}}</td>
 	<td>
 		<span class="detail">{{.Latest.Format "15:04"}}</span>
