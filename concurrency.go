@@ -28,36 +28,6 @@ func SleepCtx(ctx context.Context, duration time.Duration) bool {
 
 type Task func(context.Context) error
 
-type RetryOptions struct {
-	Times       int      `json:"times"`
-	MaxInterval Duration `json:"max_interval"`
-}
-
-func Retry(opts RetryOptions, task Task) Task {
-	backoff := time.Second
-	retries := 0
-	return func(ctx context.Context) error {
-		for {
-			if err := task(ctx); err != nil {
-				if !IsCancellation(err) && (retries < opts.Times || opts.Times == -1) {
-					if opts.MaxInterval.Value-backoff > 0*time.Second {
-						SleepCtx(ctx, backoff)
-						backoff *= 2
-					} else {
-						SleepCtx(ctx, opts.MaxInterval.Value)
-					}
-					retries += 1
-				} else {
-					return err
-				}
-			} else {
-				break
-			}
-		}
-		return nil
-	}
-}
-
 // Launches and shuts down a group of goroutine which take a context and return an error.
 // Use TaskGroup.Spawn to launch functions asynchronously,
 // and once you're done use TaskGroup.Wait to wait on them.
@@ -165,4 +135,82 @@ func (eg *ErrorGroup) ToError() error {
 		return nil
 	}
 	return eg
+}
+
+func NewRetrier(conf RetryConf, on_error func(*Retrier, error)) *Retrier {
+	return &Retrier{
+		MaxInterval: conf.MaxInterval.Value,
+		ResetAfter:  conf.ResetAfter.Value,
+		Times:       conf.Times,
+		OnError:     on_error,
+		Backoff:     time.Second,
+	}
+}
+
+// Can only be used for a single task.
+type Retrier struct {
+	Backoff     time.Duration
+	Callback    Task
+	LastRestart time.Time
+	MaxInterval time.Duration
+	OnError     func(*Retrier, error)
+	ResetAfter  time.Duration
+	Retries     int
+	Times       int
+}
+
+func (r *Retrier) Set(task Task) *Retrier {
+	r.Callback = task
+	return r
+}
+
+func (r *Retrier) Task(ctx context.Context) error {
+	var err error
+	for {
+		r.LastRestart = time.Now()
+		err = r.Callback(ctx)
+		r.conditionalReset()
+		if r.shouldRestartOn(err) {
+			if r.OnError != nil {
+				r.OnError(r, err)
+			}
+			if !r.sleepCtx(ctx) {
+				return ctx.Err()
+			}
+			r.Retries += 1
+		} else {
+			break
+		}
+	}
+	return err
+}
+
+func (r *Retrier) conditionalReset() {
+	if r.ResetAfter > 0 && r.LastRestart.Add(r.ResetAfter).Before(time.Now()) {
+		r.Retries = 0
+		r.Backoff = time.Second
+	}
+}
+
+func (r *Retrier) shouldRestartOn(err error) bool {
+	if IsCancellation(err) {
+		return false
+	}
+
+	if r.Times == -1 {
+		return true
+	}
+
+	return r.Retries < r.Times
+}
+
+func (r *Retrier) sleepCtx(ctx context.Context) bool {
+	var sleep_time time.Duration
+	if r.MaxInterval > 0 && r.Backoff > r.MaxInterval {
+		sleep_time = r.MaxInterval
+	} else {
+		sleep_time = r.Backoff
+		r.Backoff *= 2
+	}
+	return SleepCtx(ctx, sleep_time)
 }

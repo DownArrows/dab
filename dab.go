@@ -9,7 +9,7 @@ import (
 	"text/template"
 )
 
-var Version = SemVer{1, 13, 9}
+var Version = SemVer{1, 13, 10}
 
 const DefaultChannelSize = 100
 
@@ -135,12 +135,13 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		dab.components.RedditScanner = NewRedditScanner(dab.logger, dab.layers.Storage, reddit_api, dab.conf.Reddit.RedditScannerConf)
 		dab.components.RedditUsers = NewRedditUsers(dab.logger, dab.layers.Storage, reddit_api, dab.conf.Reddit.RedditUsersConf)
 
-		tasks.SpawnCtx(Retry(dab.conf.Reddit.Retry, func(ctx context.Context) error {
+		retrier := NewRetrier(dab.conf.Reddit.Retry, func(r *Retrier, err error) {
+			dab.logger.Errorf("error in reddit component, restarting (%d retries, %s backoff): %v", r.Retries, r.Backoff, err)
+		})
+
+		tasks.SpawnCtx(retrier.Set(func(ctx context.Context) error {
 			dab.logger.Info("attempting to log into reddit")
 			if err := reddit_api.Connect(ctx); err != nil {
-				if !IsCancellation(err) {
-					dab.logger.Errorf("failed to log into reddit: %v", err)
-				}
 				return err
 			}
 			dab.logger.Info("successfully logged into reddit")
@@ -150,7 +151,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 				dab.logger.Errorf("reddit scanner failed with: %v", err)
 			}
 			return err
-		}))
+		}).Task)
 	}
 
 	if dab.components.ConfState.Discord.Enabled {
@@ -160,14 +161,18 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 			return err
 		}
 
-		tasks.SpawnCtx(Retry(dab.conf.Discord.Retry, func(ctx context.Context) error {
+		retrier := NewRetrier(dab.conf.Discord.Retry, func(r *Retrier, err error) {
+			dab.logger.Errorf("error in discord component, restarting (%d retries, %s backoff): %v", r.Retries, r.Backoff, err)
+		})
+
+		tasks.SpawnCtx(retrier.Set(func(ctx context.Context) error {
 			dab.logger.Info("attempting to log into discord")
 			err := dab.components.Discord.Run(ctx)
 			if err != nil && !IsCancellation(err) {
 				dab.logger.Errorf("failed to log into discord: %v", err)
 			}
 			return err
-		}))
+		}).Task)
 	}
 
 	if dab.components.ConfState.Reddit.Enabled && dab.components.ConfState.Discord.Enabled {

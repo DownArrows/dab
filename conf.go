@@ -25,7 +25,8 @@ const Defaults string = `{
 	"discord": {
 		"retry_connection": {
 			"times": 5,
-			"max_interval": "2m"
+			"max_interval": "2m",
+			"reset_after": "2h"
 		},
 		"highscore_threshold": -1000,
 		"prefix": "!"
@@ -34,7 +35,8 @@ const Defaults string = `{
 	"reddit": {
 		"retry_connection": {
 			"times": 10,
-			"max_interval": "5m"
+			"max_interval": "5m",
+			"reset_after": "1h"
 		},
 		"full_scan_interval": "6h",
 		"inactivity_threshold": "2200h",
@@ -55,6 +57,12 @@ type StorageConf struct {
 	CleanupInterval Duration `json:"cleanup_interval"`
 	Path            string   `json:"path"`
 	Timeout         Duration `json:"timeout"`
+}
+
+type RetryConf struct {
+	MaxInterval Duration `json:"max_interval"`
+	ResetAfter  Duration `json:"reset_after"`
+	Times       int      `json:"times"`
 }
 
 type RedditAuth struct {
@@ -131,7 +139,7 @@ type Configuration struct {
 		RedditScannerConf
 		RedditUsersConf
 		DVTInterval      Duration           `json:"dvt_interval"` // Deprecated
-		Retry            RetryOptions       `json:"retry_connection"`
+		Retry            RetryConf          `json:"retry_connection"`
 		UserAgent        string             `json:"user_agent"`
 		WatchSubmissions []WatchSubmissions `json:"watch_submissions"` // Deprecated
 	}
@@ -141,9 +149,9 @@ type Configuration struct {
 
 	Discord struct {
 		DiscordBotConf
-		Admin              string       `json:"admin"` // Deprecated
-		HighScoreThreshold int64        `json:"highscore_threshold"`
-		Retry              RetryOptions `json:"retry_connection"`
+		Admin              string    `json:"admin"` // Deprecated
+		HighScoreThreshold int64     `json:"highscore_threshold"`
+		Retry              RetryConf `json:"retry_connection"`
 	}
 
 	Web WebConf

@@ -197,6 +197,7 @@ and <http://golang.localhost/pkg/text/template/>.
     - `retry_connection` *dictionary*:
        - `times` *int* (5): maximum number of times to try to connect to Discord; use -1 for infinite retries
        - `max_interval` *duration* (2m): maximum wait between connection retries
+       - `reset_after` *duration* (2h): time after which the restart count and the backoff is reset
     - `token` *string* (*none*): token to connect to Discord; leave out to disable the Discord component
     - `welcome` *template* (*none*): template of the welcome message; it is provided with three top-level keys,
       `ChannelsID`, `Member`, and `BotID`. `ChannelsID` provides `General`, `Log` and `HighScores`, which contains the numeric ID of those channels.
@@ -208,6 +209,7 @@ and <http://golang.localhost/pkg/text/template/>.
        - `sub` *string* (*none*): sub on which the compendium can be found; leave out to disable scans of the compendium
        - `update_interval` *duration* (*none*): interval between each scan of the compendium;
          leave out to disable, else must be at least an hour
+       - `reset_after` *duration* (2h): time after which the restart count and the backoff is reset
     - `dvt_interval` *string* (*none*): interval between each check of the downvote sub's new reports;
       leave out to disable, else must be at least a minute.
       **Deprecated**: starting with version 1.10.0 this option has no effect.
