@@ -411,6 +411,8 @@ type SQLiteConnOptions struct {
 }
 
 type SQLiteConn struct {
+	sync.Mutex
+	closed bool
 	conn   *sqlite.Conn
 	ctx    context.Context
 	done   chan struct{}
@@ -447,7 +449,11 @@ func NewSQLiteConn(ctx context.Context, logger LevelLogger, conf SQLiteConnOptio
 	go func() {
 		select {
 		case <-sc.ctx.Done():
-			sc.conn.Interrupt()
+			sc.Lock()
+			defer sc.Unlock()
+			if !sc.closed {
+				sc.conn.Interrupt()
+			}
 		case <-sc.done:
 		}
 	}()
@@ -457,6 +463,12 @@ func NewSQLiteConn(ctx context.Context, logger LevelLogger, conf SQLiteConnOptio
 }
 
 func (sc *SQLiteConn) Close() error {
+	sc.Lock()
+	defer sc.Unlock()
+	if sc.closed {
+		return nil
+	}
+	sc.closed = true
 	sc.logger.Debugf("closing SQLite connection %p to %q", sc, sc.Path)
 	sc.done <- struct{}{}
 	return sc.conn.Close()
