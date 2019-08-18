@@ -127,13 +127,7 @@ func TestSQLiteDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	parallel := &sync.WaitGroup{}
-
-	parallel.Add(1)
 	t.Run("open checks", func(t *testing.T) {
-		t.Parallel()
-		defer parallel.Done()
-
 		path := filepath.Join(dir, "checks.db")
 
 		t.Run("open empty", func(t *testing.T) {
@@ -181,11 +175,7 @@ func TestSQLiteDatabase(t *testing.T) {
 		})
 	})
 
-	parallel.Add(1)
 	t.Run("concurrent insert", func(t *testing.T) {
-		t.Parallel()
-		defer parallel.Done()
-
 		nb_concurrent := 50
 
 		db, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
@@ -240,11 +230,7 @@ func TestSQLiteDatabase(t *testing.T) {
 		}
 	})
 
-	parallel.Add(1)
 	t.Run("backups", func(t *testing.T) {
-		t.Parallel()
-		defer parallel.Done()
-
 		path := filepath.Join(dir, "test-backup.db")
 		backup_path := filepath.Join(dir, "test-backup.backup.db")
 
@@ -281,11 +267,7 @@ func TestSQLiteDatabase(t *testing.T) {
 		}
 	})
 
-	parallel.Add(1)
 	t.Run("cancellation", func(t *testing.T) {
-		t.Parallel()
-		defer parallel.Done()
-
 		nb_concurrent := 50
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -321,8 +303,6 @@ func TestSQLiteDatabase(t *testing.T) {
 
 	t.Run("delete temp directory", func(t *testing.T) {
 		t.Helper()
-		t.Parallel()
-		parallel.Wait()
 		os.RemoveAll(dir)
 	})
 }
