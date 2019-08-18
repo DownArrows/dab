@@ -12,7 +12,7 @@ import (
 func TestCRUDUsers(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "storage-users-test")
+	dir, err := ioutil.TempDir("", "dab-test-crud-users")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,8 +87,7 @@ func TestCRUDUsers(t *testing.T) {
 }
 
 func TestCRUDComments(t *testing.T) {
-
-	dir, err := ioutil.TempDir("", "storage-comments-test")
+	dir, err := ioutil.TempDir("", "dab-test-crud-comments")
 	if err != nil {
 		t.Fatal(err)
 	}

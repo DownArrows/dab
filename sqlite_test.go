@@ -14,7 +14,7 @@ import (
 func TestSQLiteConn(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "sqlite-test")
+	dir, err := ioutil.TempDir("", "dab-test-sqlite-conn")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestSQLiteDatabase(t *testing.T) {
 	ctx := context.Background()
 
 	app_id := 0x1e51
-	dir, err := ioutil.TempDir("", "sqlite-test")
+	dir, err := ioutil.TempDir("", "dab-test-sqlite-db")
 	if err != nil {
 		t.Fatal(err)
 	}
