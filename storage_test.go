@@ -87,6 +87,8 @@ func TestCRUDUsers(t *testing.T) {
 }
 
 func TestCRUDComments(t *testing.T) {
+	t.Parallel()
+
 	dir, err := ioutil.TempDir("", "dab-test-crud-comments")
 	if err != nil {
 		t.Fatal(err)
