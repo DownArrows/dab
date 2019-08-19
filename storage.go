@@ -7,8 +7,10 @@ import (
 	"time"
 )
 
+// ApplicationFileID is the identification integer written in the SQLite file specific to the application.
 const ApplicationFileID int = 0xdab
 
+// RedditScannerStorage is the storage interface for RedditScanner.
 type RedditScannerStorage interface {
 	KV() *KeyValueStore
 	ListActiveUsers(context.Context) ([]User, error)
@@ -18,6 +20,7 @@ type RedditScannerStorage interface {
 	UpdateInactiveStatus(context.Context, time.Duration) error
 }
 
+// RedditUsersStorage is the storage interface for RedditUsers.
 type RedditUsersStorage interface {
 	AddUser(context.Context, string, bool, time.Time) error
 	FoundUser(context.Context, string) error
@@ -28,6 +31,7 @@ type RedditUsersStorage interface {
 	UnSuspendUser(context.Context, string) error
 }
 
+// DiscordBotStorage is the storage interface for RedditUsers.
 type DiscordBotStorage interface {
 	DelUser(context.Context, string) error
 	PurgeUser(context.Context, string) error
@@ -37,17 +41,20 @@ type DiscordBotStorage interface {
 	GetKarma(context.Context, string) (int64, int64, error)
 }
 
+// ReportFactoryStorage is the storage interface for ReportFactory.
 type ReportFactoryStorage interface {
 	GetCommentsBelowBetween(*SQLiteConn, int64, time.Time, time.Time) ([]Comment, error)
 	StatsBetween(*SQLiteConn, int64, time.Time, time.Time) (UserStatsMap, error)
 	WithTx(context.Context, func(*SQLiteConn) error) error
 }
 
+// WebServerStorage is the storage interface for the WebServer.
 type WebServerStorage interface {
 	BackupStorage
 	GetUser(context.Context, string) UserQuery
 }
 
+// CompendiumStorage is the storage interface for the Compendium.
 type CompendiumStorage interface {
 	// Index
 	CompendiumPerUser(*SQLiteConn) ([]*CompendiumDetailsTagged, error)
@@ -64,11 +71,13 @@ type CompendiumStorage interface {
 	WithTx(context.Context, func(*SQLiteConn) error) error
 }
 
+// BackupStorage is the interface for backups.
 type BackupStorage interface {
 	Backup(context.Context) error
 	BackupPath() string
 }
 
+// Storage is a collection of methods to write, update, and retrieve all persistent data used throughout the application.
 type Storage struct {
 	backupPath   string
 	backupMaxAge time.Duration
@@ -77,6 +86,7 @@ type Storage struct {
 	logger       LevelLogger
 }
 
+// NewStorage returns a Storage instance after running initialization, checks, and migrations onto the target database file.
 func NewStorage(ctx context.Context, logger LevelLogger, conf StorageConf) (*Storage, error) {
 	db, err := NewSQLiteDatabase(ctx, logger, SQLiteDatabaseOptions{
 		AppID:           ApplicationFileID,
@@ -120,14 +130,17 @@ func (s *Storage) initTables(ctx context.Context) error {
 	return nil
 }
 
+// KV return a key-value store.
 func (s *Storage) KV() *KeyValueStore {
 	return s.kv
 }
 
+// WithTx is a wrapper for SQLiteDatabase.WithTx.
 func (s *Storage) WithTx(ctx context.Context, cb func(*SQLiteConn) error) error {
 	return s.db.WithTx(ctx, cb)
 }
 
+// WithConn runs a callback with a connection to the database, managing its lifecycle.
 func (s *Storage) WithConn(ctx context.Context, cb func(*SQLiteConn) error) error {
 	conn, err := s.db.GetConn(ctx)
 	if err != nil {
@@ -141,18 +154,22 @@ func (s *Storage) WithConn(ctx context.Context, cb func(*SQLiteConn) error) erro
 Maintenance
 ***********/
 
+// PeriodicCleanupIsEnabled tells if the setting for PeriodCleanup allow to run it.
 func (s *Storage) PeriodicCleanupIsEnabled() bool {
 	return s.db.CleanupInterval > 0
 }
 
+// PeriodicCleanup is a Task that periodically cleans up and optimizes the underlying database.
 func (s *Storage) PeriodicCleanup(ctx context.Context) error {
 	return s.db.PeriodicCleanup(ctx)
 }
 
+// BackupPath returns the set path for backups.
 func (s *Storage) BackupPath() string {
 	return s.backupPath
 }
 
+// Backup performs a backup on the destination returned by BackupPath.
 func (s *Storage) Backup(ctx context.Context) error {
 	if older, err := FileOlderThan(s.BackupPath(), s.backupMaxAge); err != nil {
 		return err
@@ -173,6 +190,7 @@ Users
 
 // Read
 
+// GetUser fetches a User, within a UserQuery for easier use, from a case-insensitive name.
 func (s *Storage) GetUser(ctx context.Context, username string) UserQuery {
 	user := &User{}
 	cb := func(stmt *sqlite.Stmt) error { return user.FromDB(stmt) }
@@ -184,18 +202,25 @@ func (s *Storage) GetUser(ctx context.Context, username string) UserQuery {
 	}
 }
 
+// ListUsers lists all users that are neither suspended nor deleted,
+// ordered from the least recently scanned.
 func (s *Storage) ListUsers(ctx context.Context) ([]User, error) {
 	return s.usersCtx(ctx, "SELECT * FROM users WHERE suspended IS FALSE AND not_found IS FALSE ORDER BY last_scan")
 }
 
+// ListSuspendedAndNotFound lists users that are either deleted or suspended, but not those that have been unregistered,
+// ordered from the least recently scanned.
 func (s *Storage) ListSuspendedAndNotFound(ctx context.Context) ([]User, error) {
 	return s.usersCtx(ctx, "SELECT * FROM users WHERE suspended IS TRUE OR not_found IS TRUE ORDER BY last_scan")
 }
 
+// ListActiveUsers returns users that are considered active by the application,
+// ordered from the least recently scanned.
 func (s *Storage) ListActiveUsers(ctx context.Context) ([]User, error) {
 	return s.usersCtx(ctx, "SELECT * FROM users WHERE inactive IS FALSE AND suspended IS FALSE AND not_found IS FALSE ORDER BY last_scan")
 }
 
+// ListRegisteredUsers returns all registered users, even if deleted or suspended, ordered from the most recently scanned.
 func (s *Storage) ListRegisteredUsers(conn *SQLiteConn) ([]User, error) {
 	return s.users(conn, "SELECT * FROM users ORDER BY last_scan DESC")
 }
@@ -225,49 +250,60 @@ func (s *Storage) users(conn *SQLiteConn, sql string) ([]User, error) {
 
 // Write
 
-func (s *Storage) UpdateInactiveStatus(ctx context.Context, max_age time.Duration) error {
+// UpdateInactiveStatus updates what is considered for a user to be "inactive",
+// that is, if they haven't posted since maxAge.
+func (s *Storage) UpdateInactiveStatus(ctx context.Context, maxAge time.Duration) error {
 	sql := `
 		WITH data AS (
 			SELECT author FROM comments
 			GROUP BY author HAVING (? - MAX(created)) > ?
 		)
 		UPDATE user_archive SET inactive = (name IN data)`
-	return s.db.Exec(ctx, sql, time.Now().Unix(), max_age.Seconds())
+	return s.db.Exec(ctx, sql, time.Now().Unix(), maxAge.Seconds())
 }
 
+// AddUser adds a User to the database. It doesn't check with Reddit, that is the responsibility of RedditUsers.
 func (s *Storage) AddUser(ctx context.Context, username string, hidden bool, created time.Time) error {
 	sql := "INSERT INTO user_archive(name, hidden, created, added) VALUES (?, ?, ?, ?)"
 	return s.db.Exec(ctx, sql, username, hidden, created.Unix(), time.Now().Unix())
 }
 
+// DelUser deletes a User that has the case-insensitive username.
 func (s *Storage) DelUser(ctx context.Context, username string) error {
 	return s.simpleEditUser(ctx, "UPDATE user_archive SET deleted = TRUE WHERE name = ? COLLATE NOCASE", username)
 }
 
+// HideUser hides a User that has the case-insensitive username.
 func (s *Storage) HideUser(ctx context.Context, username string) error {
 	return s.simpleEditUser(ctx, "UPDATE user_archive SET hidden = TRUE WHERE name = ? COLLATE NOCASE", username)
 }
 
+// UnHideUser un-hides a User that has the case-insensitive username.
 func (s *Storage) UnHideUser(ctx context.Context, username string) error {
 	return s.simpleEditUser(ctx, "UPDATE user_archive SET hidden = FALSE WHERE name = ? COLLATE NOCASE", username)
 }
 
+// SuspendUser sets a User as suspended (case-sensitive).
 func (s *Storage) SuspendUser(ctx context.Context, username string) error {
 	return s.simpleEditUser(ctx, "UPDATE user_archive SET suspended = TRUE WHERE name = ?", username)
 }
 
+// UnSuspendUser unsets a User as suspended (case-sensitive).
 func (s *Storage) UnSuspendUser(ctx context.Context, username string) error {
 	return s.simpleEditUser(ctx, "UPDATE user_archive SET suspended = FALSE WHERE name = ?", username)
 }
 
+// NotFoundUser sets a User as not found (case-sensitive), that is, seen from Reddit as deleted.
 func (s *Storage) NotFoundUser(ctx context.Context, username string) error {
 	return s.simpleEditUser(ctx, "UPDATE user_archive SET not_found = TRUE WHERE name = ?", username)
 }
 
+// FoundUser sets a User as found on Reddit (case-sensitive).
 func (s *Storage) FoundUser(ctx context.Context, username string) error {
 	return s.simpleEditUser(ctx, "UPDATE user_archive SET not_found = FALSE WHERE name = ?", username)
 }
 
+// PurgeUser completely removes the data associated with a User (case-insensitive).
 func (s *Storage) PurgeUser(ctx context.Context, username string) error {
 	return s.simpleEditUser(ctx, "DELETE FROM user_archive WHERE name = ? COLLATE NOCASE", username)
 }
@@ -288,8 +324,8 @@ func (s *Storage) simpleEditUser(ctx context.Context, sql, username string) erro
  Comments
 *********/
 
-// This method saves comments of a single user, and updates the user's metadata according
-// to the properties of the list of comments. It returns the updated User datastructure to
+// SaveCommentsUpdateUser saves comments of a single user, and updates the user's metadata according
+// to the properties of the list of comments. It returns the updated User data structure to
 // avoid having to do another request to get the update.
 // What happens here controls how the scanner will behave next.
 //
@@ -297,7 +333,7 @@ func (s *Storage) simpleEditUser(ctx context.Context, sql, username string) erro
 // This method may seem to have a lot of logic for something in the storage layer,
 // but most of it used to be in the scanner for reddit and outside of a transaction;
 // putting the data-consistency related logic here simplifies greatly the overall code.
-func (s *Storage) SaveCommentsUpdateUser(ctx context.Context, comments []Comment, user User, max_age time.Duration) (User, error) {
+func (s *Storage) SaveCommentsUpdateUser(ctx context.Context, comments []Comment, user User, maxAge time.Duration) (User, error) {
 	if user.Suspended {
 		return user, s.SuspendUser(ctx, user.Name)
 	} else if user.NotFound {
@@ -331,7 +367,7 @@ func (s *Storage) SaveCommentsUpdateUser(ctx context.Context, comments []Comment
 		// This way, the scanner can avoid fetching superfluous comments.
 		user.BatchSize = 0
 		for _, comment := range comments {
-			if time.Now().Sub(comment.Created) < max_age {
+			if time.Now().Sub(comment.Created) < maxAge {
 				user.BatchSize++
 			}
 		}
@@ -346,7 +382,7 @@ func (s *Storage) SaveCommentsUpdateUser(ctx context.Context, comments []Comment
 			user.Position = ""
 		}
 
-		// All comments are younger than max_age, there may be more.
+		// All comments are younger than maxAge, there may be more.
 		if user.BatchSize == uint(len(comments)) {
 			user.BatchSize = MaxRedditListingLength
 		}
@@ -360,6 +396,8 @@ func (s *Storage) SaveCommentsUpdateUser(ctx context.Context, comments []Comment
 	return user, err
 }
 
+// GetCommentsBelowBetween returns the comments below a score, between since and until.
+// To be used within a transaction.
 func (s *Storage) GetCommentsBelowBetween(conn *SQLiteConn, score int64, since, until time.Time) ([]Comment, error) {
 	return s.comments(conn, `
 			SELECT comments.*
@@ -373,6 +411,8 @@ func (s *Storage) GetCommentsBelowBetween(conn *SQLiteConn, score int64, since, 
 		`, score, since.Unix(), until.Unix())
 }
 
+// TopComments returns the most downvoted comments, up to a number set by limit.
+// To be used within a transaction.
 func (s *Storage) TopComments(conn *SQLiteConn, limit uint) ([]Comment, error) {
 	return s.comments(conn, `
 			SELECT comments.*
@@ -385,6 +425,8 @@ func (s *Storage) TopComments(conn *SQLiteConn, limit uint) ([]Comment, error) {
 		`, int(limit))
 }
 
+// TopCommentsUser returns the most downvoted comments of a single User, up to a number set by limit.
+// To be used within a transaction.
 func (s *Storage) TopCommentsUser(conn *SQLiteConn, username string, limit uint) ([]Comment, error) {
 	return s.comments(conn, "SELECT * FROM comments WHERE author = ? AND score < 0 ORDER BY score ASC LIMIT ?", username, int(limit))
 }
@@ -407,6 +449,7 @@ func (s *Storage) comments(conn *SQLiteConn, sql string, args ...interface{}) ([
  Statistics
 ***********/
 
+// GetKarma returns the total and negative karma of a User (case-insensitive).
 func (s *Storage) GetKarma(ctx context.Context, username string) (int64, int64, error) {
 	sql := `
 		SELECT SUM(score), SUM(CASE WHEN score < 0 THEN score ELSE NULL END)
@@ -428,6 +471,8 @@ func (s *Storage) GetKarma(ctx context.Context, username string) (int64, int64, 
 	return total, negative, err
 }
 
+// StatsBetween returns the commenting statistics of all non-hidden users below a score, between since and until.
+// To be used within a transaction.
 func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.Time) (UserStatsMap, error) {
 	sql := `SELECT
 			comments.author AS author,
@@ -457,6 +502,8 @@ func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.
 	return stats, err
 }
 
+// CompendiumPerUser returns the per-user statistics of all users, for use with the compendium.
+// To be used within a transaction.
 func (s *Storage) CompendiumPerUser(conn *SQLiteConn) ([]*CompendiumDetailsTagged, error) {
 	return s.compendiumDetailsTagged(conn, `
 		SELECT
@@ -472,6 +519,8 @@ func (s *Storage) CompendiumPerUser(conn *SQLiteConn) ([]*CompendiumDetailsTagge
 		ORDER BY karma ASC`)
 }
 
+// CompendiumPerUserNegative returns the per-user statistics of all users taking only into account negative comments.
+// For use with the compendium. To be used within a transaction.
 func (s *Storage) CompendiumPerUserNegative(conn *SQLiteConn) ([]*CompendiumDetailsTagged, error) {
 	return s.compendiumDetailsTagged(conn, `
 		SELECT
@@ -489,6 +538,8 @@ func (s *Storage) CompendiumPerUserNegative(conn *SQLiteConn) ([]*CompendiumDeta
 		ORDER BY karma ASC`)
 }
 
+// CompendiumUserPerSub returns the commenting statistics for a single user, for use with the compendium.
+// To be used within a transaction.
 func (s *Storage) CompendiumUserPerSub(conn *SQLiteConn, username string) ([]*CompendiumDetailsTagged, error) {
 	return s.compendiumDetailsTagged(conn, `
 		SELECT
@@ -498,6 +549,8 @@ func (s *Storage) CompendiumUserPerSub(conn *SQLiteConn, username string) ([]*Co
 		ORDER BY karma ASC`, username)
 }
 
+// CompendiumUserPerSubNegative returns the commenting statistics for a single user and negative comments only, for use with the compendium.
+// To be used within a transaction.
 func (s *Storage) CompendiumUserPerSubNegative(conn *SQLiteConn, username string) ([]*CompendiumDetailsTagged, error) {
 	return s.compendiumDetailsTagged(conn, `
 		SELECT
@@ -507,6 +560,8 @@ func (s *Storage) CompendiumUserPerSubNegative(conn *SQLiteConn, username string
 		ORDER BY karma ASC`, username)
 }
 
+// CompendiumUserSummary returns the summary of the commenting statistics for a single user, for use with the compendium.
+// To be used within a transaction.
 func (s *Storage) CompendiumUserSummary(conn *SQLiteConn, username string) (*CompendiumDetails, error) {
 	sql := "SELECT COUNT(score), AVG(score), SUM(score), MAX(created) FROM comments WHERE author = ?"
 	stats := &CompendiumDetails{}
@@ -514,6 +569,8 @@ func (s *Storage) CompendiumUserSummary(conn *SQLiteConn, username string) (*Com
 	return stats, err
 }
 
+// CompendiumUserSummaryNegative returns the summary of the commenting statistics for a single user, for use with the compendium.
+// Negative comments only. To be used within a transaction.
 func (s *Storage) CompendiumUserSummaryNegative(conn *SQLiteConn, username string) (*CompendiumDetails, error) {
 	sql := "SELECT COUNT(score), AVG(score), SUM(score), MAX(created) FROM comments WHERE author = ? AND score < 0"
 	stats := &CompendiumDetails{}

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Component
+// RedditUsers is a data structure to manage Reddit users by interacting with both the database and Reddit.
 type RedditUsers struct {
 	api     RedditUsersAPI
 	logger  LevelLogger
@@ -17,6 +17,7 @@ type RedditUsers struct {
 	UnsuspensionWatcherEnabled bool
 }
 
+// NewRedditUsers creates a RedditUsers.
 func NewRedditUsers(
 	logger LevelLogger,
 	storage RedditUsersStorage,
@@ -34,6 +35,8 @@ func NewRedditUsers(
 	}
 }
 
+// AddUserServer replies to queries on the given channel to add users.
+// It has to be launched separately from the creation of the data structure.
 func (ru *RedditUsers) AddUserServer(ctx context.Context, queries chan UserQuery) error {
 	ru.logger.Info("starting internal server to register users")
 	var query UserQuery
@@ -58,7 +61,9 @@ Loop:
 	return ctx.Err()
 }
 
-func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool, force_suspended bool) UserQuery {
+// AddUser adds the set user, sets it to "hidden" or not,
+// and with the argument forceSuspended can add the user even if it was found to be suspended.
+func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool, forceSuspended bool) UserQuery {
 	query := UserQuery{User: User{Name: username}}
 
 	query = ru.storage.GetUser(ctx, username)
@@ -76,7 +81,7 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 	}
 
 	if query.User.Suspended {
-		if !force_suspended {
+		if !forceSuspended {
 			query.Error = fmt.Errorf("user %q can't be added, forced mode not enabled", query.User.Name)
 			return query
 		}
@@ -95,10 +100,13 @@ func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool
 	return query
 }
 
+// Unsuspensions returns a channel that alerts of newly unsuspended or undeleted users.
 func (ru *RedditUsers) Unsuspensions() <-chan User {
 	return ru.unsuspensions
 }
 
+// UnsuspensionWatcher is a Task to be launched independently that watches unsuspensions
+// and send the unsuspended users User to the channel returned by Unsuspensions.
 func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
 	ru.logger.Infof("watching unsuspensions/undeletions with interval %s", ru.unsuspensionInterval)
 	for SleepCtx(ctx, ru.unsuspensionInterval) {

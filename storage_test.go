@@ -104,11 +104,11 @@ func TestCRUDComments(t *testing.T) {
 	}
 
 	// Test data
-	report_start := time.Now().Round(time.Second).Add(-time.Hour)
-	report_end := time.Now().Round(time.Second).Add(time.Hour)
-	max_age := 24 * time.Hour
-	report_cutoff := int64(-50)
-	nb_reported := 3
+	reportStart := time.Now().Round(time.Second).Add(-time.Hour)
+	reportEnd := time.Now().Round(time.Second).Add(time.Hour)
+	maxAge := 24 * time.Hour
+	reportCutoff := int64(-50)
+	nbReported := 3
 
 	users := []User{{
 		Name:    "User1",
@@ -124,9 +124,9 @@ func TestCRUDComments(t *testing.T) {
 		Created: time.Now().Round(time.Second).Add(-7 * time.Hour),
 	}}
 
-	users_map := make(map[string]User)
+	usersMap := make(map[string]User)
 	for _, user := range users {
-		users_map[user.Name] = user
+		usersMap[user.Name] = user
 	}
 
 	data := map[User][]Comment{
@@ -183,7 +183,7 @@ func TestCRUDComments(t *testing.T) {
 		}, {
 			ID:        "comment7",
 			Author:    users[2].Name,
-			Score:     report_cutoff,
+			Score:     reportCutoff,
 			Permalink: "https://example.org/comment7",
 			Sub:       "A",
 			Created:   time.Now().Round(time.Second),
@@ -191,7 +191,7 @@ func TestCRUDComments(t *testing.T) {
 		}, {
 			ID:        "comment8",
 			Author:    users[2].Name,
-			Score:     report_cutoff + 1,
+			Score:     reportCutoff + 1,
 			Permalink: "https://example.org/comment8",
 			Sub:       "B",
 			Created:   time.Now().Round(time.Second),
@@ -219,7 +219,7 @@ func TestCRUDComments(t *testing.T) {
 
 	t.Run("save", func(t *testing.T) {
 		for user, comments := range data {
-			if _, err := s.SaveCommentsUpdateUser(ctx, comments, user, max_age); err != nil {
+			if _, err := s.SaveCommentsUpdateUser(ctx, comments, user, maxAge); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -227,39 +227,39 @@ func TestCRUDComments(t *testing.T) {
 
 	t.Run("read", func(t *testing.T) {
 		err := s.WithConn(ctx, func(conn *SQLiteConn) error {
-			comments, err := s.GetCommentsBelowBetween(conn, report_cutoff, report_start, report_end)
+			comments, err := s.GetCommentsBelowBetween(conn, reportCutoff, reportStart, reportEnd)
 			if err != nil {
 				return err
 			}
 
-			scores_ok := true
+			scoresOk := true
 			for _, comment := range comments {
-				if comment.Score > report_cutoff {
-					scores_ok = false
+				if comment.Score > reportCutoff {
+					scoresOk = false
 				}
 			}
-			if !scores_ok {
-				t.Fatalf("no comment should have a score above %d: %+v", report_cutoff, comments)
+			if !scoresOk {
+				t.Fatalf("no comment should have a score above %d: %+v", reportCutoff, comments)
 			}
 
-			if len(comments) != nb_reported {
-				t.Fatalf("should have gotten %d comments, instead got %d: %+v", nb_reported, len(comments), comments)
+			if len(comments) != nbReported {
+				t.Fatalf("should have gotten %d comments, instead got %d: %+v", nbReported, len(comments), comments)
 			}
 
-			var expected_sum int64
+			var expectedSum int64
 			for _, comments := range data {
 				for _, comment := range comments {
-					if comment.Score <= report_cutoff && comment.Created.After(report_start) {
-						expected_sum += comment.Score
+					if comment.Score <= reportCutoff && comment.Created.After(reportStart) {
+						expectedSum += comment.Score
 					}
 				}
 			}
-			var actual_sum int64
+			var actualSum int64
 			for _, comment := range comments {
-				actual_sum += comment.Score
+				actualSum += comment.Score
 			}
-			if actual_sum != expected_sum {
-				t.Fatalf("the sum of the scores of the reported comments should be %d, not %d: %+v", expected_sum, actual_sum, comments)
+			if actualSum != expectedSum {
+				t.Fatalf("the sum of the scores of the reported comments should be %d, not %d: %+v", expectedSum, actualSum, comments)
 			}
 			return nil
 		})
@@ -270,25 +270,25 @@ func TestCRUDComments(t *testing.T) {
 
 	t.Run("statistics", func(t *testing.T) {
 		err := s.WithConn(ctx, func(conn *SQLiteConn) error {
-			all_stats, err := s.StatsBetween(conn, report_cutoff, report_start, report_end)
+			allStats, err := s.StatsBetween(conn, reportCutoff, reportStart, reportEnd)
 			if err != nil {
 				return err
 			}
 
-			expected_nb_stats := 3
-			if len(all_stats) != expected_nb_stats {
-				t.Errorf("expected statistics for %d users, not %d: %+v", expected_nb_stats, len(all_stats), all_stats)
+			expectedNbStats := 3
+			if len(allStats) != expectedNbStats {
+				t.Errorf("expected statistics for %d users, not %d: %+v", expectedNbStats, len(allStats), allStats)
 			}
 
-			for _, stats := range all_stats {
-				user := users_map[stats.Name]
+			for _, stats := range allStats {
+				user := usersMap[stats.Name]
 				comments := data[user]
 				// Computing averages would be a bit too involved for a test case;
 				// let's assume that if averages are broken then the rest is likely to also be broken.
 				var count uint64
 				var delta int64
 				for _, comment := range comments {
-					if comment.Score < 0 && comment.Created.After(report_start) {
+					if comment.Score < 0 && comment.Created.After(reportStart) {
 						count++
 						delta += comment.Score
 					}
@@ -317,9 +317,9 @@ func TestCRUDComments(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		expected_active := 3
-		if !(len(active) == expected_active) {
-			t.Errorf("expected %d users to be active, not %d: %v", expected_active, len(active), active)
+		expectedActive := 3
+		if !(len(active) == expectedActive) {
+			t.Errorf("expected %d users to be active, not %d: %v", expectedActive, len(active), active)
 		}
 	})
 
@@ -340,11 +340,11 @@ func TestCRUDComments(t *testing.T) {
 		}
 
 		err = s.WithConn(ctx, func(conn *SQLiteConn) error {
-			comments, err := s.GetCommentsBelowBetween(conn, report_cutoff, report_start, report_end)
+			comments, err := s.GetCommentsBelowBetween(conn, reportCutoff, reportStart, reportEnd)
 			if err != nil {
 				return err
 			}
-			if len(comments) != nb_reported {
+			if len(comments) != nbReported {
 				t.Errorf("number of reported comments should be left unchanged, instead %d", len(comments))
 			}
 			return nil
@@ -360,17 +360,17 @@ func TestCRUDComments(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		var expected_total int64
-		var expected_negative int64
+		var expectedTotal int64
+		var expectedNegative int64
 		for _, comment := range data[users[1]] {
-			expected_total += comment.Score
+			expectedTotal += comment.Score
 			if comment.Score < 0 {
-				expected_negative += comment.Score
+				expectedNegative += comment.Score
 			}
 		}
 
-		if expected_total != total || expected_negative != negative {
-			t.Errorf("karma for %s should be %d/%d, not %d/%d", users[1].Name, expected_negative, expected_total, negative, total)
+		if expectedTotal != total || expectedNegative != negative {
+			t.Errorf("karma for %s should be %d/%d, not %d/%d", users[1].Name, expectedNegative, expectedTotal, negative, total)
 		}
 	})
 
@@ -396,12 +396,12 @@ func TestCRUDComments(t *testing.T) {
 		}
 		defer conn.Close()
 
-		comments, err := s.GetCommentsBelowBetween(conn, report_cutoff, report_start, report_end)
+		comments, err := s.GetCommentsBelowBetween(conn, reportCutoff, reportStart, reportEnd)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if len(comments) == nb_reported {
+		if len(comments) == nbReported {
 			t.Error("number of reported comments should not have changed")
 		}
 	})

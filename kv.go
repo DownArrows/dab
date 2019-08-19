@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Key-Value store with in-memory reads and on-disk writes.
+// KeyValueStore is a string-based key-value store with in-memory reads and on-disk writes that uses SQLite.
 type KeyValueStore struct {
 	sync.RWMutex
 	db          *SQLiteDatabase
@@ -17,6 +17,7 @@ type KeyValueStore struct {
 	table       string
 }
 
+// NewKeyValueStore creates a new KeyValueStore with the given SQLite database onto the given table, which it assumes has total control of.
 func NewKeyValueStore(ctx context.Context, db *SQLiteDatabase, table string) (*KeyValueStore, error) {
 	kv := &KeyValueStore{
 		db:          db,
@@ -68,10 +69,13 @@ func (kv *KeyValueStore) readAll(ctx context.Context) error {
 	})
 }
 
+// Save saves a value associated to a key.
+// Any number of values can be associated to a key.
 func (kv *KeyValueStore) Save(ctx context.Context, key string, value string) error {
 	return kv.SaveMany(ctx, key, []string{value})
 }
 
+// SaveMany saves several values associated with a single key.
 func (kv *KeyValueStore) SaveMany(ctx context.Context, key string, values []string) error {
 	new := make(map[string]struct{})
 
@@ -83,9 +87,9 @@ func (kv *KeyValueStore) SaveMany(ctx context.Context, key string, values []stri
 		defer stmt.Close()
 
 		kv.RLock()
-		if _, has_key := kv.store[key]; !has_key {
+		if _, hasKey := kv.store[key]; !hasKey {
 			for _, value := range values {
-				if _, has_value := kv.store[key][value]; !has_value {
+				if _, hasValue := kv.store[key][value]; !hasValue {
 					new[value] = struct{}{}
 				}
 			}
@@ -96,7 +100,7 @@ func (kv *KeyValueStore) SaveMany(ctx context.Context, key string, values []stri
 		}
 		kv.RUnlock()
 
-		for value, _ := range new {
+		for value := range new {
 			if err := stmt.Exec(key, value, time.Now().Unix()); err != nil {
 				return err
 			}
@@ -116,7 +120,7 @@ func (kv *KeyValueStore) SaveMany(ctx context.Context, key string, values []stri
 	if _, ok := kv.store[key]; !ok {
 		kv.store[key] = new
 	} else {
-		for value, _ := range new {
+		for value := range new {
 			kv.store[key][value] = struct{}{}
 		}
 	}
@@ -125,6 +129,7 @@ func (kv *KeyValueStore) SaveMany(ctx context.Context, key string, values []stri
 	return nil
 }
 
+// Has returns whether the given key has the given value.
 func (kv *KeyValueStore) Has(key, value string) bool {
 	kv.RLock()
 	defer kv.RUnlock()
@@ -135,6 +140,7 @@ func (kv *KeyValueStore) Has(key, value string) bool {
 	return ok
 }
 
+// HasKey returns whether the given key exists.
 func (kv *KeyValueStore) HasKey(key string) bool {
 	kv.RLock()
 	_, ok := kv.store[key]

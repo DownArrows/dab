@@ -5,6 +5,7 @@ import (
 	text "text/template"
 )
 
+// MarkdownReport is the template for reports in markdow format.
 var MarkdownReport = text.Must(text.New("MarkdownReport").Parse(`
 {{- with .Head -}}
 {{.Number}} comments under {{.CutOff}} from {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}.
@@ -41,6 +42,7 @@ Post text:
 {{end -}}
 `))
 
+// HTMLReportPage is the template for single reports in HTML format.
 var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 <head>
 	<meta charset="utf-8"/>
@@ -110,6 +112,7 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 
 </body>`))
 
+// HTMLCompendiumUserPage is the template for the compendium page of a single user, in HTML format.
 var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(`<!DOCTYPE html>
 <head>
 	<meta charset="utf-8"/>
@@ -301,6 +304,7 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 </main>
 </body>`))
 
+// HTMLCompendium is the HTML template for the compendium's index.
 var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 <head>
 	<meta charset="utf-8"/>
@@ -450,6 +454,7 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 
 </body>`))
 
+// CSSMain is the main CSS stylesheet, to be served along the result of the HTML templates.
 const CSSMain = `:root {
 	--main-color: #6a6;
 	--sec-color: #5af;
@@ -541,6 +546,7 @@ main {
 	body { font-size: 1em }
 }`
 
+// CSSReports is the CSS stylesheet to be served with the HTML reports.
 const CSSReports = `
 aside.md-link {
 	font-weight: bold;
@@ -559,6 +565,7 @@ aside.md-link a::after {
 	font-size: smaller;
 }`
 
+// CSSCompendium is the CSS stylesheet to be served with the HTML compendium pages.
 const CSSCompendium = `table.tags {
 	border-spacing: calc(2*var(--spacing));
 }

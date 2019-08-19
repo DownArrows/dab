@@ -11,24 +11,26 @@ import (
 	"time"
 )
 
+// Default options for SQLiteConn.
 const (
 	SQLiteDefaultOpenOptions = sqlite.OPEN_READWRITE | sqlite.OPEN_CREATE | sqlite.OPEN_NOMUTEX | sqlite.OPEN_SHAREDCACHE | sqlite.OPEN_WAL
 	SQLiteDefaultTimeout     = 5 * time.Second
 )
 
-// Used for MultiExec
+// SQLQuery describes multiple SQL queries and their arguments.
 type SQLQuery struct {
 	SQL  string
 	Args []interface{}
 }
 
+// SQLiteMigration describes a migration from a SemVer to another.
 type SQLiteMigration struct {
 	From SemVer
 	To   SemVer
 	Exec func(*SQLiteConn) error
 }
 
-// Use a struct instead of arguments for SQLiteDatabase.Backup to avoid mistakenly swapping
+// SQLiteBackupOptions replaces three consecutive string arguments to avoid mistakenly swapping
 // the arguments, which the compiler couldn't warn about since they all are of the same type.
 // DestName and SrcName are the name of the schema to backup; unless there's an attached
 // database to backup, it's always "main" for both.
@@ -38,6 +40,7 @@ type SQLiteBackupOptions struct {
 	SrcName  string
 }
 
+// SQLiteDatabaseOptions describes the configuration for an SQLite database.
 type SQLiteDatabaseOptions struct {
 	AppID           int
 	CleanupInterval time.Duration
@@ -47,7 +50,7 @@ type SQLiteDatabaseOptions struct {
 	Version         SemVer
 }
 
-// Provides database features that are not application-specific:
+// SQLiteDatabase provides database features that are not application-specific:
 //  - open or create a database file with data-safe performance-oriented options
 //  - check its application ID and version fields
 //  - check its consistency
@@ -66,6 +69,7 @@ type SQLiteDatabase struct {
 	WrittenVersion SemVer
 }
 
+// NewSQLiteDatabase creates a new SQLiteDatabase.
 func NewSQLiteDatabase(ctx context.Context, logger LevelLogger, opts SQLiteDatabaseOptions) (*SQLiteDatabase, error) {
 	// Supporting both options would mean leave a connection open in its own goroutine;
 	// there's no justification for the increased complexity, since there is no use case.
@@ -89,6 +93,7 @@ func NewSQLiteDatabase(ctx context.Context, logger LevelLogger, opts SQLiteDatab
 	return db, db.init(ctx)
 }
 
+// GetConn returns an SQLiteConn managed by the SQLiteDatabase.
 func (db *SQLiteDatabase) GetConn(ctx context.Context) (*SQLiteConn, error) {
 	return NewSQLiteConn(ctx, db.logger, db.getConnDefaultOptions())
 }
@@ -102,6 +107,7 @@ func (db *SQLiteDatabase) getConnDefaultOptions() SQLiteConnOptions {
 	}
 }
 
+// Select is a wrapper for SQLiteConn.Select.
 func (db *SQLiteDatabase) Select(ctx context.Context, sql string, cb func(*sqlite.Stmt) error, args ...interface{}) error {
 	conn, err := db.GetConn(ctx)
 	if err != nil {
@@ -112,6 +118,7 @@ func (db *SQLiteDatabase) Select(ctx context.Context, sql string, cb func(*sqlit
 	return err
 }
 
+// Exec is a wrapper for SQLiteConn.Exec.
 func (db *SQLiteDatabase) Exec(ctx context.Context, sql string, args ...interface{}) error {
 	conn, err := db.GetConn(ctx)
 	if err != nil {
@@ -121,6 +128,7 @@ func (db *SQLiteDatabase) Exec(ctx context.Context, sql string, args ...interfac
 	return conn.Exec(sql, args...)
 }
 
+// MultiExec is a wrapper for SQLiteConn.MultiExec.
 func (db *SQLiteDatabase) MultiExec(ctx context.Context, queries []SQLQuery) error {
 	conn, err := db.GetConn(ctx)
 	if err != nil {
@@ -130,6 +138,7 @@ func (db *SQLiteDatabase) MultiExec(ctx context.Context, queries []SQLQuery) err
 	return conn.MultiExec(queries)
 }
 
+// WithTx is a wrapper for SQLiteConn.WithTx.
 func (db *SQLiteDatabase) WithTx(ctx context.Context, cb func(*SQLiteConn) error) error {
 	conn, err := db.GetConn(ctx)
 	if err != nil {
@@ -140,9 +149,9 @@ func (db *SQLiteDatabase) WithTx(ctx context.Context, cb func(*SQLiteConn) error
 }
 
 func (db *SQLiteDatabase) init(ctx context.Context) error {
-	is_new := false
+	isNew := false
 	if stat, err := os.Stat(db.Path); os.IsNotExist(err) {
-		is_new = true
+		isNew = true
 		db.logger.Infof("database %q doesn't exist, creating", db.Path)
 	} else if err != nil {
 		return err
@@ -156,7 +165,7 @@ func (db *SQLiteDatabase) init(ctx context.Context) error {
 	}
 	defer conn.Close()
 
-	if !is_new {
+	if !isNew {
 		err := conn.WithTx(func() error {
 			if err := db.checkApplicationID(conn); err != nil {
 				return err
@@ -201,15 +210,15 @@ func (db *SQLiteDatabase) init(ctx context.Context) error {
 }
 
 func (db *SQLiteDatabase) checkApplicationID(conn *SQLiteConn) error {
-	var app_id int
+	var appID int
 	err := conn.Select("PRAGMA application_id", func(stmt *sqlite.Stmt) error {
 		var err error
-		app_id, _, err = stmt.ColumnInt(0)
+		appID, _, err = stmt.ColumnInt(0)
 		return err
 	})
-	db.logger.Debugf("database %p found application ID 0x%x in %q", db, app_id, db.Path)
-	if err == nil && app_id != db.AppID {
-		return fmt.Errorf("database %q is from another application: found application ID 0x%x instead of 0x%x", db.Path, app_id, db.AppID)
+	db.logger.Debugf("database %p found application ID 0x%x in %q", db, appID, db.Path)
+	if err == nil && appID != db.AppID {
+		return fmt.Errorf("database %q is from another application: found application ID 0x%x instead of 0x%x", db.Path, appID, db.AppID)
 	}
 	return err
 }
@@ -219,10 +228,10 @@ func (db *SQLiteDatabase) setAppID(conn *SQLiteConn) error {
 }
 
 func (db *SQLiteDatabase) getWrittenVersion(conn *SQLiteConn) error {
-	var int_version int
+	var intVersion int
 	err := conn.Select("PRAGMA user_version", func(stmt *sqlite.Stmt) error {
 		var err error
-		int_version, _, err = stmt.ColumnInt(0)
+		intVersion, _, err = stmt.ColumnInt(0)
 		return err
 	})
 
@@ -230,7 +239,7 @@ func (db *SQLiteDatabase) getWrittenVersion(conn *SQLiteConn) error {
 		return err
 	}
 
-	db.WrittenVersion = SemVerFromInt(int_version)
+	db.WrittenVersion = SemVerFromInt(intVersion)
 	db.logger.Debugf("%p found database at %q with version %s", db, db.Path, db.WrittenVersion)
 	return nil
 }
@@ -303,6 +312,8 @@ func (db *SQLiteDatabase) quickCheck(conn *SQLiteConn) error {
 	return nil
 }
 
+// PeriodicCleanup is a Task to be launched independently which periodically optimizes the database,
+// according to the interval set in the SQLiteDatabaseOptions.
 func (db *SQLiteDatabase) PeriodicCleanup(ctx context.Context) error {
 	if !(db.CleanupInterval > 0) {
 		return fmt.Errorf("database at %q cannot run periodic cleanup with an interval of %s", db.Path, db.CleanupInterval)
@@ -320,40 +331,41 @@ func (db *SQLiteDatabase) PeriodicCleanup(ctx context.Context) error {
 	return ctx.Err()
 }
 
+// Backup creates or clobbers a backup of the current database at the destination set in the SQLiteBackupOptinos.
 func (db *SQLiteDatabase) Backup(ctx context.Context, opts SQLiteBackupOptions) error {
 	db.backups.Lock()
 	defer db.backups.Unlock()
 
 	db.logger.Debugf("opening connection at %q for backup from database %p at %q", opts.DestPath, db, db.Path)
-	dest_opts := db.getConnDefaultOptions()
-	dest_opts.Path = opts.DestPath
-	dest_conn, err := NewSQLiteConn(ctx, db.logger, dest_opts)
+	destOpts := db.getConnDefaultOptions()
+	destOpts.Path = opts.DestPath
+	destConn, err := NewSQLiteConn(ctx, db.logger, destOpts)
 	if err != nil {
 		return err
 	}
-	defer dest_conn.Close()
+	defer destConn.Close()
 
-	src_conn, err := db.GetConn(ctx)
+	srcConn, err := db.GetConn(ctx)
 	if err != nil {
 		return err
 	}
-	defer src_conn.Close()
+	defer srcConn.Close()
 
-	backup, err := src_conn.Backup(opts.SrcName, dest_conn, opts.DestName)
+	backup, err := srcConn.Backup(opts.SrcName, destConn, opts.DestName)
 	if err != nil {
 		return err
 	}
 	defer backup.Close()
 
 	db.logger.Debugf("backup connection %p and %p from %q to %q established",
-		src_conn, dest_conn, db.Path, opts.DestPath)
+		srcConn, destConn, db.Path, opts.DestPath)
 
 	for {
 		// Surprisingly, this is the best way to avoid getting a "database locked" error,
 		// instead of saving a few pages at a time.
 		// This is probably due to SQLite's deadlock detetection in its notify API.
 		db.logger.Debugf("backup connection %p and %p from %q to %q trying to backup all pages",
-			src_conn, dest_conn, db.Path, opts.DestPath)
+			srcConn, destConn, db.Path, opts.DestPath)
 		err = backup.Step(-1) // -1 saves all remaning pages.
 		if err != nil {
 			break
@@ -370,6 +382,7 @@ func (db *SQLiteDatabase) Backup(ctx context.Context, opts SQLiteBackupOptions) 
 	return nil
 }
 
+// SQLiteForeignKeyCheck describes a foreign key error in a single row.
 type SQLiteForeignKeyCheck struct {
 	ValidRowID   bool // RowID can be NULL, contrarily to the rest.
 	Table        string
@@ -378,6 +391,7 @@ type SQLiteForeignKeyCheck struct {
 	ForeignKeyID int
 }
 
+// FromDB reads the error from the results of "PRAGMA foreign_key_check".
 func (fkc *SQLiteForeignKeyCheck) FromDB(stmt *sqlite.Stmt) error {
 	var err error
 	if fkc.Table, _, err = stmt.ColumnText(0); err != nil {
@@ -396,6 +410,7 @@ func (fkc *SQLiteForeignKeyCheck) FromDB(stmt *sqlite.Stmt) error {
 	return err
 }
 
+// Error summarizes the error the data structure describes.
 func (fkc *SQLiteForeignKeyCheck) Error() string {
 	if !fkc.ValidRowID {
 		return fmt.Sprintf("a row in %q failed to reference key #%d in %q", fkc.Table, fkc.ForeignKeyID, fkc.Parent)
@@ -403,6 +418,7 @@ func (fkc *SQLiteForeignKeyCheck) Error() string {
 	return fmt.Sprintf("row #%d in %q failed to reference key #%d in %q", fkc.RowID, fkc.Table, fkc.ForeignKeyID, fkc.Parent)
 }
 
+// SQLiteConnOptions describes the connection options for an SQLiteConn.
 type SQLiteConnOptions struct {
 	ForeignKeys bool
 	Path        string
@@ -410,6 +426,7 @@ type SQLiteConnOptions struct {
 	OpenOptions int
 }
 
+// SQLiteConn is a single connection to an SQLite database.
 type SQLiteConn struct {
 	sync.Mutex
 	closed bool
@@ -420,6 +437,9 @@ type SQLiteConn struct {
 	Path   string
 }
 
+// NewSQLiteConn creates a connection to a SQLite database.
+// Note that the timeout isn't taken into account for this phase;
+// it will return a "database locked" error if it can't immediately connect.
 func NewSQLiteConn(ctx context.Context, logger LevelLogger, conf SQLiteConnOptions) (*SQLiteConn, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -462,6 +482,7 @@ func NewSQLiteConn(ctx context.Context, logger LevelLogger, conf SQLiteConnOptio
 	return sc, nil
 }
 
+// Close idempotently closes the connection.
 func (sc *SQLiteConn) Close() error {
 	sc.Lock()
 	defer sc.Unlock()
@@ -474,17 +495,22 @@ func (sc *SQLiteConn) Close() error {
 	return sc.conn.Close()
 }
 
+// TotalChanges returns the number of rows that have been changed.
 func (sc *SQLiteConn) TotalChanges() int {
 	return sc.conn.TotalChanges()
 }
 
-func (sc *SQLiteConn) Backup(src_name string, conn *SQLiteConn, dest_name string) (*sqlite.Backup, error) {
+// Backup backs the database up using the given connection to the backup file.
+// srcName is the name of the database inside the database file, which is relevant if you attach secondary databases;
+// otherwise it is "main". Similarly for destName, it is the target name of the database inside the destination file.
+func (sc *SQLiteConn) Backup(srcName string, conn *SQLiteConn, destName string) (*sqlite.Backup, error) {
 	if sc.ctx.Err() != nil {
 		return nil, sc.ctx.Err()
 	}
-	return sc.conn.Backup(src_name, conn.conn, dest_name)
+	return sc.conn.Backup(srcName, conn.conn, destName)
 }
 
+// Prepare prepares an SQL statement and binds some arguments (none to all).
 func (sc *SQLiteConn) Prepare(sql string, args ...interface{}) (*sqlite.Stmt, error) {
 	if sc.ctx.Err() != nil {
 		return nil, sc.ctx.Err()
@@ -493,6 +519,8 @@ func (sc *SQLiteConn) Prepare(sql string, args ...interface{}) (*sqlite.Stmt, er
 	return sc.conn.Prepare(sql, args...)
 }
 
+// Select runs an SQL statement witih the given arguments and lets a callback read the statement
+// to get its result until all rows in the response are read, and closes the statement.
 func (sc *SQLiteConn) Select(sql string, cb func(stmt *sqlite.Stmt) error, args ...interface{}) error {
 	if sc.ctx.Err() != nil {
 		return sc.ctx.Err()
@@ -506,6 +534,7 @@ func (sc *SQLiteConn) Select(sql string, cb func(stmt *sqlite.Stmt) error, args 
 	return SQLiteStmtScan(sc.ctx, stmt, cb)
 }
 
+// Exec execute the SQL statement with the given arguments, managing the entirety of the underlying statement's lifecycle.
 func (sc *SQLiteConn) Exec(sql string, args ...interface{}) error {
 	if sc.ctx.Err() != nil {
 		return sc.ctx.Err()
@@ -514,6 +543,7 @@ func (sc *SQLiteConn) Exec(sql string, args ...interface{}) error {
 	return sc.conn.Exec(sql, args...)
 }
 
+// MultiExec execute multiple SQL statements with their arguments.
 func (sc *SQLiteConn) MultiExec(queries []SQLQuery) error {
 	sc.logger.Debugf("executing with SQLite connection %p at %q multiple SQL queries: %+v", sc, sc.Path, queries)
 	for _, query := range queries {
@@ -524,6 +554,7 @@ func (sc *SQLiteConn) MultiExec(queries []SQLQuery) error {
 	return nil
 }
 
+// WithTx runs a callback while managing a transaction's entire lifecycle.
 func (sc *SQLiteConn) WithTx(cb func() error) error {
 	if sc.ctx.Err() != nil {
 		return sc.ctx.Err()
@@ -532,6 +563,7 @@ func (sc *SQLiteConn) WithTx(cb func() error) error {
 	return sc.conn.WithTx(cb)
 }
 
+// MultiExecWithTx is like MultiExec but within a single transaction.
 func (sc *SQLiteConn) MultiExecWithTx(queries []SQLQuery) error {
 	if sc.ctx.Err() != nil {
 		return sc.ctx.Err()
@@ -540,6 +572,7 @@ func (sc *SQLiteConn) MultiExecWithTx(queries []SQLQuery) error {
 	return sc.conn.WithTx(func() error { return sc.MultiExec(queries) })
 }
 
+// SQLiteStmtScan runs a callback multiple times onto an SQLite statement to read its results until every record has been read.
 func SQLiteStmtScan(ctx context.Context, stmt *sqlite.Stmt, cb func(*sqlite.Stmt) error) error {
 	for {
 		if ctx.Err() != nil {

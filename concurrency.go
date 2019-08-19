@@ -8,15 +8,18 @@ import (
 	"time"
 )
 
+// IsCancellation returns whether the error corresponds to a cancellation.
 func IsCancellation(err error) bool {
 	if err == context.Canceled || err == context.DeadlineExceeded {
 		return true
-	} else if sqlite_err, ok := err.(*sqlite.Error); ok && sqlite_err.Code() == sqlite.INTERRUPT {
+	} else if sqliteErr, ok := err.(*sqlite.Error); ok && sqliteErr.Code() == sqlite.INTERRUPT {
 		return true
 	}
 	return false
 }
 
+// SleepCtx sleeps with the ability to be cancelled,
+// and returns whether it has slept without being cancelled (makes use in for loops easier).
 func SleepCtx(ctx context.Context, duration time.Duration) bool {
 	select {
 	case <-time.After(duration):
@@ -26,9 +29,10 @@ func SleepCtx(ctx context.Context, duration time.Duration) bool {
 	}
 }
 
+// Task is a function that can be managed by a TaskGroup.
 type Task func(context.Context) error
 
-// Launches and shuts down a group of goroutine which take a context and return an error.
+// TaskGroup launches and shuts down a group of goroutine which take a context and return an error.
 // Use TaskGroup.Spawn to launch functions asynchronously,
 // and once you're done use TaskGroup.Wait to wait on them.
 // To cancel a TaskGroup, use TaskGroup.Cancel, or cancel the context you passed
@@ -43,8 +47,9 @@ type TaskGroup struct {
 	wait    *sync.WaitGroup
 }
 
-func NewTaskGroup(parent_ctx context.Context) *TaskGroup {
-	ctx, cancel := context.WithCancel(parent_ctx)
+// NewTaskGroup returns a new TaskGroup which depends on a parent context.
+func NewTaskGroup(parentCtx context.Context) *TaskGroup {
+	ctx, cancel := context.WithCancel(parentCtx)
 	return &TaskGroup{
 		Cancel:  cancel,
 		Context: ctx,
@@ -53,6 +58,9 @@ func NewTaskGroup(parent_ctx context.Context) *TaskGroup {
 	}
 }
 
+// SpawnCtx runs a task and manages it.
+// If the task returns an error that isn't nil nor is a cancellation,
+// it registers the error and cancels the whole TaskGroup.
 func (tg *TaskGroup) SpawnCtx(cb Task) {
 	tg.wait.Add(1)
 	go func() {
@@ -67,6 +75,7 @@ func (tg *TaskGroup) SpawnCtx(cb Task) {
 	}()
 }
 
+// Spawn runs and manages a simple callback that isn't a Task.
 func (tg *TaskGroup) Spawn(cb func()) {
 	tg.wait.Add(1)
 	go func() {
@@ -75,23 +84,27 @@ func (tg *TaskGroup) Spawn(cb func()) {
 	}()
 }
 
+// SubGroup returns a TaskGroup that is linked to the current TaskGroup through their contexts.
 func (tg *TaskGroup) SubGroup() *TaskGroup {
-	sub_tg := NewTaskGroup(tg.Context)
-	sub_tg.parent = tg
-	return sub_tg
+	subTg := NewTaskGroup(tg.Context)
+	subTg.parent = tg
+	return subTg
 }
 
+// Wait blocks until all tasks in the group have returned.
 func (tg *TaskGroup) Wait() *ErrorGroup {
 	defer tg.Cancel()
 	tg.wait.Wait()
 	return tg.Errors
 }
 
+// ErrorGroup is a goroutine-safe group of errors for use by TaskGroup.
 type ErrorGroup struct {
 	mutex  *sync.RWMutex
 	errors []error
 }
 
+// NewErrorGroup creates a new ErrorGroup.
 func NewErrorGroup() *ErrorGroup {
 	return &ErrorGroup{
 		mutex:  &sync.RWMutex{},
@@ -99,12 +112,14 @@ func NewErrorGroup() *ErrorGroup {
 	}
 }
 
+// Add adds an error to the ErrorGroup.
 func (eg *ErrorGroup) Add(err error) {
 	eg.mutex.Lock()
 	defer eg.mutex.Unlock()
 	eg.errors = append(eg.errors, err)
 }
 
+// Errors returns a slice of the errors it has registered so far.
 func (eg *ErrorGroup) Errors() []error {
 	eg.mutex.RLock()
 	defer eg.mutex.RUnlock()
@@ -113,23 +128,26 @@ func (eg *ErrorGroup) Errors() []error {
 	return errors
 }
 
+// Len returns the number of errors it has registered so far without the need to generate a slice of errors first.
 func (eg *ErrorGroup) Len() int {
 	eg.mutex.RLock()
 	defer eg.mutex.RUnlock()
 	return len(eg.errors)
 }
 
+// Error implements the Error interface.
 func (eg *ErrorGroup) Error() string {
 	errors := eg.Errors()
-	nb_errs := len(errors)
-	if nb_errs == 0 {
+	nbErrs := len(errors)
+	if nbErrs == 0 {
 		return ""
-	} else if nb_errs == 1 {
+	} else if nbErrs == 1 {
 		return errors[0].Error()
 	}
-	return fmt.Sprintf("%d error(s): %v", nb_errs, errors)
+	return fmt.Sprintf("%d error(s): %v", nbErrs, errors)
 }
 
+// ToError unwraps the ErrorGroup from its interface when nil.
 func (eg *ErrorGroup) ToError() error {
 	if eg.Len() == 0 {
 		return nil
@@ -137,17 +155,10 @@ func (eg *ErrorGroup) ToError() error {
 	return eg
 }
 
-func NewRetrier(conf RetryConf, on_error func(*Retrier, error)) *Retrier {
-	return &Retrier{
-		MaxInterval: conf.MaxInterval.Value,
-		ResetAfter:  conf.ResetAfter.Value,
-		Times:       conf.Times,
-		OnError:     on_error,
-		Backoff:     time.Second,
-	}
-}
-
-// Can only be used for a single task.
+// Retrier automatically retries a Task when it fails, with exponential backoff,
+// an optional limit of retries and a limit to the backoff.
+// It can only be used for a single Task; misuse may result in unforeseen behavior and data races.
+// To use, first run NewRetrier, then Set, and finally pass Retrier.Task to whatever expects a Task.
 type Retrier struct {
 	Backoff     time.Duration
 	Callback    Task
@@ -159,11 +170,24 @@ type Retrier struct {
 	Times       int
 }
 
+// NewRetrier creates a new Retrier that has yet to be bound to a Task.
+func NewRetrier(conf RetryConf, onError func(*Retrier, error)) *Retrier {
+	return &Retrier{
+		MaxInterval: conf.MaxInterval.Value,
+		ResetAfter:  conf.ResetAfter.Value,
+		Times:       conf.Times,
+		OnError:     onError,
+		Backoff:     time.Second,
+	}
+}
+
+// Set binds a Retrier to a Task and returns the Retrier so that the method can be chained.
 func (r *Retrier) Set(task Task) *Retrier {
 	r.Callback = task
 	return r
 }
 
+// Task wraps with retry logic the Task to which the Retrier has been bound to.
 func (r *Retrier) Task(ctx context.Context) error {
 	var err error
 	for {
@@ -177,7 +201,7 @@ func (r *Retrier) Task(ctx context.Context) error {
 			if !r.sleepCtx(ctx) {
 				return ctx.Err()
 			}
-			r.Retries += 1
+			r.Retries++
 		} else {
 			break
 		}
@@ -205,12 +229,12 @@ func (r *Retrier) shouldRestartOn(err error) bool {
 }
 
 func (r *Retrier) sleepCtx(ctx context.Context) bool {
-	var sleep_time time.Duration
+	var sleeptime time.Duration
 	if r.MaxInterval > 0 && r.Backoff > r.MaxInterval {
-		sleep_time = r.MaxInterval
+		sleeptime = r.MaxInterval
 	} else {
-		sleep_time = r.Backoff
+		sleeptime = r.Backoff
 		r.Backoff *= 2
 	}
-	return SleepCtx(ctx, sleep_time)
+	return SleepCtx(ctx, sleeptime)
 }

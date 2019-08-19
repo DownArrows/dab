@@ -337,8 +337,8 @@ This readme is written in markdown and is compatible with github-flavored markdo
    and only use pascal case if they are to be used outside of the struct's methods and creation function(s)
    (we treat unexported fields and methods like private methods and attributes in object-oriented programming,
    although since everything is in the same package at this point it's nothing more than a convention that isn't enforced by the compiler)
+ - comment everything that's exported
  - sort by name struct fields, or if they are really about different things, separate them with a blank line
- - use snake case for variables inside functions
  - use camel case for constants, types and variables at package-level
  - use pascal case for them if they are used in another file
  - unless you add a lot of code, keep everything inside the main package (having to deal with multiple packages complicates things)

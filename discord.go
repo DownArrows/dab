@@ -13,6 +13,7 @@ import (
 	"time"
 )
 
+// Emojis that are used in the application.
 const (
 	EmojiCheckMark     = "\u2705"
 	EmojiCrossBones    = "\u2620"
@@ -44,7 +45,7 @@ var linkReactions = []string{
 	EmojiOkHand, EmojiOneHundred, EmojiThumbUp, EmojiWhiteFlower,
 }
 
-// discordgo's data structures aren't well adapted to our needs,
+// DiscordMessage exists because discordgo's data structures aren't well adapted to our needs,
 // and typing "*discordgo.<DataStructure>" all the time gets tiring.
 type DiscordMessage struct {
 	Args      []string
@@ -55,30 +56,33 @@ type DiscordMessage struct {
 	ID        string
 }
 
-func NewDiscordMessage(dg_msg *discordgo.MessageCreate) DiscordMessage {
+// NewDiscordMessage creates a newe DiscordMessage from a *discordgo.MessageCreate
+func NewDiscordMessage(dgMsg *discordgo.MessageCreate) DiscordMessage {
 	return DiscordMessage{
-		ID:        dg_msg.ID,
-		Content:   dg_msg.Content,
-		ChannelID: dg_msg.ChannelID,
+		ID:        dgMsg.ID,
+		Content:   dgMsg.Content,
+		ChannelID: dgMsg.ChannelID,
 		Author: DiscordMember{
-			ID:            dg_msg.Author.ID,
-			Name:          dg_msg.Author.Username,
-			Discriminator: dg_msg.Author.Discriminator,
+			ID:            dgMsg.Author.ID,
+			Name:          dgMsg.Author.Username,
+			Discriminator: dgMsg.Author.Discriminator,
 		},
 	}
 }
 
-// This usefully subsumes discordgo.Member and discordgo.User
+// DiscordMember usefully subsumes discordgo.Member and discordgo.User
 type DiscordMember struct {
 	ID            string
 	Name          string
 	Discriminator string
 }
 
+// FQN returns the fully qualified name of a user, with its discriminator.
 func (member DiscordMember) FQN() string {
 	return member.Name + "#" + member.Discriminator
 }
 
+// DiscordEmbed describes an embed for Discord in a simpler way than *discordgo.MessageEmbed.
 type DiscordEmbed struct {
 	Title       string
 	Description string
@@ -86,29 +90,33 @@ type DiscordEmbed struct {
 	Color       int
 }
 
+// AddField adds a field to the embed.
 func (embed *DiscordEmbed) AddField(field DiscordEmbedField) {
 	embed.Fields = append(embed.Fields, field)
 }
 
+// Convert converts the data structure to the corresponding one in discordgo.
 func (embed *DiscordEmbed) Convert() *discordgo.MessageEmbed {
-	dg_embed := &discordgo.MessageEmbed{
+	dgEmbed := &discordgo.MessageEmbed{
 		Title:       embed.Title,
 		Description: embed.Description,
 		Color:       embed.Color,
 		Fields:      []*discordgo.MessageEmbedField{},
 	}
 	for _, field := range embed.Fields {
-		dg_embed.Fields = append(dg_embed.Fields, field.Convert())
+		dgEmbed.Fields = append(dgEmbed.Fields, field.Convert())
 	}
-	return dg_embed
+	return dgEmbed
 }
 
+// DiscordEmbedField is an easy to use description of a field for Discord's embeds.
 type DiscordEmbedField struct {
 	Name   string
 	Value  string
 	Inline bool
 }
 
+// Convert converts the data structure to the corresponding one in discordgo.
 func (field DiscordEmbedField) Convert() *discordgo.MessageEmbedField {
 	return &discordgo.MessageEmbedField{
 		Name:   field.Name,
@@ -117,7 +125,7 @@ func (field DiscordEmbedField) Convert() *discordgo.MessageEmbedField {
 	}
 }
 
-// This is used in DiscordBot.getCommandsDescriptors.
+// DiscordCommand describes a command for DiscordBot.
 type DiscordCommand struct {
 	Command    string
 	Aliases    []string
@@ -126,6 +134,8 @@ type DiscordCommand struct {
 	HasArgs    bool
 }
 
+// Match returns whether the message's content with the set prefix matches a registered command,
+// and returns the content with the command.
 func (cmd DiscordCommand) Match(prefix, content string) (bool, string) {
 	if matches, head := cmd.SingleMatch(cmd.Command, prefix, content); matches {
 		return matches, strings.TrimPrefix(content, head)
@@ -138,6 +148,8 @@ func (cmd DiscordCommand) Match(prefix, content string) (bool, string) {
 	return false, content
 }
 
+// SingleMatch tests whether a command with a prefix matches a message's content.
+// If it does, it also returns the content without the command.
 func (cmd DiscordCommand) SingleMatch(name, prefix, content string) (bool, string) {
 	if cmd.HasArgs {
 		head := prefix + name + " "
@@ -153,13 +165,15 @@ func (cmd DiscordCommand) SingleMatch(name, prefix, content string) (bool, strin
 	return false, ""
 }
 
+// DiscordWelcomeData describes the data useful to welcome a new member on a server.
+// To be used with a template.
 type DiscordWelcomeData struct {
 	BotID      string
 	ChannelsID DiscordBotChannelsID
 	Member     DiscordMember
 }
 
-// Component
+// DiscordBot is a component that interacts with Discord.
 type DiscordBot struct {
 	sync.Mutex
 
@@ -191,10 +205,11 @@ type DiscordBot struct {
 	mention    *regexp.Regexp
 }
 
+// NewDiscordBot returns a new DiscordBot.
 func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, conf DiscordBotConf) (*DiscordBot, error) {
-	discordgo.Logger = func(msgL, caller int, format string, dg_args ...interface{}) {
+	discordgo.Logger = func(msgL, caller int, format string, dgArgs ...interface{}) {
 		args := []interface{}{msgL, caller}
-		args = append(args, dg_args...)
+		args = append(args, dgArgs...)
 		logger.Debugf("discordgo library (log level %d, goroutine %d): "+format, args...)
 	}
 
@@ -240,6 +255,7 @@ func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, conf DiscordBo
 	return bot, nil
 }
 
+// Run runs and blocks until the bot stops.
 func (bot *DiscordBot) Run(ctx context.Context) error {
 	bot.ctx = ctx
 
@@ -267,6 +283,7 @@ func (bot *DiscordBot) fatal(err error) {
 	bot.done <- err
 }
 
+// OpenAddUser creates, sets, and returns a channel to send and receive queries to add users.
 func (bot *DiscordBot) OpenAddUser() chan UserQuery {
 	bot.Lock()
 	defer bot.Unlock()
@@ -276,6 +293,7 @@ func (bot *DiscordBot) OpenAddUser() chan UserQuery {
 	return bot.addUser
 }
 
+// CloseAddUser closes and remove the channel used to communicate with another component to add users.
 func (bot *DiscordBot) CloseAddUser() {
 	bot.Lock()
 	defer bot.Unlock()
@@ -399,20 +417,20 @@ func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
 	}
 }
 
-func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
+func (bot *DiscordBot) onMessage(dgMsg *discordgo.MessageCreate) {
 	var err error
 
-	if dg_msg.Author.ID == bot.ID {
+	if dgMsg.Author.ID == bot.ID {
 		return
 	}
 
-	is_dm, err := bot.isDMChannel(dg_msg.ChannelID)
+	isDm, err := bot.isDMChannel(dgMsg.ChannelID)
 	if err != nil {
 		bot.logger.Error(err)
 	}
 
-	msg := NewDiscordMessage(dg_msg)
-	msg.IsDM = is_dm
+	msg := NewDiscordMessage(dgMsg)
+	msg.IsDM = isDm
 
 	if bot.isLoggableRedditLink(msg) {
 		err = bot.processRedditLink(msg)
@@ -425,6 +443,8 @@ func (bot *DiscordBot) onMessage(dg_msg *discordgo.MessageCreate) {
 	}
 }
 
+// SignalSuspensions signals on discord the suspended or deleted User sent on the given channel.
+// It needs to be launched independently of the bot.
 func (bot *DiscordBot) SignalSuspensions(suspensions <-chan User) {
 	for user := range suspensions {
 		state := "suspended"
@@ -438,6 +458,8 @@ func (bot *DiscordBot) SignalSuspensions(suspensions <-chan User) {
 	}
 }
 
+// SignalUnsuspensions signals on discord as unsuspensions any User sent on the given channel.
+// It needs to be launched independently of the bot.
 func (bot *DiscordBot) SignalUnsuspensions(ch <-chan User) {
 	for user := range ch {
 		msg := fmt.Sprintf("%s /u/%s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
@@ -447,6 +469,8 @@ func (bot *DiscordBot) SignalUnsuspensions(ch <-chan User) {
 	}
 }
 
+// SignalHighScores signals on discord as high scores any Comment sent on the given channel.
+// It needs to be launched independently of the bot.
 func (bot *DiscordBot) SignalHighScores(ch <-chan Comment) {
 	for comment := range ch {
 		link := "https://www.reddit.com" + comment.Permalink
@@ -461,7 +485,7 @@ func (bot *DiscordBot) SignalHighScores(ch <-chan Comment) {
 func (bot *DiscordBot) matchCommand(msg DiscordMessage) (DiscordCommand, DiscordMessage) {
 	for _, cmd := range bot.commands {
 
-		if matches, content_rest := cmd.Match(bot.prefix, msg.Content); matches {
+		if matches, contentRest := cmd.Match(bot.prefix, msg.Content); matches {
 
 			// if the command was issued by someone who is not the admin, check role
 			if cmd.Privileged && msg.Author.ID != bot.adminID {
@@ -482,7 +506,7 @@ func (bot *DiscordBot) matchCommand(msg DiscordMessage) (DiscordCommand, Discord
 				}
 			}
 
-			msg.Content = content_rest
+			msg.Content = contentRest
 			msg.Args = strings.Split(msg.Content, " ")
 			return cmd, msg
 		}
@@ -531,9 +555,9 @@ func (bot *DiscordBot) processRedditLink(msg DiscordMessage) error {
 }
 
 func (bot *DiscordBot) addRandomReactionTo(msg DiscordMessage) error {
-	nb_reactions := len(linkReactions)
-	rand_index := rand.Int31n(int32(nb_reactions))
-	reaction := linkReactions[rand_index]
+	nbReactions := len(linkReactions)
+	randIndex := rand.Int31n(int32(nbReactions))
+	reaction := linkReactions[randIndex]
 	return bot.client.MessageReactionAdd(msg.ChannelID, msg.ID, reaction)
 }
 
@@ -646,13 +670,13 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 	return bot.channelEmbedSend(msg.ChannelID, status)
 }
 
-func (bot *DiscordBot) editUsers(action_name string, action func(context.Context, string) error) func(DiscordMessage) error {
+func (bot *DiscordBot) editUsers(actionName string, action func(context.Context, string) error) func(DiscordMessage) error {
 	return func(msg DiscordMessage) error {
 		names := msg.Args
-		bot.logger.Infof("%s wants to %s %v", msg.Author.FQN(), action_name, names)
+		bot.logger.Infof("%s wants to %s %v", msg.Author.FQN(), actionName, names)
 
 		status := &DiscordEmbed{
-			Title:       strings.Title(action_name),
+			Title:       strings.Title(actionName),
 			Description: fmt.Sprintf("request from <@%s>", msg.Author.ID),
 		}
 
@@ -729,15 +753,15 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 	username := TrimUsername(msg.Args[0])
 
-	user_query := bot.storage.GetUser(bot.ctx, username)
-	if user_query.Error != nil {
-		return user_query.Error
-	} else if !user_query.Exists {
+	userQuery := bot.storage.GetUser(bot.ctx, username)
+	if userQuery.Error != nil {
+		return userQuery.Error
+	} else if !userQuery.Exists {
 		reply := fmt.Sprintf("user %s not found.", username)
 		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, reply)
 	}
 
-	user := user_query.User
+	user := userQuery.User
 
 	total, negative, err := bot.storage.GetKarma(bot.ctx, user.Name)
 	if err != nil {
@@ -788,13 +812,14 @@ func (bot *DiscordBot) ban(msg DiscordMessage) error {
 	return nil
 }
 
+// TrimUsername trims reddit user names so that the application is liberal in what it accepts.
 func TrimUsername(username string) string {
 	return strings.TrimPrefix(strings.TrimPrefix(username, "/u/"), "u/")
 }
 
-func rolesHaveRoleID(roles []*discordgo.Role, role_id string) bool {
+func rolesHaveRoleID(roles []*discordgo.Role, roleID string) bool {
 	for _, role := range roles {
-		if role.ID == role_id {
+		if role.ID == roleID {
 			return true
 		}
 	}

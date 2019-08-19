@@ -9,11 +9,13 @@ import (
 	"text/template"
 )
 
+// Version of the application.
 var Version = SemVer{1, 13, 10}
 
+// DefaultChannelSize is the size of the channels that are used throughout of the application, unless there's a need for a specific size.
 const DefaultChannelSize = 100
 
-// This data structure and its methods contain very little logic.
+// DownArrowsBot and its methods contain very little logic.
 // All it does is pass dependencies around and connect components
 // together according to what is already decided in the configuration
 // data structure. It offers a clear view of how everything is organized.
@@ -49,36 +51,42 @@ type DownArrowsBot struct {
 	}
 }
 
-func NewDownArrowsBot(log_out io.Writer, output io.Writer) *DownArrowsBot {
+// NewDownArrowsBot creates a new DownArrowsBot.
+// logOut is the output of the logs, and output the output for other data.
+// Typically logOut will be stderr, and output stdout.
+func NewDownArrowsBot(logOut io.Writer, output io.Writer) *DownArrowsBot {
 	dab := &DownArrowsBot{
 		flagSet: flag.NewFlagSet("DownArrowsBot", flag.ExitOnError),
 		stdOut:  output,
 	}
-	dab.logOut = log_out
+	dab.logOut = logOut
 	return dab
 }
 
+// Run launches a DownArrowsBot with the given args and blocks until it is shutdown.
 func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
+	var err error
+
 	if err := dab.parseFlags(args); err != nil {
 		return err
 	}
 
-	if logger, err := NewStdLevelLogger(dab.logOut, dab.logLvl); err != nil {
+	var logger LevelLogger
+	if logger, err = NewStdLevelLogger(dab.logOut, dab.logLvl); err != nil {
 		return err
-	} else {
-		dab.logger = logger
 	}
+	dab.logger = logger
 
 	dab.logger.Infof("running DAB version %s", Version)
 
 	// Most of the decisions about what parts of the code
 	// should be enabled is done there.
-	if conf, err := NewConfiguration(dab.runtimeConf.ConfPath); err != nil {
+	var conf Configuration
+	if conf, err = NewConfiguration(dab.runtimeConf.ConfPath); err != nil {
 		return err
-	} else {
-		dab.conf = conf
-		dab.components.ConfState = conf.Components()
 	}
+	dab.conf = conf
+	dab.components.ConfState = conf.Components()
 
 	if err := dab.conf.HasSaneValues(); err != nil {
 		return err
@@ -89,11 +97,11 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	}
 
 	dab.logger.Infof("using database %s", dab.conf.Database.Path)
-	if storage, err := NewStorage(ctx, dab.logger, dab.conf.Database); err != nil {
+	var storage *Storage
+	if storage, err = NewStorage(ctx, dab.logger, dab.conf.Database); err != nil {
 		return err
-	} else {
-		dab.layers.Storage = storage
 	}
+	dab.layers.Storage = storage
 
 	if dab.runtimeConf.InitDB {
 		return nil
@@ -127,13 +135,13 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	}
 
 	if dab.components.ConfState.Reddit.Enabled {
-		reddit_api, err := dab.makeRedditAPI(ctx)
+		redditAPI, err := dab.makeRedditAPI(ctx)
 		if err != nil {
 			return err
 		}
 
-		dab.components.RedditScanner = NewRedditScanner(dab.logger, dab.layers.Storage, reddit_api, dab.conf.Reddit.RedditScannerConf)
-		dab.components.RedditUsers = NewRedditUsers(dab.logger, dab.layers.Storage, reddit_api, dab.conf.Reddit.RedditUsersConf)
+		dab.components.RedditScanner = NewRedditScanner(dab.logger, dab.layers.Storage, redditAPI, dab.conf.Reddit.RedditScannerConf)
+		dab.components.RedditUsers = NewRedditUsers(dab.logger, dab.layers.Storage, redditAPI, dab.conf.Reddit.RedditUsersConf)
 
 		retrier := NewRetrier(dab.conf.Reddit.Retry, func(r *Retrier, err error) {
 			dab.logger.Errorf("error in reddit component, restarting (%d retries, %s backoff): %v", r.Retries, r.Backoff, err)
@@ -141,7 +149,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 		tasks.SpawnCtx(retrier.Set(func(ctx context.Context) error {
 			dab.logger.Info("attempting to log into reddit")
-			if err := reddit_api.Connect(ctx); err != nil {
+			if err := redditAPI.Connect(ctx); err != nil {
 				return err
 			}
 			dab.logger.Info("successfully logged into reddit")
@@ -220,12 +228,12 @@ func (dab *DownArrowsBot) parseFlags(args []string) error {
 }
 
 func (dab *DownArrowsBot) makeRedditAPI(ctx context.Context) (*RedditAPI, error) {
-	user_agent, err := template.New("UserAgent").Parse(dab.conf.Reddit.UserAgent)
+	userAgent, err := template.New("UserAgent").Parse(dab.conf.Reddit.UserAgent)
 	if err != nil {
 		return nil, err
 	}
 
-	ra, err := NewRedditAPI(ctx, dab.conf.Reddit.RedditAuth, user_agent)
+	ra, err := NewRedditAPI(ctx, dab.conf.Reddit.RedditAuth, userAgent)
 	if err != nil {
 		return nil, err
 	}

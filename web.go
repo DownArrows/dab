@@ -12,14 +12,16 @@ import (
 	"strings"
 )
 
+// HTTPCacheMaxAge is the maxmimum cache age one can set in response to an HTTP request.
 const HTTPCacheMaxAge = 31536000
 
-// http.ResponseWriter wrapper with basic GZip compression support
+// ResponseWriter is a wrapper for http.ResponseWriter with basic GZip compression support.
 type ResponseWriter struct {
 	actual http.ResponseWriter
 	gzip   *gzip.Writer
 }
 
+// NewResponseWriter wraps standard ResponseWriter, and uses an *http.Request to test for GZip support.
 func NewResponseWriter(w http.ResponseWriter, r *http.Request) *ResponseWriter {
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		w.Header().Set("Content-Encoding", "gzip")
@@ -32,6 +34,7 @@ func NewResponseWriter(w http.ResponseWriter, r *http.Request) *ResponseWriter {
 	return &ResponseWriter{actual: w}
 }
 
+// Close closes the writer, which is required by the underlying GZip writer.
 func (w *ResponseWriter) Close() error {
 	if w.gzip == nil {
 		return nil
@@ -39,10 +42,12 @@ func (w *ResponseWriter) Close() error {
 	return w.gzip.Close()
 }
 
+// Header wrapper.
 func (w *ResponseWriter) Header() http.Header {
 	return w.actual.Header()
 }
 
+// Write wrapper.
 func (w *ResponseWriter) Write(data []byte) (int, error) {
 	if w.gzip == nil {
 		return w.actual.Write(data)
@@ -50,25 +55,29 @@ func (w *ResponseWriter) Write(data []byte) (int, error) {
 	return w.gzip.Write(data)
 }
 
+// WriteHeader wrapper.
 func (w *ResponseWriter) WriteHeader(statusCode int) {
 	w.actual.WriteHeader(statusCode)
 }
 
-// http.ServeMux minimal wrapper that uses our ResponseWriter
+// ServeMux is a minimal wrapper for http.ServeMux uses our ResponseWriter
 type ServeMux struct {
 	actual *http.ServeMux
 }
 
+// NewServeMux returns a ServeMux wrapping an http.NewServeMux.
 func NewServeMux() *ServeMux {
 	return &ServeMux{actual: http.NewServeMux()}
 }
 
+// HandleFunc wrapper.
 func (mux *ServeMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
 	mux.actual.HandleFunc(pattern, handler)
 }
 
-func (mux *ServeMux) ServeHTTP(base_w http.ResponseWriter, r *http.Request) {
-	w := NewResponseWriter(base_w, r)
+// ServeHTTP wrapper.
+func (mux *ServeMux) ServeHTTP(baseW http.ResponseWriter, r *http.Request) {
+	w := NewResponseWriter(baseW, r)
 	mux.actual.ServeHTTP(w, r)
 	if err := w.Close(); err != nil {
 		panic(err)
@@ -93,7 +102,7 @@ func immutableCache(handler func(http.ResponseWriter, *http.Request)) func(http.
 	}
 }
 
-// Component
+// WebServer serves the stored data as HTML pages and a backup of the database.
 type WebServer struct {
 	compendium      CompendiumFactory
 	done            chan error
@@ -103,13 +112,14 @@ type WebServer struct {
 	storage         WebServerStorage
 }
 
+// NewWebServer creates a new WebServer.
 func NewWebServer(conf WebConf, storage WebServerStorage, reports ReportFactory, compendium CompendiumFactory) *WebServer {
-	md_exts := blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis
+	mdExts := blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis
 
 	wsrv := &WebServer{
 		compendium:      compendium,
 		done:            make(chan error),
-		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(md_exts)),
+		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(mdExts)),
 		reports:         reports,
 		storage:         storage,
 	}
@@ -134,6 +144,7 @@ func (wsrv *WebServer) fatal(err error) {
 	wsrv.done <- err
 }
 
+// Run runs the web server and blocks until it is cancelled or returns an error.
 func (wsrv *WebServer) Run(ctx context.Context) error {
 	go func() {
 		wsrv.done <- wsrv.server.ListenAndServe()
@@ -152,6 +163,7 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 	return err
 }
 
+// CSS serves the style sheets.
 func (wsrv *WebServer) CSS(w http.ResponseWriter, r *http.Request) {
 	var css string
 	switch r.URL.Path {
@@ -169,10 +181,12 @@ func (wsrv *WebServer) CSS(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(css))
 }
 
+// ReportIndex serves the reports' index (unimplemented).
 func (wsrv *WebServer) ReportIndex(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
+// ReportSource serves the reports in markdown format according to the year and week in the URL.
 func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 	week, year, err := weekAndYear(ignoreTrailing(subPath("/reports/source/", r)))
 	if err != nil {
@@ -195,6 +209,7 @@ func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Report serves the HTML reports according to the year and week in the URL.
 func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 	week, year, err := weekAndYear(ignoreTrailing(subPath("/reports/", r)))
 	if err != nil {
@@ -210,7 +225,7 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	report.CommentBodyConverter = wsrv.CommentBodyConverter
+	report.CommentBodyConverter = wsrv.commentBodyConverter
 
 	w.Header().Set("Content-Type", "text/html")
 	if err := HTMLReportPage.Execute(w, report); err != nil {
@@ -218,16 +233,19 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ReportCurrent redirects to the report for the current week.
 func (wsrv *WebServer) ReportCurrent(w http.ResponseWriter, r *http.Request) {
 	week, year := wsrv.reports.CurrentWeekCoordinates()
 	redirectToReport(week, year, w, r)
 }
 
+// ReportLatest redirects to the report for the previous week.
 func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
 	week, year := wsrv.reports.LastWeekCoordinates()
 	redirectToReport(week, year, w, r)
 }
 
+// CompendiumIndex serves the compendium's index.
 func (wsrv *WebServer) CompendiumIndex(w http.ResponseWriter, r *http.Request) {
 	stats, err := wsrv.compendium.Compendium(r.Context())
 	if err != nil {
@@ -235,7 +253,7 @@ func (wsrv *WebServer) CompendiumIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats.CommentBodyConverter = wsrv.CommentBodyConverter
+	stats.CommentBodyConverter = wsrv.commentBodyConverter
 
 	w.Header().Set("Content-Type", "text/html")
 	if err := HTMLCompendium.Execute(w, stats); err != nil {
@@ -243,6 +261,7 @@ func (wsrv *WebServer) CompendiumIndex(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// CompendiumUser serves the compendium page for a single user, whose name is taken from the URL (case-insensitive).
 func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 	args := ignoreTrailing(subPath("/compendium/user/", r))
 	if len(args) != 1 {
@@ -266,7 +285,7 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats.CommentBodyConverter = wsrv.CommentBodyConverter
+	stats.CommentBodyConverter = wsrv.commentBodyConverter
 
 	w.Header().Set("Content-Type", "text/html")
 	if err := HTMLCompendiumUserPage.Execute(w, stats); err != nil {
@@ -274,6 +293,7 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Backup triggers a backup if needed, and serves it.
 func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
 	if err := wsrv.storage.Backup(r.Context()); err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
@@ -283,7 +303,7 @@ func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, wsrv.storage.BackupPath())
 }
 
-func (wsrv *WebServer) CommentBodyConverter(src CommentView) (interface{}, error) {
+func (wsrv *WebServer) commentBodyConverter(src CommentView) (interface{}, error) {
 	html := blackfriday.Run([]byte(src.Body), wsrv.markdownOptions)
 	return template.HTML(html), nil
 }
@@ -293,8 +313,8 @@ func redirectToReport(week uint8, year int, w http.ResponseWriter, r *http.Reque
 }
 
 func subPath(prefix string, r *http.Request) []string {
-	sub_url := r.URL.Path[len(prefix):]
-	return strings.Split(sub_url, "/")
+	subURL := r.URL.Path[len(prefix):]
+	return strings.Split(subURL, "/")
 }
 
 func ignoreTrailing(path []string) []string {

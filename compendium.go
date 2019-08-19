@@ -6,12 +6,16 @@ import (
 	"time"
 )
 
+// CompendiumFactory generates data structures for any page of the compendium.
 type CompendiumFactory struct {
-	NbTop    uint
-	storage  CompendiumStorage
+	// Number of most downvoted comments.
+	NbTop   uint
+	storage CompendiumStorage
+	// Timezone of the dates.
 	Timezone *time.Location
 }
 
+// NewCompendiumFactory returns a new CompendiumFactory.
 func NewCompendiumFactory(storage CompendiumStorage, conf CompendiumConf) CompendiumFactory {
 	return CompendiumFactory{
 		NbTop:    conf.NbTop,
@@ -20,6 +24,7 @@ func NewCompendiumFactory(storage CompendiumStorage, conf CompendiumConf) Compen
 	}
 }
 
+// Compendium returns the data structure that describes the compendium's index.
 func (c CompendiumFactory) Compendium(ctx context.Context) (*Compendium, error) {
 	stats := &Compendium{
 		NbTop:    c.NbTop,
@@ -51,11 +56,12 @@ func (c CompendiumFactory) Compendium(ctx context.Context) (*Compendium, error) 
 		return nil, err
 	}
 
-	stats.Normalize()
+	stats.normalize()
 
 	return stats, nil
 }
 
+// User returs a data structure that describes the compendium page for a single user.
 func (c CompendiumFactory) User(ctx context.Context, user User) (*CompendiumUser, error) {
 	stats := &CompendiumUser{
 		Compendium: Compendium{
@@ -97,11 +103,13 @@ func (c CompendiumFactory) User(ctx context.Context, user User) (*CompendiumUser
 		return nil, err
 	}
 
-	stats.Normalize()
+	stats.normalize()
 
 	return stats, nil
 }
 
+// Compendium describes the basic data of a page of the compendium.
+// Specific pages may use it directly or extend it.
 type Compendium struct {
 	All                  []*CompendiumDetailsTagged
 	CommentBodyConverter CommentBodyConverter
@@ -113,10 +121,12 @@ type Compendium struct {
 	Version              SemVer
 }
 
+// TopCommentsLen returns the number of top comments without generating them.
 func (c *Compendium) TopCommentsLen() int {
 	return len(c.rawTopComments)
 }
 
+// TopComments generates the views for the top comments.
 func (c *Compendium) TopComments() []CommentView {
 	views := make([]CommentView, 0, len(c.rawTopComments))
 	for i, comment := range c.rawTopComments {
@@ -126,6 +136,7 @@ func (c *Compendium) TopComments() []CommentView {
 	return views
 }
 
+// HiddenUsersLen returns the number of hidden users.
 func (c *Compendium) HiddenUsersLen() int {
 	var nb int
 	for _, user := range c.Users {
@@ -136,7 +147,7 @@ func (c *Compendium) HiddenUsersLen() int {
 	return nb
 }
 
-func (c *Compendium) Normalize() {
+func (c *Compendium) normalize() {
 	for i, details := range c.All {
 		details.Normalize(uint(i+1), c.Timezone)
 	}
@@ -145,22 +156,25 @@ func (c *Compendium) Normalize() {
 		details.Normalize(uint(i+1), c.Timezone)
 	}
 
-	nb_users := len(c.Users)
-	for i := 0; i < nb_users; i++ {
+	nbUsers := len(c.Users)
+	for i := 0; i < nbUsers; i++ {
 		c.Users[i] = c.Users[i].InTimezone(c.Timezone)
 	}
 }
 
+// CompendiumUser describes the compendium page for a single user.
 type CompendiumUser struct {
 	Compendium
 	Summary         *CompendiumDetails
 	SummaryNegative *CompendiumDetails
 }
 
+// User returns the single User being described.
 func (cu *CompendiumUser) User() User {
 	return cu.Users[0]
 }
 
+// PercentageNegative returns the rounded percentage of comments in the negatives.
 func (cu *CompendiumUser) PercentageNegative() int64 {
 	if cu.Summary.Count == 0 || cu.SummaryNegative.Count == 0 {
 		return 0
@@ -168,8 +182,8 @@ func (cu *CompendiumUser) PercentageNegative() int64 {
 	return int64(math.Round(100 * float64(cu.SummaryNegative.Count) / float64(cu.Summary.Count)))
 }
 
-func (cu *CompendiumUser) Normalize() {
-	cu.Compendium.Normalize()
+func (cu *CompendiumUser) normalize() {
+	cu.Compendium.normalize()
 	cu.Summary.Normalize(0, cu.Timezone)
 	cu.SummaryNegative.Normalize(0, cu.Timezone)
 }

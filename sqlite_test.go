@@ -21,7 +21,7 @@ func TestSQLiteConn(t *testing.T) {
 	defer os.RemoveAll(dir)
 	path := filepath.Join(dir, "test.db")
 	ctx := context.Background()
-	conn_opts := SQLiteConnOptions{
+	connOpts := SQLiteConnOptions{
 		Path:        path,
 		Timeout:     SQLiteDefaultTimeout,
 		OpenOptions: SQLiteDefaultOpenOptions,
@@ -29,7 +29,7 @@ func TestSQLiteConn(t *testing.T) {
 	expected := []string{"value1", "value2", "value3", "value4"}
 
 	t.Run("create connection", func(t *testing.T) {
-		if conn, err := NewSQLiteConn(ctx, NewTestLevelLogger(t), conn_opts); err != nil {
+		if conn, err := NewSQLiteConn(ctx, NewTestLevelLogger(t), connOpts); err != nil {
 			t.Fatal(err)
 		} else {
 			conn.Close()
@@ -37,7 +37,7 @@ func TestSQLiteConn(t *testing.T) {
 	})
 
 	t.Run("exec create table", func(t *testing.T) {
-		conn, err := NewSQLiteConn(ctx, NewTestLevelLogger(t), conn_opts)
+		conn, err := NewSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -49,7 +49,7 @@ func TestSQLiteConn(t *testing.T) {
 	})
 
 	t.Run("prepared statement insert", func(t *testing.T) {
-		conn, err := NewSQLiteConn(ctx, NewTestLevelLogger(t), conn_opts)
+		conn, err := NewSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -72,7 +72,7 @@ func TestSQLiteConn(t *testing.T) {
 	})
 
 	t.Run("select previously inserted values", func(t *testing.T) {
-		conn, err := NewSQLiteConn(ctx, NewTestLevelLogger(t), conn_opts)
+		conn, err := NewSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -99,7 +99,7 @@ func TestSQLiteConn(t *testing.T) {
 	})
 
 	t.Run("multi exec", func(t *testing.T) {
-		conn, err := NewSQLiteConn(ctx, NewTestLevelLogger(t), conn_opts)
+		conn, err := NewSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -121,7 +121,7 @@ func TestSQLiteDatabase(t *testing.T) {
 
 	ctx := context.Background()
 
-	app_id := 0x1e51
+	appID := 0x1e51
 	dir, err := ioutil.TempDir("", "dab-test-sqlite-db")
 	if err != nil {
 		t.Fatal(err)
@@ -133,7 +133,7 @@ func TestSQLiteDatabase(t *testing.T) {
 		t.Run("open empty", func(t *testing.T) {
 			_, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
 				Path:    path,
-				AppID:   app_id,
+				AppID:   appID,
 				Version: SemVer{0, 2, 0},
 			})
 			if err != nil {
@@ -144,7 +144,7 @@ func TestSQLiteDatabase(t *testing.T) {
 		t.Run("open already existing", func(t *testing.T) {
 			_, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
 				Path:    path,
-				AppID:   app_id,
+				AppID:   appID,
 				Version: SemVer{0, 2, 0},
 			})
 			if err != nil {
@@ -155,7 +155,7 @@ func TestSQLiteDatabase(t *testing.T) {
 		t.Run("open already existing database with lower version", func(t *testing.T) {
 			_, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
 				Path:    path,
-				AppID:   app_id,
+				AppID:   appID,
 				Version: SemVer{0, 3, 0},
 			})
 			if err != nil {
@@ -166,7 +166,7 @@ func TestSQLiteDatabase(t *testing.T) {
 		t.Run("open already existing database with higher version", func(t *testing.T) {
 			_, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
 				Path:    path,
-				AppID:   app_id,
+				AppID:   appID,
 				Version: SemVer{0, 1, 0},
 			})
 			if err == nil {
@@ -176,11 +176,11 @@ func TestSQLiteDatabase(t *testing.T) {
 	})
 
 	t.Run("concurrent insert", func(t *testing.T) {
-		nb_concurrent := 50
+		nbConcurrent := 50
 
 		db, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
 			Path:    filepath.Join(dir, "concurrent-insert.db"),
-			AppID:   app_id,
+			AppID:   appID,
 			Version: SemVer{0, 3, 0},
 		})
 		if err != nil {
@@ -192,7 +192,7 @@ func TestSQLiteDatabase(t *testing.T) {
 		}
 
 		wg := &sync.WaitGroup{}
-		for i := 0; i < nb_concurrent; i++ {
+		for i := 0; i < nbConcurrent; i++ {
 			wg.Add(1)
 			value := i
 			go func() {
@@ -215,12 +215,12 @@ func TestSQLiteDatabase(t *testing.T) {
 				return err
 			}
 
-			if count != nb_concurrent {
-				return fmt.Errorf("table 'test' should contain %d records, not %d", nb_concurrent, count)
+			if count != nbConcurrent {
+				return fmt.Errorf("table 'test' should contain %d records, not %d", nbConcurrent, count)
 			}
 
-			if n := nb_concurrent - 1; sum != (n*(n+1))/2 {
-				return fmt.Errorf("table 'test' should contain a list of all integers between 0 and %d", nb_concurrent)
+			if n := nbConcurrent - 1; sum != (n*(n+1))/2 {
+				return fmt.Errorf("table 'test' should contain a list of all integers between 0 and %d", nbConcurrent)
 			}
 
 			return nil
@@ -232,11 +232,11 @@ func TestSQLiteDatabase(t *testing.T) {
 
 	t.Run("backups", func(t *testing.T) {
 		path := filepath.Join(dir, "test-backup.db")
-		backup_path := filepath.Join(dir, "test-backup.backup.db")
+		backupPath := filepath.Join(dir, "test-backup.backup.db")
 
 		db, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
 			Path:    path,
-			AppID:   app_id,
+			AppID:   appID,
 			Version: SemVer{0, 3, 0},
 		})
 
@@ -246,7 +246,7 @@ func TestSQLiteDatabase(t *testing.T) {
 
 		opts := SQLiteBackupOptions{
 			DestName: "main",
-			DestPath: backup_path,
+			DestPath: backupPath,
 			SrcName:  "main",
 		}
 		if err := db.Backup(ctx, opts); err != nil {
@@ -254,8 +254,8 @@ func TestSQLiteDatabase(t *testing.T) {
 		}
 
 		backup, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
-			Path:    backup_path,
-			AppID:   app_id,
+			Path:    backupPath,
+			AppID:   appID,
 			Version: SemVer{0, 3, 0},
 		})
 		if err != nil {
@@ -268,13 +268,13 @@ func TestSQLiteDatabase(t *testing.T) {
 	})
 
 	t.Run("cancellation", func(t *testing.T) {
-		nb_concurrent := 50
+		nbConcurrent := 50
 
 		ctx, cancel := context.WithCancel(context.Background())
 
 		db, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
 			Path:    filepath.Join(dir, "cancellation.db"),
-			AppID:   app_id,
+			AppID:   appID,
 			Version: SemVer{0, 3, 0},
 		})
 		if err != nil {
@@ -286,7 +286,7 @@ func TestSQLiteDatabase(t *testing.T) {
 		}
 
 		wg := &sync.WaitGroup{}
-		for i := 0; i < nb_concurrent; i++ {
+		for i := 0; i < nbConcurrent; i++ {
 			wg.Add(1)
 			value := i
 			go func() {

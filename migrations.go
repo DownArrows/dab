@@ -4,6 +4,7 @@ import (
 	"strconv"
 )
 
+// StorageMigrations defines the migrations for the whole application.
 // Keep the migrations sorted from the lowest to highest version, the migration logic doesn't check.
 // The connection given to the migrations is always the same one, and hasn't started a transaction.
 var StorageMigrations = []SQLiteMigration{

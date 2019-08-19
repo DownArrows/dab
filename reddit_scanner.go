@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Component
+// RedditScanner is a component that efficiently scans users' comments and saves them.
 type RedditScanner struct {
 	// dependencies
 	api     RedditScannerAPI
@@ -27,6 +27,7 @@ type RedditScanner struct {
 	commentsLeeway      uint
 }
 
+// NewRedditScanner creates a new RedditScanner.
 func NewRedditScanner(
 	logger LevelLogger,
 	storage RedditScannerStorage,
@@ -47,28 +48,30 @@ func NewRedditScanner(
 	}
 }
 
+// Run launches the scanner and blocks until it errors out or is cancelled.
+// Note that network errors are only logged and not returned, as Reddit is rather unreliable.
 func (rs *RedditScanner) Run(ctx context.Context) error {
-	var last_full_scan time.Time
+	var lastFullScan time.Time
 
 	rs.logger.Info("starting comments scanner")
 
 	for ctx.Err() == nil {
 
-		full_scan := time.Now().Sub(last_full_scan) >= rs.fullScanInterval
+		fullScan := time.Now().Sub(lastFullScan) >= rs.fullScanInterval
 
-		users, err := rs.getUsersOrWait(ctx, full_scan)
+		users, err := rs.getUsersOrWait(ctx, fullScan)
 		if err != nil {
 			return err
 		}
 
-		rs.logger.Debugf("scan pass: %d users, full scan: %t", len(users), full_scan)
+		rs.logger.Debugf("scan pass: %d users, full scan: %t", len(users), fullScan)
 		if err := rs.Scan(ctx, users); err != nil {
 			return err
 		}
 		rs.logger.Debug("scan pass done")
 
-		if full_scan {
-			last_full_scan = time.Now()
+		if fullScan {
+			lastFullScan = time.Now()
 			if err := rs.storage.UpdateInactiveStatus(ctx, rs.inactivityThreshold); err != nil {
 				return err
 			}
@@ -81,6 +84,7 @@ func (rs *RedditScanner) Run(ctx context.Context) error {
 	return ctx.Err()
 }
 
+// OpenSuspensions creates, set, and returns a channel that sends newly suspended or deleted User.
 func (rs *RedditScanner) OpenSuspensions() <-chan User {
 	rs.Lock()
 	defer rs.Unlock()
@@ -90,6 +94,7 @@ func (rs *RedditScanner) OpenSuspensions() <-chan User {
 	return rs.suspensions
 }
 
+// CloseSuspensions closes and unsets the channel that sends suspended and deleted User.
 func (rs *RedditScanner) CloseSuspensions() {
 	rs.Lock()
 	defer rs.Unlock()
@@ -99,6 +104,7 @@ func (rs *RedditScanner) CloseSuspensions() {
 	}
 }
 
+// OpenHighScores creates, set, and returns a channel that sends comments whose score just passed a set threshold.
 func (rs *RedditScanner) OpenHighScores() <-chan Comment {
 	rs.Lock()
 	defer rs.Unlock()
@@ -108,6 +114,7 @@ func (rs *RedditScanner) OpenHighScores() <-chan Comment {
 	return rs.highScores
 }
 
+// CloseHighScores closes and unsets the channel that sends high scoring comments.
 func (rs *RedditScanner) CloseHighScores() {
 	rs.Lock()
 	defer rs.Unlock()
@@ -117,6 +124,7 @@ func (rs *RedditScanner) CloseHighScores() {
 	}
 }
 
+// Scan scans a slice of users once.
 func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 	for _, user := range users {
 
@@ -124,12 +132,12 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 			var err error
 			var comments []Comment
 			var limit uint
-			last_scan := time.Now().Sub(user.LastScan)
+			lastScan := time.Now().Sub(user.LastScan)
 
 			if user.New || // if the user is new, we need to scan everything as fast as possible
 				user.Position != "" || // we don't know how many relevant comments the next page has, so take as many as possible
 				user.BatchSize+rs.commentsLeeway > MaxRedditListingLength || // don't request more than the maximum, else we'll look stupid
-				last_scan > rs.maxAge { // use rs.maxAge as a heuristic to say if too much time has passed since the last scan
+				lastScan > rs.maxAge { // use rs.maxAge as a heuristic to say if too much time has passed since the last scan
 				limit = MaxRedditListingLength
 			} else {
 				limit = user.BatchSize + rs.commentsLeeway
@@ -148,7 +156,7 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 			// This method contains logic that returns an User datastructure whose metadata
 			// has been updated; in other words, it indirectly controls the behavior of the
 			// current loop.
-			user, err = rs.storage.SaveCommentsUpdateUser(ctx, comments, user, last_scan+rs.maxAge)
+			user, err = rs.storage.SaveCommentsUpdateUser(ctx, comments, user, lastScan+rs.maxAge)
 			if IsCancellation(err) {
 				return err
 			} else if err != nil {
@@ -180,14 +188,14 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 	return nil
 }
 
-func (rs *RedditScanner) getUsersOrWait(ctx context.Context, full_scan bool) ([]User, error) {
+func (rs *RedditScanner) getUsersOrWait(ctx context.Context, fullScan bool) ([]User, error) {
 	var users []User
 	var err error
 	// We could be using a channel to signal when a new user is added,
 	// but this isn't worth complicating AddUser for a feature that
 	// is used in production only once, when the database is empty.
 	for SleepCtx(ctx, time.Second) {
-		if full_scan {
+		if fullScan {
 			users, err = rs.storage.ListUsers(ctx)
 			if err != nil {
 				return nil, err
@@ -213,18 +221,18 @@ func (rs *RedditScanner) alertIfHighScore(ctx context.Context, comments []Commen
 		return nil
 	}
 
-	var highscores_id []string
+	var highscoresID []string
 	var highscores []Comment
 	for _, comment := range comments {
 		if comment.Score < rs.highScoreThreshold {
 			if !rs.storage.KV().Has("highscores", comment.ID) {
-				highscores_id = append(highscores_id, comment.ID)
+				highscoresID = append(highscoresID, comment.ID)
 				highscores = append(highscores, comment)
 			}
 		}
 	}
 
-	if err := rs.storage.KV().SaveMany(ctx, "highscores", highscores_id); err != nil {
+	if err := rs.storage.KV().SaveMany(ctx, "highscores", highscoresID); err != nil {
 		return err
 	}
 

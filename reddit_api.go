@@ -16,15 +16,18 @@ import (
 	"time"
 )
 
+// Reddit-related knowledge.
 const (
 	MaxRedditListingLength = 100
 	RedditAPIRequestWait   = time.Second
 )
 
+// RedditScannerAPI provides methods for RedditScanner to interact with Reddit.
 type RedditScannerAPI interface {
 	UserComments(context.Context, User, uint) ([]Comment, User, error)
 }
 
+// RedditUsersAPI provides methods for RedditUsers to interact with Reddit.
 type RedditUsersAPI interface {
 	AboutUser(context.Context, string) UserQuery
 	WikiPage(context.Context, string, string) (string, error)
@@ -49,7 +52,7 @@ type oAuthResponse struct {
 type wikiPage struct {
 	Data struct {
 		RevisionDate float64
-		Content_MD   string
+		ContentMD    string `json:"content_md"`
 	}
 }
 
@@ -57,13 +60,13 @@ type commentListing struct {
 	Data struct {
 		Children []struct {
 			Data struct {
-				ID          string
-				Author      string
-				Score       int64
-				Permalink   string
-				Subreddit   string
-				Created_UTC float64
-				Body        string
+				ID         string
+				Author     string
+				Score      int64
+				Permalink  string
+				Subreddit  string
+				CreatedUTC float64 `json:"created_utc"`
+				Body       string
 			}
 		}
 		After string
@@ -72,9 +75,9 @@ type commentListing struct {
 
 type aboutUser struct {
 	Data struct {
-		Name         string
-		Created_UTC  float64
-		Is_Suspended bool
+		Name        string
+		CreatedUTC  float64 `json:"created_utc"`
+		IsSuspended bool    `json:"is_suspended"`
 	}
 }
 
@@ -84,6 +87,7 @@ type redditResponse struct {
 	Error  error
 }
 
+// RedditAPI provides methods to interact with Reddit.
 // Note that all exported methods automatically retry once if they got a 403 response.
 type RedditAPI struct {
 	sync.Mutex
@@ -94,13 +98,18 @@ type RedditAPI struct {
 	userAgent string
 }
 
+// NewRedditAPI creates a data structure to interact with Reddit.
+// userAgent is a template for the user agent that will be used in requests.
+// It receives a map with the keys "Version", which is the SemVer version of the application,
+// and "OS", which is the name of the type of platform (eg. "linux").
+// Before use, run the Connect method.
 func NewRedditAPI(ctx context.Context, auth RedditAuth, userAgent *template.Template) (*RedditAPI, error) {
-	var user_agent strings.Builder
+	var ua strings.Builder
 	data := map[string]interface{}{
 		"Version": Version,
 		"OS":      runtime.GOOS,
 	}
-	if err := userAgent.Execute(&user_agent, data); err != nil {
+	if err := userAgent.Execute(&ua, data); err != nil {
 		return nil, err
 	}
 
@@ -109,31 +118,31 @@ func NewRedditAPI(ctx context.Context, auth RedditAuth, userAgent *template.Temp
 		auth:      auth,
 		client:    client,
 		ticker:    time.NewTicker(RedditAPIRequestWait),
-		userAgent: user_agent.String(),
+		userAgent: ua.String(),
 	}
 
 	return ra, nil
 }
 
-// Gets a token from Reddit's API which will be used for all requests.
+// Connect gets a token from Reddit's API which will be used for all requests.
 func (ra *RedditAPI) Connect(ctx context.Context) error {
-	auth_conf := url.Values{
+	authConf := url.Values{
 		"grant_type": {"password"},
 		"username":   {ra.auth.Username},
 		"password":   {ra.auth.Password},
 	}
-	auth_form := strings.NewReader(auth_conf.Encode())
+	authForm := strings.NewReader(authConf.Encode())
 
 	// This might be called from RedditAPI.rawRequest,
 	// so we can't use it to make our request (deadlock),
 	// and we have different needs here anyway.
-	req, err := http.NewRequest("POST", accessTokenRawURL, auth_form)
+	req, err := http.NewRequest("POST", accessTokenRawURL, authForm)
 	if err != nil {
 		return err
 	}
 
 	req.Header.Set("User-Agent", ra.userAgent)
-	req.SetBasicAuth(ra.auth.Id, ra.auth.Secret)
+	req.SetBasicAuth(ra.auth.ID, ra.auth.Secret)
 	req = req.WithContext(ctx)
 
 	res, err := ra.do(req)
@@ -144,9 +153,9 @@ func (ra *RedditAPI) Connect(ctx context.Context) error {
 		return err
 	}
 
-	body, read_err := ioutil.ReadAll(res.Body)
-	if read_err != nil {
-		return read_err
+	body, readErr := ioutil.ReadAll(res.Body)
+	if readErr != nil {
+		return readErr
 	}
 
 	ra.Lock()
@@ -162,6 +171,7 @@ func (ra *RedditAPI) Connect(ctx context.Context) error {
 	return nil
 }
 
+// UserComments fetches nb comments for a User, and returns a slice of Comment and an updated User.
 func (ra *RedditAPI) UserComments(ctx context.Context, user User, nb uint) ([]Comment, User, error) {
 	comments, position, status, err := ra.getListing(ctx, "/u/"+user.Name+"/comments", user.Position, nb)
 	if err != nil {
@@ -183,6 +193,12 @@ func (ra *RedditAPI) UserComments(ctx context.Context, user User, nb uint) ([]Co
 	return comments, user, nil
 }
 
+// AboutUser returns reddit-only data about the user:
+//  - whether it exists
+//  - whether it is suspended
+//  - its name with the correct capitalization
+//  - when it was created
+// It returns an error without making a request if username contains characters that are forbidden by Reddit.
 func (ra *RedditAPI) AboutUser(ctx context.Context, username string) UserQuery {
 	query := UserQuery{User: User{Name: username}}
 	sane, err := regexp.MatchString(`^[[:word:]-]+$`, username)
@@ -216,19 +232,20 @@ func (ra *RedditAPI) AboutUser(ctx context.Context, username string) UserQuery {
 
 	query.Exists = true
 	query.User.Name = about.Data.Name
-	query.User.Created = time.Unix(int64(about.Data.Created_UTC), 0)
-	query.User.Suspended = about.Data.Is_Suspended
+	query.User.Created = time.Unix(int64(about.Data.CreatedUTC), 0)
+	query.User.Suspended = about.Data.IsSuspended
 	return query
 }
 
+// WikiPage returns the content of the page of the wiki of a subreddit.
 func (ra *RedditAPI) WikiPage(ctx context.Context, sub, page string) (string, error) {
-	relative_url := &url.URL{Path: "/r/" + sub + "/wiki/" + page}
-	res := ra.request(ctx, "GET", relative_url, nil)
+	relativeURL := &url.URL{Path: "/r/" + sub + "/wiki/" + page}
+	res := ra.request(ctx, "GET", relativeURL, nil)
 	if res.Error != nil {
 		return "", res.Error
 	}
 	if res.Status != 200 {
-		return "", fmt.Errorf("invalid status when fetching '%s': %d", relative_url, res.Status)
+		return "", fmt.Errorf("invalid status when fetching '%s': %d", relativeURL, res.Status)
 	}
 
 	parsed := &wikiPage{}
@@ -236,7 +253,7 @@ func (ra *RedditAPI) WikiPage(ctx context.Context, sub, page string) (string, er
 		return "", err
 	}
 
-	return parsed.Data.Content_MD, nil
+	return parsed.Data.ContentMD, nil
 }
 
 func (ra *RedditAPI) getListing(ctx context.Context, path, position string, nb uint) ([]Comment, string, int, error) {
@@ -274,29 +291,29 @@ func (ra *RedditAPI) getListing(ctx context.Context, path, position string, nb u
 			Score:     child.Data.Score,
 			Permalink: child.Data.Permalink,
 			Sub:       child.Data.Subreddit,
-			Created:   time.Unix(int64(child.Data.Created_UTC), 0),
+			Created:   time.Unix(int64(child.Data.CreatedUTC), 0),
 			Body:      child.Data.Body,
 		}
 		comments = append(comments, comment)
 	}
 
-	new_position := parsed.Data.After
-	return comments, new_position, res.Status, nil
+	newPosition := parsed.Data.After
+	return comments, newPosition, res.Status, nil
 }
 
 // Never pass nil as the URL, it can't deal with it. The data argument can be nil though.
-func (ra *RedditAPI) request(ctx context.Context, verb string, relative_url *url.URL, data io.Reader) redditResponse {
-	make_req := func() (*http.Request, error) {
-		query, err := url.ParseQuery(relative_url.RawQuery)
+func (ra *RedditAPI) request(ctx context.Context, verb string, relativeURL *url.URL, data io.Reader) redditResponse {
+	makeReq := func() (*http.Request, error) {
+		query, err := url.ParseQuery(relativeURL.RawQuery)
 		if err != nil {
 			return nil, err
 		}
 		query.Set("raw_json", "1")
-		relative_url.RawQuery = query.Encode()
-		full_url := requestBaseURL.ResolveReference(relative_url)
-		return http.NewRequest(verb, full_url.String(), data)
+		relativeURL.RawQuery = query.Encode()
+		fullURL := requestBaseURL.ResolveReference(relativeURL)
+		return http.NewRequest(verb, fullURL.String(), data)
 	}
-	return ra.rawRequest(ctx, make_req)
+	return ra.rawRequest(ctx, makeReq)
 }
 
 // Why take a closure instead of a request object directly?
@@ -316,18 +333,18 @@ func (ra *RedditAPI) rawRequest(ctx context.Context, makeReq func() (*http.Reque
 	}
 
 	ra.prepareRequest(ctx, req)
-	raw_res, err := ra.client.Do(req)
+	rawRes, err := ra.client.Do(req)
 	if err != nil {
 		return redditResponse{Error: err}
 	}
 
 	// The response's body must be read and closed to make sure the underlying TCP connection can be re-used.
-	raw_data, err := ioutil.ReadAll(raw_res.Body)
-	raw_res.Body.Close()
+	rawData, err := ioutil.ReadAll(rawRes.Body)
+	rawRes.Body.Close()
 
 	res := redditResponse{
-		Status: raw_res.StatusCode,
-		Data:   raw_data,
+		Status: rawRes.StatusCode,
+		Data:   rawData,
 		Error:  err,
 	}
 
