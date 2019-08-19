@@ -28,8 +28,7 @@ dab.db.xz:
 	wget $(ARCHIVE_URL)
 
 test:
-	go test
-	go vet
+	go test -vet=all -timeout 5s github.com/DownArrows/dab
 
 README.html: README.md
 	pandoc $< --self-contained -t html > $@
