@@ -178,6 +178,7 @@ type DiscordBot struct {
 	sync.Mutex
 
 	// dependencies
+	addUser AddRedditUser
 	client  *discordgo.Session
 	ctx     context.Context
 	logger  LevelLogger
@@ -198,7 +199,6 @@ type DiscordBot struct {
 	welcome        *template.Template
 
 	// miscellaneous
-	addUser    chan UserQuery
 	commands   []DiscordCommand
 	done       chan error
 	redditLink *regexp.Regexp
@@ -206,7 +206,7 @@ type DiscordBot struct {
 }
 
 // NewDiscordBot returns a new DiscordBot.
-func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, conf DiscordBotConf) (*DiscordBot, error) {
+func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, addUser AddRedditUser, conf DiscordBotConf) (*DiscordBot, error) {
 	discordgo.Logger = func(msgL, caller int, format string, dgArgs ...interface{}) {
 		args := []interface{}{msgL, caller}
 		args = append(args, dgArgs...)
@@ -224,6 +224,7 @@ func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, conf DiscordBo
 	}
 
 	bot := &DiscordBot{
+		addUser: addUser,
 		client:  session,
 		logger:  logger,
 		storage: storage,
@@ -281,26 +282,6 @@ func (bot *DiscordBot) Run(ctx context.Context) error {
 func (bot *DiscordBot) fatal(err error) {
 	bot.logger.Errorf("fatal: %v", err)
 	bot.done <- err
-}
-
-// OpenAddUser creates, sets, and returns a channel to send and receive queries to add users.
-func (bot *DiscordBot) OpenAddUser() chan UserQuery {
-	bot.Lock()
-	defer bot.Unlock()
-	if bot.addUser == nil {
-		bot.addUser = make(chan UserQuery, DefaultChannelSize)
-	}
-	return bot.addUser
-}
-
-// CloseAddUser closes and remove the channel used to communicate with another component to add users.
-func (bot *DiscordBot) CloseAddUser() {
-	bot.Lock()
-	defer bot.Unlock()
-	if bot.addUser != nil {
-		close(bot.addUser)
-		bot.addUser = nil
-	}
 }
 
 func (bot *DiscordBot) isDMChannel(channelID string) (bool, error) {
@@ -633,6 +614,10 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 	names := msg.Args
 	bot.logger.Infof("%s wants to register %v", msg.Author.FQN(), names)
 
+	if bot.addUser == nil {
+		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, "registration service is unavailable")
+	}
+
 	status := &DiscordEmbed{
 		Title:       "Registration",
 		Description: fmt.Sprintf("request from <@%s>", msg.Author.ID),
@@ -646,15 +631,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 		hidden := strings.HasPrefix(name, bot.hidePrefix)
 		name = TrimUsername(strings.TrimPrefix(name, bot.hidePrefix))
 
-		bot.Lock()
-		if bot.addUser == nil {
-			bot.Unlock()
-			status.AddField(DiscordEmbedField{Name: name, Value: EmojiCrossMark + " registration service unavailable"})
-			continue
-		}
-		bot.addUser <- UserQuery{User: User{Name: name, Hidden: hidden}}
-		reply := <-bot.addUser
-		bot.Unlock()
+		reply := bot.addUser(bot.ctx, name, hidden, false)
 
 		if IsCancellation(reply.Error) {
 			continue

@@ -6,6 +6,9 @@ import (
 	"time"
 )
 
+// AddRedditUser is a function for when the only thing needed is to add users by checking through Reddit first.
+type AddRedditUser func(context.Context, string, bool, bool) UserQuery
+
 // RedditUsers is a data structure to manage Reddit users by interacting with both the database and Reddit.
 type RedditUsers struct {
 	api     RedditUsersAPI
@@ -35,35 +38,10 @@ func NewRedditUsers(
 	}
 }
 
-// AddUserServer replies to queries on the given channel to add users.
-// It has to be launched separately from the creation of the data structure.
-func (ru *RedditUsers) AddUserServer(ctx context.Context, queries chan UserQuery) error {
-	ru.logger.Info("starting internal server to register users")
-	var query UserQuery
-Loop:
-	for {
-		select {
-		case query = <-queries:
-			break
-		case <-ctx.Done():
-			break Loop
-		}
-		ru.logger.Infof("received query to add a new user, %+v", query)
-		query = ru.AddUser(ctx, query.User.Name, query.User.Hidden, false)
-		ru.logger.Infof("replying to query to add a new user, %+v", query)
-		select {
-		case queries <- query:
-			break
-		case <-ctx.Done():
-			break Loop
-		}
-	}
-	return ctx.Err()
-}
-
-// AddUser adds the set user, sets it to "hidden" or not,
+// Add registers the a user, sets it to "hidden" or not,
 // and with the argument forceSuspended can add the user even if it was found to be suspended.
-func (ru *RedditUsers) AddUser(ctx context.Context, username string, hidden bool, forceSuspended bool) UserQuery {
+// Case-insensitive.
+func (ru *RedditUsers) Add(ctx context.Context, username string, hidden bool, forceSuspended bool) UserQuery {
 	query := UserQuery{User: User{Name: username}}
 
 	query = ru.storage.GetUser(ctx, username)

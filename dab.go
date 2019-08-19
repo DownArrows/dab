@@ -164,7 +164,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 	if dab.components.ConfState.Discord.Enabled {
 		var err error
-		dab.components.Discord, err = NewDiscordBot(dab.layers.Storage, dab.logger, dab.conf.Discord.DiscordBotConf)
+		dab.components.Discord, err = NewDiscordBot(dab.layers.Storage, dab.logger, dab.components.RedditUsers.Add, dab.conf.Discord.DiscordBotConf)
 		if err != nil {
 			return err
 		}
@@ -184,11 +184,6 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	}
 
 	if dab.components.ConfState.Reddit.Enabled && dab.components.ConfState.Discord.Enabled {
-
-		tasks.SpawnCtx(func(ctx context.Context) error {
-			defer dab.components.Discord.CloseAddUser()
-			return dab.components.RedditUsers.AddUserServer(ctx, dab.components.Discord.OpenAddUser())
-		})
 
 		tasks.Spawn(func() { dab.components.Discord.SignalSuspensions(dab.components.RedditScanner.OpenSuspensions()) })
 
@@ -269,7 +264,7 @@ func (dab *DownArrowsBot) userAdd(ctx context.Context) error {
 	for _, username := range usernames {
 		hidden := strings.HasPrefix(username, dab.conf.HidePrefix)
 		username = strings.TrimPrefix(username, dab.conf.HidePrefix)
-		if res := ru.AddUser(ctx, username, hidden, true); res.Error != nil {
+		if res := ru.Add(ctx, username, hidden, true); res.Error != nil {
 			dab.logger.Errorf("error when trying to register %q: %v", username, res.Error)
 		} else if !res.Exists {
 			dab.logger.Errorf("reddit user %q doesn't exist", username)
