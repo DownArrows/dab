@@ -157,6 +157,10 @@ func (ru *RedditUsers) updateRedditUserStatus(ctx context.Context, user User, re
 			return ru.storage.SuspendUser(ctx, user.Name)
 		}
 	} else if user.Suspended && !res.Exists { // deletion of a suspended account
+		// if the user was already found not to exist anymore, don't pointlessly update
+		if user.NotFound { // leave that condition here so as not to break the overall logic of if/else if
+			return nil
+		}
 		// don't signal it, we only need to keep track of it
 		return ru.storage.NotFoundUser(ctx, user.Name)
 	} else if user.Suspended && !res.User.Suspended { // unsuspension
