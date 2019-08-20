@@ -79,7 +79,7 @@ func (ru *RedditUsers) Add(ctx context.Context, username string, hidden bool, fo
 	return query
 }
 
-// Unsuspensions returns a channel that alerts of newly unsuspended or undeleted users.
+// OpenUnsuspensions returns a channel that alerts of newly unsuspended or undeleted users.
 func (ru *RedditUsers) OpenUnsuspensions() <-chan User {
 	return ru.unsuspensions
 }
