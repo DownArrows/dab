@@ -341,21 +341,19 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) {
 		return
 	}
 
-	guild := r.Guilds[0]
+	// The data structure representing guilds only has their ID set at this point.
+	bot.guildID = r.Guilds[0].ID
 
-	bot.guildID = guild.ID
+	guild, err := bot.client.Guild(bot.guildID)
+	if err != nil {
+		bot.fatal(fmt.Errorf("error when getting information about guild %q: %v", bot.guildID, err))
+	}
 
 	bot.adminID = guild.OwnerID
 
-	roles, err := bot.client.GuildRoles(guild.ID)
-	if err != nil {
-		bot.fatal(fmt.Errorf("error when getting roles on the discord server: %v", err))
-		return
-	}
-
 	if bot.privilegedRole == "" {
 		bot.logger.Info("no privileged discord role has been set, only the server's owner can use privileged commands")
-	} else if !rolesHaveRoleID(roles, bot.privilegedRole) {
+	} else if !rolesHaveRoleID(guild.Roles, bot.privilegedRole) {
 		bot.fatal(fmt.Errorf("the discord server doesn't have a role with ID %s", bot.privilegedRole))
 		return
 	}
