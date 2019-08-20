@@ -338,6 +338,7 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) {
 	// guild-related information and checks
 	if nb := len(r.Guilds); nb != 1 {
 		bot.fatal(fmt.Errorf("the bot needs to be in one and only one discord server (found in %d server(s))", nb))
+		return
 	}
 
 	guild := r.Guilds[0]
@@ -349,12 +350,14 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) {
 	roles, err := bot.client.GuildRoles(guild.ID)
 	if err != nil {
 		bot.fatal(fmt.Errorf("error when getting roles on the discord server: %v", err))
+		return
 	}
 
 	if bot.privilegedRole == "" {
 		bot.logger.Info("no privileged discord role has been set, only the server's owner can use privileged commands")
 	} else if !rolesHaveRoleID(roles, bot.privilegedRole) {
 		bot.fatal(fmt.Errorf("the discord server doesn't have a role with ID %s", bot.privilegedRole))
+		return
 	}
 
 	// check the channels
