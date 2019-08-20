@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // HTTPCacheMaxAge is the maxmimum cache age one can set in response to an HTTP request.
@@ -104,7 +105,9 @@ func immutableCache(handler func(http.ResponseWriter, *http.Request)) func(http.
 
 // WebServer serves the stored data as HTML pages and a backup of the database.
 type WebServer struct {
+	sync.Mutex
 	compendium      CompendiumFactory
+	conn            *SQLiteConn // a single connection is acceptable since each use tends to peg the CPU and I/O anyway
 	done            chan error
 	markdownOptions blackfriday.Option
 	reports         ReportFactory
@@ -146,11 +149,20 @@ func (wsrv *WebServer) fatal(err error) {
 
 // Run runs the web server and blocks until it is cancelled or returns an error.
 func (wsrv *WebServer) Run(ctx context.Context) error {
+	var err error
+
+	wsrv.Lock()
+	wsrv.conn, err = wsrv.storage.GetConn(ctx)
+	wsrv.Unlock()
+	if err != nil {
+		return err
+	}
+	defer wsrv.conn.Close()
+
 	go func() {
 		wsrv.done <- wsrv.server.ListenAndServe()
 	}()
 
-	var err error
 	select {
 	case <-ctx.Done():
 		wsrv.server.Close()
@@ -194,7 +206,9 @@ func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	report, err := wsrv.reports.ReportWeek(r.Context(), week, year)
+	wsrv.conn.Lock()
+	report, err := wsrv.reports.ReportWeek(wsrv.conn, week, year)
+	wsrv.conn.Unlock()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
@@ -216,7 +230,9 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	report, err := wsrv.reports.ReportWeek(r.Context(), week, year)
+	wsrv.conn.Lock()
+	report, err := wsrv.reports.ReportWeek(wsrv.conn, week, year)
+	wsrv.conn.Unlock()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
@@ -247,7 +263,9 @@ func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
 
 // CompendiumIndex serves the compendium's index.
 func (wsrv *WebServer) CompendiumIndex(w http.ResponseWriter, r *http.Request) {
-	stats, err := wsrv.compendium.Compendium(r.Context())
+	wsrv.conn.Lock()
+	stats, err := wsrv.compendium.Compendium(wsrv.conn)
+	wsrv.conn.Unlock()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -270,7 +288,9 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 	}
 	username := args[0]
 
-	query := wsrv.storage.GetUser(r.Context(), username)
+	wsrv.conn.Lock()
+	query := wsrv.storage.GetUser(wsrv.conn, username)
+	wsrv.conn.Unlock()
 	if !query.Exists {
 		http.Error(w, fmt.Sprintf("user %q doesn't exist", username), http.StatusNotFound)
 		return
@@ -279,7 +299,9 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats, err := wsrv.compendium.User(r.Context(), query.User)
+	wsrv.conn.Lock()
+	stats, err := wsrv.compendium.User(wsrv.conn, query.User)
+	wsrv.conn.Unlock()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -295,7 +317,10 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 
 // Backup triggers a backup if needed, and serves it.
 func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
-	if err := wsrv.storage.Backup(r.Context()); err != nil {
+	wsrv.conn.Lock()
+	err := wsrv.storage.Backup(r.Context(), wsrv.conn)
+	wsrv.conn.Unlock()
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}

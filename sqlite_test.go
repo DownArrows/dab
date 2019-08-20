@@ -2,12 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
-	sqlite "github.com/bvinc/go-sqlite-lite/sqlite3"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 )
 
@@ -79,7 +76,7 @@ func TestSQLiteConn(t *testing.T) {
 		defer conn.Close()
 
 		var actual []string
-		cb := func(stmt *sqlite.Stmt) error {
+		cb := func(stmt *SQLiteStmt) error {
 			if value, ok, err := stmt.ColumnText(0); err != nil {
 				return err
 			} else if !ok {
@@ -175,61 +172,6 @@ func TestSQLiteDatabase(t *testing.T) {
 		})
 	})
 
-	t.Run("concurrent insert", func(t *testing.T) {
-		nbConcurrent := 50
-
-		db, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
-			Path:    filepath.Join(dir, "concurrent-insert.db"),
-			AppID:   appID,
-			Version: SemVer{0, 3, 0},
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if err := db.Exec(ctx, "CREATE TABLE test(id INTEGER NOT NULL)"); err != nil {
-			t.Fatal(err)
-		}
-
-		wg := &sync.WaitGroup{}
-		for i := 0; i < nbConcurrent; i++ {
-			wg.Add(1)
-			value := i
-			go func() {
-				defer wg.Done()
-				if err := db.Exec(ctx, "INSERT INTO test VALUES(?)", value); err != nil {
-					t.Fatal(err)
-				}
-			}()
-		}
-		wg.Wait()
-
-		cb := func(stmt *sqlite.Stmt) error {
-			count, _, err := stmt.ColumnInt(0)
-			if err != nil {
-				return err
-			}
-
-			sum, _, err := stmt.ColumnInt(1)
-			if err != nil {
-				return err
-			}
-
-			if count != nbConcurrent {
-				return fmt.Errorf("table 'test' should contain %d records, not %d", nbConcurrent, count)
-			}
-
-			if n := nbConcurrent - 1; sum != (n*(n+1))/2 {
-				return fmt.Errorf("table 'test' should contain a list of all integers between 0 and %d", nbConcurrent)
-			}
-
-			return nil
-		}
-		if err := db.Select(ctx, "SELECT COUNT(id), SUM(id) FROM test", cb); err != nil {
-			t.Fatal(err)
-		}
-	})
-
 	t.Run("backups", func(t *testing.T) {
 		path := filepath.Join(dir, "test-backup.db")
 		backupPath := filepath.Join(dir, "test-backup.backup.db")
@@ -240,7 +182,13 @@ func TestSQLiteDatabase(t *testing.T) {
 			Version: SemVer{0, 3, 0},
 		})
 
-		if err := db.Exec(ctx, "CREATE TABLE test(id INTEGER NOT NULL)"); err != nil {
+		conn, err := db.GetConn(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+
+		if err := conn.Exec("CREATE TABLE test(id INTEGER NOT NULL)"); err != nil {
 			t.Fatal(err)
 		}
 
@@ -249,11 +197,11 @@ func TestSQLiteDatabase(t *testing.T) {
 			DestPath: backupPath,
 			SrcName:  "main",
 		}
-		if err := db.Backup(ctx, opts); err != nil {
+		if err := db.Backup(ctx, conn, opts); err != nil {
 			t.Fatal(err)
 		}
 
-		backup, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
+		backupDB, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
 			Path:    backupPath,
 			AppID:   appID,
 			Version: SemVer{0, 3, 0},
@@ -262,43 +210,15 @@ func TestSQLiteDatabase(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := backup.Exec(ctx, "INSERT INTO test VALUES (?)", 1); err != nil {
-			t.Fatal(err)
-		}
-	})
-
-	t.Run("cancellation", func(t *testing.T) {
-		nbConcurrent := 50
-
-		ctx, cancel := context.WithCancel(context.Background())
-
-		db, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
-			Path:    filepath.Join(dir, "cancellation.db"),
-			AppID:   appID,
-			Version: SemVer{0, 3, 0},
-		})
+		backup, err := backupDB.GetConn(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer backup.Close()
 
-		if err := db.Exec(ctx, "CREATE TABLE test(id INTEGER NOT NULL)"); err != nil {
+		if err := backup.Exec("INSERT INTO test VALUES (?)", 1); err != nil {
 			t.Fatal(err)
 		}
-
-		wg := &sync.WaitGroup{}
-		for i := 0; i < nbConcurrent; i++ {
-			wg.Add(1)
-			value := i
-			go func() {
-				defer wg.Done()
-				if err := db.Exec(ctx, "INSERT INTO test VALUES(?)", value); err != nil && !IsCancellation(err) {
-					t.Log(err)
-				}
-			}()
-		}
-
-		cancel()
-		wg.Wait()
 	})
 
 	t.Run("delete temp directory", func(t *testing.T) {

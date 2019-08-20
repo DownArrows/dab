@@ -3,19 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	sqlite "github.com/bvinc/go-sqlite-lite/sqlite3"
 	"sync"
 	"time"
 )
 
 // IsCancellation returns whether the error corresponds to a cancellation.
 func IsCancellation(err error) bool {
-	if err == context.Canceled || err == context.DeadlineExceeded {
-		return true
-	} else if sqliteErr, ok := err.(*sqlite.Error); ok && sqliteErr.Code() == sqlite.INTERRUPT {
-		return true
-	}
-	return false
+	return err == context.Canceled || err == context.DeadlineExceeded
 }
 
 // SleepCtx sleeps with the ability to be cancelled,
@@ -165,6 +159,7 @@ type Retrier struct {
 	LastRestart time.Time
 	MaxInterval time.Duration
 	OnError     func(*Retrier, error)
+	ErrorFilter func(error) bool
 	ResetAfter  time.Duration
 	Retries     int
 	Times       int
@@ -184,6 +179,12 @@ func NewRetrier(conf RetryConf, onError func(*Retrier, error)) *Retrier {
 // Set binds a Retrier to a Task and returns the Retrier so that the method can be chained.
 func (r *Retrier) Set(task Task) *Retrier {
 	r.Callback = task
+	return r
+}
+
+// SetErrorFilter binds a filter for what errors should trigger a restart, and returns the Retrier so that the method can be chained.
+func (r *Retrier) SetErrorFilter(filter func(error) bool) *Retrier {
+	r.ErrorFilter = filter
 	return r
 }
 
@@ -221,12 +222,16 @@ func (r *Retrier) shouldRestartOn(err error) bool {
 		return false
 	}
 
+	if r.Times == -1 {
+		return true
+	}
+
 	if IsCancellation(err) {
 		return false
 	}
 
-	if r.Times == -1 {
-		return true
+	if r.ErrorFilter != nil && !r.ErrorFilter(err) {
+		return false
 	}
 
 	return r.Retries < r.Times
@@ -241,4 +246,14 @@ func (r *Retrier) sleepCtx(ctx context.Context) bool {
 		r.Backoff *= 2
 	}
 	return SleepCtx(ctx, sleeptime)
+}
+
+// WithCtx adds a cancellation point before the execution of the given callback.
+func WithCtx(cb func() error) Task {
+	return func(ctx context.Context) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return cb()
+	}
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"math"
 	"time"
 )
@@ -28,9 +27,9 @@ func NewReportFactory(storage ReportFactoryStorage, conf ReportConf) ReportFacto
 }
 
 // ReportWeek generates a Report for an ISO week number and a year.
-func (rf ReportFactory) ReportWeek(ctx context.Context, weekNum uint8, year int) (Report, error) {
+func (rf ReportFactory) ReportWeek(conn *SQLiteConn, weekNum uint8, year int) (Report, error) {
 	start, end := rf.WeekYearToDates(weekNum, year)
-	report, err := rf.Report(ctx, start.Add(-rf.leeway), end.Add(-rf.leeway))
+	report, err := rf.Report(conn, start.Add(-rf.leeway), end.Add(-rf.leeway))
 	if err != nil {
 		return report, err
 	}
@@ -40,11 +39,11 @@ func (rf ReportFactory) ReportWeek(ctx context.Context, weekNum uint8, year int)
 }
 
 // Report generates a Report between two arbitrary dates.
-func (rf ReportFactory) Report(ctx context.Context, start, end time.Time) (Report, error) {
+func (rf ReportFactory) Report(conn *SQLiteConn, start, end time.Time) (Report, error) {
 	var comments []Comment
 	var stats UserStatsMap
 
-	err := rf.storage.WithTx(ctx, func(conn *SQLiteConn) error {
+	err := conn.WithTx(func() error {
 		var err error
 		comments, err = rf.storage.GetCommentsBelowBetween(conn, rf.cutOff, start, end)
 		if err != nil {

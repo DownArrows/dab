@@ -27,13 +27,19 @@ func TestKeyValue(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	kv, err := NewKeyValueStore(context.Background(), db, "test")
+	conn, err := db.GetConn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	kv, err := NewKeyValueStore(conn, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Run("write", func(t *testing.T) {
-		if err := kv.Save(ctx, "key1", "value1"); err != nil {
+		if err := kv.Save(conn, "key1", "value1"); err != nil {
 			t.Error(err)
 		}
 	})
@@ -57,7 +63,7 @@ func TestKeyValue(t *testing.T) {
 	})
 
 	t.Run("write many", func(t *testing.T) {
-		if err := kv.SaveMany(ctx, "key1", []string{"value2", "value3"}); err != nil {
+		if err := kv.SaveMany(conn, "key1", []string{"value2", "value3"}); err != nil {
 			t.Error(err)
 			return
 		}
@@ -72,7 +78,7 @@ func TestKeyValue(t *testing.T) {
 	})
 
 	t.Run("caching on startup", func(t *testing.T) {
-		kv2, err := NewKeyValueStore(ctx, db, "test")
+		kv2, err := NewKeyValueStore(conn, "test")
 		if err != nil {
 			t.Fatal(err)
 		}

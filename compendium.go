@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"math"
 	"time"
 )
@@ -25,14 +24,14 @@ func NewCompendiumFactory(storage CompendiumStorage, conf CompendiumConf) Compen
 }
 
 // Compendium returns the data structure that describes the compendium's index.
-func (c CompendiumFactory) Compendium(ctx context.Context) (*Compendium, error) {
+func (c CompendiumFactory) Compendium(conn *SQLiteConn) (*Compendium, error) {
 	stats := &Compendium{
 		NbTop:    c.NbTop,
 		Timezone: c.Timezone,
 		Version:  Version,
 	}
 
-	err := c.storage.WithTx(ctx, func(conn *SQLiteConn) error {
+	err := conn.WithTx(func() error {
 		var err error
 		stats.Users, err = c.storage.ListRegisteredUsers(conn)
 		if err != nil {
@@ -62,7 +61,7 @@ func (c CompendiumFactory) Compendium(ctx context.Context) (*Compendium, error) 
 }
 
 // User returs a data structure that describes the compendium page for a single user.
-func (c CompendiumFactory) User(ctx context.Context, user User) (*CompendiumUser, error) {
+func (c CompendiumFactory) User(conn *SQLiteConn, user User) (*CompendiumUser, error) {
 	stats := &CompendiumUser{
 		Compendium: Compendium{
 			NbTop:    c.NbTop,
@@ -74,7 +73,7 @@ func (c CompendiumFactory) User(ctx context.Context, user User) (*CompendiumUser
 		SummaryNegative: &CompendiumDetails{},
 	}
 
-	err := c.storage.WithTx(ctx, func(conn *SQLiteConn) error {
+	err := conn.WithTx(func() error {
 		var err error
 		stats.All, err = c.storage.CompendiumUserPerSub(conn, user.Name)
 		if err != nil {

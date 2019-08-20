@@ -181,6 +181,10 @@ and <http://golang.localhost/pkg/text/template/>.
     - `cleanup_interval` *duration* (30m): interval between clean-ups of the database (reduces its size and optimizes queries);
        put at `0s` to disable, else must be at least one minute
     - `path` *string* (./dab.db): path to the database file
+    - `retry_connection` *dictionary*:
+       - `times` *int* (25): maximum number of times to try to create a connection to the database; use -1 for infinite retries
+       - `max_interval` *duration* (10s): maximum wait between connection retries
+       - `reset_after` *duration* (*none*): time after which the restart count and the backoff are reset
     - `timeout` *duration* (15s): timeout on the [database' lock](https://sqlite.org/c3ref/busy_timeout.html)
  - `discord`
     - `admin` *string* (*none*): Discord ID of the privileged user (use Discord's developer mode to get them);
@@ -197,7 +201,7 @@ and <http://golang.localhost/pkg/text/template/>.
     - `retry_connection` *dictionary*:
        - `times` *int* (5): maximum number of times to try to connect to Discord; use -1 for infinite retries
        - `max_interval` *duration* (2m): maximum wait between connection retries
-       - `reset_after` *duration* (2h): time after which the restart count and the backoff is reset
+       - `reset_after` *duration* (2h): time after which the restart count and the backoff are reset
     - `token` *string* (*none*): token to connect to Discord; leave out to disable the Discord component
     - `welcome` *template* (*none*): template of the welcome message; it is provided with three top-level keys,
       `ChannelsID`, `Member`, and `BotID`. `ChannelsID` provides `General`, `Log` and `HighScores`, which contains the numeric ID of those channels.
@@ -209,7 +213,7 @@ and <http://golang.localhost/pkg/text/template/>.
        - `sub` *string* (*none*): sub on which the compendium can be found; leave out to disable scans of the compendium
        - `update_interval` *duration* (*none*): interval between each scan of the compendium;
          leave out to disable, else must be at least an hour
-       - `reset_after` *duration* (2h): time after which the restart count and the backoff is reset
+       - `reset_after` *duration* (2h): time after which the restart count and the backoff are reset
     - `dvt_interval` *string* (*none*): interval between each check of the downvote sub's new reports;
       leave out to disable, else must be at least a minute.
       **Deprecated**: starting with version 1.10.0 this option has no effect.

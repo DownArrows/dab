@@ -46,6 +46,7 @@ type SQLiteDatabaseOptions struct {
 	CleanupInterval time.Duration
 	Migrations      []SQLiteMigration
 	Path            string
+	Retry           RetryConf
 	Timeout         time.Duration
 	Version         SemVer
 }
@@ -93,59 +94,19 @@ func NewSQLiteDatabase(ctx context.Context, logger LevelLogger, opts SQLiteDatab
 	return db, db.init(ctx)
 }
 
-// GetConn returns an SQLiteConn managed by the SQLiteDatabase.
+// GetConn returns an SQLiteConn.
 func (db *SQLiteDatabase) GetConn(ctx context.Context) (*SQLiteConn, error) {
 	return NewSQLiteConn(ctx, db.logger, db.getConnDefaultOptions())
 }
 
 func (db *SQLiteDatabase) getConnDefaultOptions() SQLiteConnOptions {
 	return SQLiteConnOptions{
+		RetryConf:   db.Retry,
 		ForeignKeys: true,
 		Path:        db.Path,
 		OpenOptions: SQLiteDefaultOpenOptions,
 		Timeout:     db.Timeout,
 	}
-}
-
-// Select is a wrapper for SQLiteConn.Select.
-func (db *SQLiteDatabase) Select(ctx context.Context, sql string, cb func(*sqlite.Stmt) error, args ...interface{}) error {
-	conn, err := db.GetConn(ctx)
-	if err != nil {
-		return err
-	}
-	err = conn.Select(sql, cb, args...)
-	conn.Close()
-	return err
-}
-
-// Exec is a wrapper for SQLiteConn.Exec.
-func (db *SQLiteDatabase) Exec(ctx context.Context, sql string, args ...interface{}) error {
-	conn, err := db.GetConn(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	return conn.Exec(sql, args...)
-}
-
-// MultiExec is a wrapper for SQLiteConn.MultiExec.
-func (db *SQLiteDatabase) MultiExec(ctx context.Context, queries []SQLQuery) error {
-	conn, err := db.GetConn(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	return conn.MultiExec(queries)
-}
-
-// WithTx is a wrapper for SQLiteConn.WithTx.
-func (db *SQLiteDatabase) WithTx(ctx context.Context, cb func(*SQLiteConn) error) error {
-	conn, err := db.GetConn(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	return conn.WithTx(func() error { return cb(conn) })
 }
 
 func (db *SQLiteDatabase) init(ctx context.Context) error {
@@ -211,7 +172,7 @@ func (db *SQLiteDatabase) init(ctx context.Context) error {
 
 func (db *SQLiteDatabase) checkApplicationID(conn *SQLiteConn) error {
 	var appID int
-	err := conn.Select("PRAGMA application_id", func(stmt *sqlite.Stmt) error {
+	err := conn.Select("PRAGMA application_id", func(stmt *SQLiteStmt) error {
 		var err error
 		appID, _, err = stmt.ColumnInt(0)
 		return err
@@ -229,7 +190,7 @@ func (db *SQLiteDatabase) setAppID(conn *SQLiteConn) error {
 
 func (db *SQLiteDatabase) getWrittenVersion(conn *SQLiteConn) error {
 	var intVersion int
-	err := conn.Select("PRAGMA user_version", func(stmt *sqlite.Stmt) error {
+	err := conn.Select("PRAGMA user_version", func(stmt *SQLiteStmt) error {
 		var err error
 		intVersion, _, err = stmt.ColumnInt(0)
 		return err
@@ -276,7 +237,7 @@ func (db *SQLiteDatabase) migrate(conn *SQLiteConn) error {
 
 func (db *SQLiteDatabase) foreignKeysCheck(conn *SQLiteConn) error {
 	var checks []error
-	err := conn.Select("PRAGMA foreign_key_check", func(stmt *sqlite.Stmt) error {
+	err := conn.Select("PRAGMA foreign_key_check", func(stmt *SQLiteStmt) error {
 		check := &SQLiteForeignKeyCheck{}
 		if err := check.FromDB(stmt); err != nil {
 			return err
@@ -295,7 +256,7 @@ func (db *SQLiteDatabase) foreignKeysCheck(conn *SQLiteConn) error {
 
 func (db *SQLiteDatabase) quickCheck(conn *SQLiteConn) error {
 	var errs []error
-	err := conn.Select("PRAGMA quick_check", func(stmt *sqlite.Stmt) error {
+	err := conn.Select("PRAGMA quick_check", func(stmt *SQLiteStmt) error {
 		if msg, _, err := stmt.ColumnText(0); err != nil {
 			return err
 		} else if msg != "ok" {
@@ -318,13 +279,20 @@ func (db *SQLiteDatabase) PeriodicCleanup(ctx context.Context) error {
 	if !(db.CleanupInterval > 0) {
 		return fmt.Errorf("database at %q cannot run periodic cleanup with an interval of %s", db.Path, db.CleanupInterval)
 	}
+
+	conn, err := db.GetConn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
 	for SleepCtx(ctx, db.CleanupInterval) {
 		db.logger.Debugf("performing database %p at %q vacuum", db, db.Path)
-		if err := db.Exec(ctx, "PRAGMA incremental_vacuum"); err != nil {
+		if err := conn.Exec("PRAGMA incremental_vacuum"); err != nil {
 			return err
 		}
 		db.logger.Debugf("performing database %p at %q optimization", db, db.Path)
-		if err := db.Exec(ctx, "PRAGMA optimize"); err != nil {
+		if err := conn.Exec("PRAGMA optimize"); err != nil {
 			return err
 		}
 	}
@@ -332,7 +300,7 @@ func (db *SQLiteDatabase) PeriodicCleanup(ctx context.Context) error {
 }
 
 // Backup creates or clobbers a backup of the current database at the destination set in the SQLiteBackupOptinos.
-func (db *SQLiteDatabase) Backup(ctx context.Context, opts SQLiteBackupOptions) error {
+func (db *SQLiteDatabase) Backup(ctx context.Context, srcConn *SQLiteConn, opts SQLiteBackupOptions) error {
 	db.backups.Lock()
 	defer db.backups.Unlock()
 
@@ -344,12 +312,6 @@ func (db *SQLiteDatabase) Backup(ctx context.Context, opts SQLiteBackupOptions) 
 		return err
 	}
 	defer destConn.Close()
-
-	srcConn, err := db.GetConn(ctx)
-	if err != nil {
-		return err
-	}
-	defer srcConn.Close()
 
 	backup, err := srcConn.Backup(opts.SrcName, destConn, opts.DestName)
 	if err != nil {
@@ -392,7 +354,7 @@ type SQLiteForeignKeyCheck struct {
 }
 
 // FromDB reads the error from the results of "PRAGMA foreign_key_check".
-func (fkc *SQLiteForeignKeyCheck) FromDB(stmt *sqlite.Stmt) error {
+func (fkc *SQLiteForeignKeyCheck) FromDB(stmt *SQLiteStmt) error {
 	var err error
 	if fkc.Table, _, err = stmt.ColumnText(0); err != nil {
 		return err
@@ -420,19 +382,23 @@ func (fkc *SQLiteForeignKeyCheck) Error() string {
 
 // SQLiteConnOptions describes the connection options for an SQLiteConn.
 type SQLiteConnOptions struct {
+	RetryConf
 	ForeignKeys bool
+	OpenOptions int
 	Path        string
 	Timeout     time.Duration
-	OpenOptions int
 }
 
 // SQLiteConn is a single connection to an SQLite database.
+// If you want to share one between several goroutines,
+// use its sync.Locker interface.
 type SQLiteConn struct {
+	SQLiteConnOptions
 	sync.Mutex
+	mutex  *sync.Mutex
 	closed bool
 	conn   *sqlite.Conn
 	ctx    context.Context
-	done   chan struct{}
 	logger LevelLogger
 	Path   string
 }
@@ -441,143 +407,281 @@ type SQLiteConn struct {
 // Note that the timeout isn't taken into account for this phase;
 // it will return a "database locked" error if it can't immediately connect.
 func NewSQLiteConn(ctx context.Context, logger LevelLogger, conf SQLiteConnOptions) (*SQLiteConn, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-
-	conn, err := sqlite.Open(conf.Path, conf.OpenOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	conn.BusyTimeout(conf.Timeout)
-
-	if conf.ForeignKeys {
-		if err := conn.Exec("PRAGMA foreign_keys = ON"); err != nil {
-			return nil, err
-		}
-	}
-
 	sc := &SQLiteConn{
-		conn:   conn,
-		done:   make(chan struct{}, 1),
+		SQLiteConnOptions: conf,
+
 		ctx:    ctx,
 		logger: logger,
+		mutex:  &sync.Mutex{},
 		Path:   conf.Path,
 	}
 
-	go func() {
-		select {
-		case <-sc.ctx.Done():
-			sc.Lock()
-			defer sc.Unlock()
-			if !sc.closed {
-				sc.conn.Interrupt()
-			}
-		case <-sc.done:
+	err := sc.retry(func() error {
+		sc.logger.Debugf("trying to connect SQLite connection %p to %q", sc, sc.Path)
+		conn, err := sqlite.Open(conf.Path, conf.OpenOptions)
+		if err != nil {
+			return err
 		}
-	}()
+		sc.conn = conn
+		sc.conn.BusyFunc(sc.busy)
+		if conf.ForeignKeys {
+			return conn.Exec("PRAGMA foreign_keys = ON")
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	sc.logger.Debugf("created SQLite connection %p to %q", sc, sc.Path)
 	return sc, nil
 }
 
+func (sc *SQLiteConn) busy(count int) bool {
+	sc.logger.Infof("%p calling busy function with count %d", sc, count)
+	if sc.Times > -1 && count > sc.Times {
+		return false
+	}
+	// ignore its result because we don't want to trigger a busy error because of a cancellation,
+	// that would break the semantics of the error for our application
+	SleepCtx(sc.ctx, sc.Timeout)
+	return true
+}
+
+func (sc *SQLiteConn) retry(cb func() error) error {
+	return NewRetrier(sc.RetryConf, sc.logRetry).SetErrorFilter(isSQLiteBusyErr).Set(WithCtx(cb)).Task(sc.ctx)
+}
+
+func (sc *SQLiteConn) logRetry(r *Retrier, err error) {
+	sc.logger.Errorf("SQLite connection %p at %q got an error, retrying: %v", sc, sc.Path, err)
+}
+
 // Close idempotently closes the connection.
 func (sc *SQLiteConn) Close() error {
-	sc.Lock()
-	defer sc.Unlock()
+	sc.mutex.Lock()
+	defer sc.mutex.Unlock()
 	if sc.closed {
 		return nil
 	}
 	sc.closed = true
 	sc.logger.Debugf("closing SQLite connection %p to %q", sc, sc.Path)
-	sc.done <- struct{}{}
-	return sc.conn.Close()
+	err := sc.conn.Close()
+	sc.logger.Debugf("closed SQLite connection %p to %q with error %v", sc, sc.Path, err)
+	return err
 }
 
-// TotalChanges returns the number of rows that have been changed.
-func (sc *SQLiteConn) TotalChanges() int {
-	return sc.conn.TotalChanges()
+// Changes returns the number of rows that have been changed by the last queries.
+func (sc *SQLiteConn) Changes() int {
+	return sc.conn.Changes()
 }
 
 // Backup backs the database up using the given connection to the backup file.
 // srcName is the name of the database inside the database file, which is relevant if you attach secondary databases;
 // otherwise it is "main". Similarly for destName, it is the target name of the database inside the destination file.
-func (sc *SQLiteConn) Backup(srcName string, conn *SQLiteConn, destName string) (*sqlite.Backup, error) {
-	if sc.ctx.Err() != nil {
-		return nil, sc.ctx.Err()
+func (sc *SQLiteConn) Backup(srcName string, conn *SQLiteConn, destName string) (*SQLiteBackup, error) {
+	var sqltBackup *sqlite.Backup
+	err := sc.retry(func() error {
+		var err error
+		sqltBackup, err = sc.conn.Backup(srcName, conn.conn, destName)
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
-	return sc.conn.Backup(srcName, conn.conn, destName)
+	backup := &SQLiteBackup{
+		RetryConf: sc.RetryConf,
+		backup:    sqltBackup,
+		ctx:       sc.ctx,
+		destPath:  conn.Path,
+		logger:    sc.logger,
+		srcPath:   sc.Path,
+	}
+	return backup, nil
 }
 
 // Prepare prepares an SQL statement and binds some arguments (none to all).
-func (sc *SQLiteConn) Prepare(sql string, args ...interface{}) (*sqlite.Stmt, error) {
-	if sc.ctx.Err() != nil {
-		return nil, sc.ctx.Err()
+func (sc *SQLiteConn) Prepare(sql string, args ...interface{}) (*SQLiteStmt, error) {
+	var sqltStmt *sqlite.Stmt
+	err := sc.retry(func() error {
+		var err error
+		sc.logger.Debugf("preparing SQL statement |%v| with arguments %v for connection %p on %q", sql, args, sc, sc.Path)
+		sqltStmt, err = sc.conn.Prepare(sql, args...)
+		return err
+	})
+	stmt := &SQLiteStmt{
+		ctx:       sc.ctx,
+		logger:    sc.logger,
+		RetryConf: sc.RetryConf,
+		stmt:      sqltStmt,
 	}
-	sc.logger.Debugf("preparing SQL statement |%v| with arguments %v for connection %p on %q", sql, args, sc, sc.Path)
-	return sc.conn.Prepare(sql, args...)
+	sc.logger.Debugf("prepared SQL statement %p with query |%v| and arguments %v for connection %p on %q: %+v", stmt, sql, args, sc, sc.Path, stmt)
+	return stmt, err
 }
 
 // Select runs an SQL statement witih the given arguments and lets a callback read the statement
 // to get its result until all rows in the response are read, and closes the statement.
-func (sc *SQLiteConn) Select(sql string, cb func(stmt *sqlite.Stmt) error, args ...interface{}) error {
-	if sc.ctx.Err() != nil {
-		return sc.ctx.Err()
-	}
-	sc.logger.Debugf("row scan from SQL statement |%v| with arguments %v for connection %p on %q", sql, args, sc, sc.Path)
-	stmt, err := sc.conn.Prepare(sql, args...)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	return SQLiteStmtScan(sc.ctx, stmt, cb)
+func (sc *SQLiteConn) Select(sql string, cb func(*SQLiteStmt) error, args ...interface{}) error {
+	return sc.retry(func() error {
+		sc.logger.Debugf("row scan from SQL statement |%v| with arguments %v for connection %p on %q", sql, args, sc, sc.Path)
+		stmt, err := sc.Prepare(sql, args...)
+		if err != nil {
+			return err
+		}
+		defer stmt.Close()
+		return stmt.Scan(cb)
+	})
 }
 
 // Exec execute the SQL statement with the given arguments, managing the entirety of the underlying statement's lifecycle.
 func (sc *SQLiteConn) Exec(sql string, args ...interface{}) error {
-	if sc.ctx.Err() != nil {
-		return sc.ctx.Err()
-	}
-	sc.logger.Debugf("executing SQL statement |%v| with arguments %v for connection %p on %q", sql, args, sc, sc.Path)
-	return sc.conn.Exec(sql, args...)
+	return sc.retry(func() error {
+		sc.logger.Debugf("executing SQL statement |%v| with arguments %v for connection %p on %q", sql, args, sc, sc.Path)
+		return sc.conn.Exec(sql, args...)
+	})
 }
 
 // MultiExec execute multiple SQL statements with their arguments.
 func (sc *SQLiteConn) MultiExec(queries []SQLQuery) error {
-	sc.logger.Debugf("executing with SQLite connection %p at %q multiple SQL queries: %+v", sc, sc.Path, queries)
-	for _, query := range queries {
-		if err := sc.Exec(query.SQL, query.Args...); err != nil {
-			return err
+	return sc.retry(func() error {
+		sc.logger.Debugf("executing with SQLite connection %p at %q multiple SQL queries: %+v", sc, sc.Path, queries)
+		for _, query := range queries {
+			if err := sc.Exec(query.SQL, query.Args...); err != nil {
+				return err
+			}
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 // WithTx runs a callback while managing a transaction's entire lifecycle.
 func (sc *SQLiteConn) WithTx(cb func() error) error {
-	if sc.ctx.Err() != nil {
-		return sc.ctx.Err()
-	}
-	sc.logger.Debugf("executing SQL transaction with connection %p on %q", sc, sc.Path)
-	return sc.conn.WithTx(cb)
+	return sc.retry(func() error {
+		sc.logger.Debugf("executing SQL transaction with connection %p on %q", sc, sc.Path)
+		return sc.conn.WithTx(cb)
+	})
 }
 
 // MultiExecWithTx is like MultiExec but within a single transaction.
 func (sc *SQLiteConn) MultiExecWithTx(queries []SQLQuery) error {
-	if sc.ctx.Err() != nil {
-		return sc.ctx.Err()
-	}
-	sc.logger.Debugf("executing with SQLite connection %p at %q within a transaction multiple SQL queries: %+v", sc, sc.Path, queries)
-	return sc.conn.WithTx(func() error { return sc.MultiExec(queries) })
+	return sc.retry(func() error {
+		sc.logger.Debugf("executing with SQLite connection %p at %q within a transaction multiple SQL queries: %+v", sc, sc.Path, queries)
+		return sc.conn.WithTx(func() error { return sc.MultiExec(queries) })
+	})
 }
 
-// SQLiteStmtScan runs a callback multiple times onto an SQLite statement to read its results until every record has been read.
-func SQLiteStmtScan(ctx context.Context, stmt *sqlite.Stmt, cb func(*sqlite.Stmt) error) error {
+// SQLiteBackup is a wrapper for *sqlite.Backup with retries.
+type SQLiteBackup struct {
+	RetryConf
+	backup   *sqlite.Backup
+	ctx      context.Context
+	destPath string
+	logger   LevelLogger
+	srcPath  string
+}
+
+// Close closes the backup.
+func (b *SQLiteBackup) Close() error {
+	return b.backup.Close()
+}
+
+// Step saves n pages; returns io.EOF when finished.
+func (b *SQLiteBackup) Step(n int) error {
+	cb := func() error { return b.backup.Step(n) }
+	return NewRetrier(b.RetryConf, b.logRetry).SetErrorFilter(isSQLiteBusyErr).Set(WithCtx(cb)).Task(b.ctx)
+}
+
+func (b *SQLiteBackup) logRetry(r *Retrier, err error) {
+	b.logger.Debugf("error when saving pages with SQLite backup %p from %s to %s, retrying: %v", b, b.srcPath, b.destPath, err)
+	b.logger.Errorf("error with a database backup from %s to %s, retrying (%d/%d, backoff %s): %v",
+		b.srcPath, b.destPath, r.Retries, r.Times, r.Backoff, err)
+}
+
+// SQLiteStmt is a wrapper for sqlite.Stmt that supports automatic retry with busy errors.
+type SQLiteStmt struct {
+	RetryConf
+	ctx    context.Context
+	logger LevelLogger
+	stmt   *sqlite.Stmt
+}
+
+// Close closes the statement (simple wrapper).
+func (stmt *SQLiteStmt) Close() error {
+	return stmt.stmt.Close()
+}
+
+// ColumnText returns a string for the given column number, starting at 0 (wrapper with retry).
+func (stmt *SQLiteStmt) ColumnText(pos int) (string, bool, error) {
+	var result string
+	var ok bool
+	err := stmt.retry(func() error {
+		var err error
+		result, ok, err = stmt.stmt.ColumnText(pos)
+		return err
+	})
+	return result, ok, err
+}
+
+// ColumnInt returns an integer for the given column number, starting at 0 (wrapper with retry).
+func (stmt *SQLiteStmt) ColumnInt(pos int) (int, bool, error) {
+	var result int
+	var ok bool
+	err := stmt.retry(func() error {
+		var err error
+		result, ok, err = stmt.stmt.ColumnInt(pos)
+		return err
+	})
+	return result, ok, err
+}
+
+// ColumnInt64 returns a 64 bits integer for the given column number, starting at 0 (wrapper with retry).
+func (stmt *SQLiteStmt) ColumnInt64(pos int) (int64, bool, error) {
+	var result int64
+	var ok bool
+	err := stmt.retry(func() error {
+		var err error
+		result, ok, err = stmt.stmt.ColumnInt64(pos)
+		return err
+	})
+	return result, ok, err
+}
+
+// ColumnDouble returns a 64 bits float for the given column number, starting at 0 (wrapper with retry).
+func (stmt *SQLiteStmt) ColumnDouble(pos int) (float64, bool, error) {
+	var result float64
+	var ok bool
+	err := stmt.retry(func() error {
+		var err error
+		result, ok, err = stmt.stmt.ColumnDouble(pos)
+		return err
+	})
+	return result, ok, err
+}
+
+// Step advances the scan of the result rows by one, true if successful, false if end reached (wrapper with retry).
+func (stmt *SQLiteStmt) Step() (bool, error) {
+	var ok bool
+	err := stmt.retry(func() error {
+		var err error
+		ok, err = stmt.stmt.Step()
+		return err
+	})
+	return ok, err
+}
+
+// Exec execute the statements with the given supplementary arguments (wrapper with retry).
+func (stmt *SQLiteStmt) Exec(args ...interface{}) error {
+	return stmt.retry(func() error { return stmt.stmt.Exec(args...) })
+}
+
+// ClearBindings clears the bindings of the previous Exec (wrapper with retry).
+func (stmt *SQLiteStmt) ClearBindings() error {
+	return stmt.retry(func() error { return stmt.stmt.ClearBindings() })
+}
+
+// Scan runs a callback multiple times onto the SQLite statement to read its results until every record has been read.
+func (stmt *SQLiteStmt) Scan(cb func(*SQLiteStmt) error) error {
 	for {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
 		if ok, err := stmt.Step(); err != nil {
 			return err
 		} else if !ok {
@@ -588,4 +692,23 @@ func SQLiteStmtScan(ctx context.Context, stmt *sqlite.Stmt, cb func(*sqlite.Stmt
 		}
 	}
 	return nil
+}
+
+func (stmt *SQLiteStmt) retry(cb func() error) error {
+	return NewRetrier(stmt.RetryConf, stmt.logRetry).SetErrorFilter(isSQLiteBusyErr).Set(WithCtx(cb)).Task(stmt.ctx)
+}
+
+func (stmt *SQLiteStmt) logRetry(r *Retrier, err error) {
+	stmt.logger.Debugf("error in SQLite statement %p, retrying: %v", stmt, err)
+	stmt.logger.Errorf("error within a database connection, retrying (%d/%d, backoff %s): %v",
+		r.Retries, r.Times, r.Backoff, err)
+}
+
+func isSQLiteBusyErr(err error) bool {
+	sqliteErr, ok := err.(*sqlite.Error)
+	if !ok || sqliteErr == nil {
+		return false
+	}
+	code := sqliteErr.Code()
+	return (code == sqlite.LOCKED_SHAREDCACHE || code == sqlite.BUSY || code == sqlite.IOERR_LOCK)
 }

@@ -26,6 +26,12 @@ func TestCRUDUsers(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	conn, err := s.GetConn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
 	users := []User{{
 		Name:    "User1",
 		Created: time.Now().Round(time.Second).Add(-6 * time.Hour),
@@ -36,14 +42,14 @@ func TestCRUDUsers(t *testing.T) {
 
 	t.Run("add", func(t *testing.T) {
 		for _, user := range users {
-			if err := s.AddUser(ctx, user.Name, false, user.Created); err != nil {
+			if err := s.AddUser(conn, user.Name, false, user.Created); err != nil {
 				t.Fatal(err)
 			}
 		}
 	})
 
 	t.Run("get", func(t *testing.T) {
-		query := s.GetUser(ctx, users[0].Name)
+		query := s.GetUser(conn, users[0].Name)
 		if query.Error != nil {
 			t.Fatal(query.Error)
 		}
@@ -58,7 +64,7 @@ func TestCRUDUsers(t *testing.T) {
 	})
 
 	t.Run("list", func(t *testing.T) {
-		list, err := s.ListUsers(ctx)
+		list, err := s.ListUsers(conn)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -70,12 +76,12 @@ func TestCRUDUsers(t *testing.T) {
 
 	// Leave this case at the end so as not to complicate the previous ones.
 	t.Run("delete", func(t *testing.T) {
-		err := s.DelUser(ctx, users[1].Name)
+		err := s.DelUser(conn, users[1].Name)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		list, err := s.ListUsers(ctx)
+		list, err := s.ListUsers(conn)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -102,6 +108,12 @@ func TestCRUDComments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	conn, err := s.GetConn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
 
 	// Test data
 	reportStart := time.Now().Round(time.Second).Add(-time.Hour)
@@ -211,7 +223,7 @@ func TestCRUDComments(t *testing.T) {
 	t.Run("save users", func(t *testing.T) {
 		t.Helper()
 		for _, user := range users {
-			if err := s.AddUser(ctx, user.Name, false, user.Created); err != nil {
+			if err := s.AddUser(conn, user.Name, false, user.Created); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -219,100 +231,88 @@ func TestCRUDComments(t *testing.T) {
 
 	t.Run("save", func(t *testing.T) {
 		for user, comments := range data {
-			if _, err := s.SaveCommentsUpdateUser(ctx, comments, user, maxAge); err != nil {
+			if _, err := s.SaveCommentsUpdateUser(conn, comments, user, maxAge); err != nil {
 				t.Fatal(err)
 			}
 		}
 	})
 
 	t.Run("read", func(t *testing.T) {
-		err := s.WithConn(ctx, func(conn *SQLiteConn) error {
-			comments, err := s.GetCommentsBelowBetween(conn, reportCutoff, reportStart, reportEnd)
-			if err != nil {
-				return err
-			}
-
-			scoresOk := true
-			for _, comment := range comments {
-				if comment.Score > reportCutoff {
-					scoresOk = false
-				}
-			}
-			if !scoresOk {
-				t.Fatalf("no comment should have a score above %d: %+v", reportCutoff, comments)
-			}
-
-			if len(comments) != nbReported {
-				t.Fatalf("should have gotten %d comments, instead got %d: %+v", nbReported, len(comments), comments)
-			}
-
-			var expectedSum int64
-			for _, comments := range data {
-				for _, comment := range comments {
-					if comment.Score <= reportCutoff && comment.Created.After(reportStart) {
-						expectedSum += comment.Score
-					}
-				}
-			}
-			var actualSum int64
-			for _, comment := range comments {
-				actualSum += comment.Score
-			}
-			if actualSum != expectedSum {
-				t.Fatalf("the sum of the scores of the reported comments should be %d, not %d: %+v", expectedSum, actualSum, comments)
-			}
-			return nil
-		})
+		comments, err := s.GetCommentsBelowBetween(conn, reportCutoff, reportStart, reportEnd)
 		if err != nil {
 			t.Fatal(err)
+		}
+
+		scoresOk := true
+		for _, comment := range comments {
+			if comment.Score > reportCutoff {
+				scoresOk = false
+			}
+		}
+		if !scoresOk {
+			t.Fatalf("no comment should have a score above %d: %+v", reportCutoff, comments)
+		}
+
+		if len(comments) != nbReported {
+			t.Fatalf("should have gotten %d comments, instead got %d: %+v", nbReported, len(comments), comments)
+		}
+
+		var expectedSum int64
+		for _, comments := range data {
+			for _, comment := range comments {
+				if comment.Score <= reportCutoff && comment.Created.After(reportStart) {
+					expectedSum += comment.Score
+				}
+			}
+		}
+		var actualSum int64
+		for _, comment := range comments {
+			actualSum += comment.Score
+		}
+		if actualSum != expectedSum {
+			t.Fatalf("the sum of the scores of the reported comments should be %d, not %d: %+v", expectedSum, actualSum, comments)
 		}
 	})
 
 	t.Run("statistics", func(t *testing.T) {
-		err := s.WithConn(ctx, func(conn *SQLiteConn) error {
-			allStats, err := s.StatsBetween(conn, reportCutoff, reportStart, reportEnd)
-			if err != nil {
-				return err
-			}
-
-			expectedNbStats := 3
-			if len(allStats) != expectedNbStats {
-				t.Errorf("expected statistics for %d users, not %d: %+v", expectedNbStats, len(allStats), allStats)
-			}
-
-			for _, stats := range allStats {
-				user := usersMap[stats.Name]
-				comments := data[user]
-				// Computing averages would be a bit too involved for a test case;
-				// let's assume that if averages are broken then the rest is likely to also be broken.
-				var count uint64
-				var delta int64
-				for _, comment := range comments {
-					if comment.Score < 0 && comment.Created.After(reportStart) {
-						count++
-						delta += comment.Score
-					}
-				}
-				if count != stats.Count {
-					t.Errorf("expected count for user %s to be %d, not %d", user.Name, count, stats.Count)
-				}
-				if delta != stats.Delta {
-					t.Errorf("expected delta for user %s to be %d, not %d", user.Name, delta, stats.Delta)
-				}
-			}
-			return nil
-		})
+		allStats, err := s.StatsBetween(conn, reportCutoff, reportStart, reportEnd)
 		if err != nil {
 			t.Fatal(err)
+		}
+
+		expectedNbStats := 3
+		if len(allStats) != expectedNbStats {
+			t.Errorf("expected statistics for %d users, not %d: %+v", expectedNbStats, len(allStats), allStats)
+		}
+
+		for _, stats := range allStats {
+			user := usersMap[stats.Name]
+			comments := data[user]
+			// Computing averages would be a bit too involved for a test case;
+			// let's assume that if averages are broken then the rest is likely to also be broken.
+			var count uint64
+			var delta int64
+			for _, comment := range comments {
+				if comment.Score < 0 && comment.Created.After(reportStart) {
+					count++
+					delta += comment.Score
+				}
+			}
+			if count != stats.Count {
+				t.Errorf("expected count for user %s to be %d, not %d", user.Name, count, stats.Count)
+			}
+			if delta != stats.Delta {
+				t.Errorf("expected delta for user %s to be %d, not %d", user.Name, delta, stats.Delta)
+			}
 		}
 	})
 
 	t.Run("update and read inactivity", func(t *testing.T) {
-		if err := s.UpdateInactiveStatus(ctx, time.Hour); err != nil {
+		if err := s.UpdateInactiveStatus(conn, time.Hour); err != nil {
 			t.Fatal(err)
 		}
 
-		active, err := s.ListActiveUsers(ctx)
+		active, err := s.ListActiveUsers(conn)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -325,12 +325,12 @@ func TestCRUDComments(t *testing.T) {
 
 	// See end of the list of test cases for a successful purge.
 	t.Run("purge fail", func(t *testing.T) {
-		err := s.PurgeUser(ctx, "NotUser")
+		err := s.PurgeUser(conn, "NotUser")
 		if err == nil {
 			t.Error("NotUser doesn't exist and should lead to an error")
 		}
 
-		active, err := s.ListUsers(ctx)
+		active, err := s.ListUsers(conn)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -339,23 +339,17 @@ func TestCRUDComments(t *testing.T) {
 			t.Errorf("list of users should be left unchanged, instead of getting %v", active)
 		}
 
-		err = s.WithConn(ctx, func(conn *SQLiteConn) error {
-			comments, err := s.GetCommentsBelowBetween(conn, reportCutoff, reportStart, reportEnd)
-			if err != nil {
-				return err
-			}
-			if len(comments) != nbReported {
-				t.Errorf("number of reported comments should be left unchanged, instead %d", len(comments))
-			}
-			return nil
-		})
+		comments, err := s.GetCommentsBelowBetween(conn, reportCutoff, reportStart, reportEnd)
 		if err != nil {
 			t.Fatal(err)
+		}
+		if len(comments) != nbReported {
+			t.Errorf("number of reported comments should be left unchanged, instead %d", len(comments))
 		}
 	})
 
 	t.Run("get karma", func(t *testing.T) {
-		total, negative, err := s.GetKarma(ctx, users[1].Name)
+		total, negative, err := s.GetKarma(conn, users[1].Name)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -376,12 +370,12 @@ func TestCRUDComments(t *testing.T) {
 
 	// Leave that test case at the end so as not to complicate the previous ones.
 	t.Run("purge", func(t *testing.T) {
-		err := s.PurgeUser(ctx, users[0].Name)
+		err := s.PurgeUser(conn, users[0].Name)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		active, err := s.ListUsers(ctx)
+		active, err := s.ListUsers(conn)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -389,12 +383,6 @@ func TestCRUDComments(t *testing.T) {
 		if len(active) != len(users)-1 {
 			t.Errorf("after purge there should be %d users left, not %d: %+v", len(users)-1, len(active), active)
 		}
-
-		conn, err := s.db.GetConn(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer conn.Close()
 
 		comments, err := s.GetCommentsBelowBetween(conn, reportCutoff, reportStart, reportEnd)
 		if err != nil {

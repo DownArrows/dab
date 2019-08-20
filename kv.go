@@ -1,9 +1,7 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	sqlite "github.com/bvinc/go-sqlite-lite/sqlite3"
 	"sync"
 	"time"
 )
@@ -11,45 +9,42 @@ import (
 // KeyValueStore is a string-based key-value store with in-memory reads and on-disk writes that uses SQLite.
 type KeyValueStore struct {
 	sync.RWMutex
-	db          *SQLiteDatabase
 	insertQuery string
 	store       map[string]map[string]struct{}
 	table       string
 }
 
 // NewKeyValueStore creates a new KeyValueStore with the given SQLite database onto the given table, which it assumes has total control of.
-func NewKeyValueStore(ctx context.Context, db *SQLiteDatabase, table string) (*KeyValueStore, error) {
+func NewKeyValueStore(conn *SQLiteConn, table string) (*KeyValueStore, error) {
 	kv := &KeyValueStore{
-		db:          db,
 		insertQuery: fmt.Sprintf("INSERT INTO %s(key, value, created) VALUES (?, ?, ?)", table),
 		store:       make(map[string]map[string]struct{}),
 		table:       table,
 	}
 
-	if err := kv.init(ctx); err != nil {
+	if err := kv.init(conn); err != nil {
 		return nil, err
 	}
 
-	if err := kv.readAll(ctx); err != nil {
+	if err := kv.readAll(conn); err != nil {
 		return nil, err
 	}
 
 	return kv, nil
 }
 
-func (kv *KeyValueStore) init(ctx context.Context) error {
-	sql := fmt.Sprintf(`
+func (kv *KeyValueStore) init(conn *SQLiteConn) error {
+	return conn.Exec(fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
 			key TEXT NOT NULL,
 			value TEXT NOT NULL,
 			created INTEGER NOT NULL,
 			PRIMARY KEY (key, value)
-		) WITHOUT ROWID`, kv.table)
-	return kv.db.Exec(ctx, sql)
+		) WITHOUT ROWID`, kv.table))
 }
 
-func (kv *KeyValueStore) readAll(ctx context.Context) error {
-	return kv.db.Select(ctx, "SELECT key, value FROM "+kv.table, func(stmt *sqlite.Stmt) error {
+func (kv *KeyValueStore) readAll(conn *SQLiteConn) error {
+	return conn.Select("SELECT key, value FROM "+kv.table, func(stmt *SQLiteStmt) error {
 		key, _, err := stmt.ColumnText(0)
 		if err != nil {
 			return err
@@ -71,15 +66,15 @@ func (kv *KeyValueStore) readAll(ctx context.Context) error {
 
 // Save saves a value associated to a key.
 // Any number of values can be associated to a key.
-func (kv *KeyValueStore) Save(ctx context.Context, key string, value string) error {
-	return kv.SaveMany(ctx, key, []string{value})
+func (kv *KeyValueStore) Save(conn *SQLiteConn, key string, value string) error {
+	return kv.SaveMany(conn, key, []string{value})
 }
 
 // SaveMany saves several values associated with a single key.
-func (kv *KeyValueStore) SaveMany(ctx context.Context, key string, values []string) error {
+func (kv *KeyValueStore) SaveMany(conn *SQLiteConn, key string, values []string) error {
 	new := make(map[string]struct{})
 
-	err := kv.db.WithTx(ctx, func(conn *SQLiteConn) error {
+	err := conn.WithTx(func() error {
 		stmt, err := conn.Prepare(kv.insertQuery)
 		if err != nil {
 			return err

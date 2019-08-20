@@ -154,11 +154,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 			}
 			dab.logger.Info("successfully logged into reddit")
 
-			err := dab.components.RedditScanner.Run(ctx)
-			if err != nil && !IsCancellation(err) {
-				dab.logger.Errorf("reddit scanner failed with: %v", err)
-			}
-			return err
+			return dab.components.RedditScanner.Run(ctx)
 		}).Task)
 	}
 
@@ -175,11 +171,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 		tasks.SpawnCtx(retrier.Set(func(ctx context.Context) error {
 			dab.logger.Info("attempting to log into discord")
-			err := dab.components.Discord.Run(ctx)
-			if err != nil && !IsCancellation(err) {
-				dab.logger.Errorf("failed to log into discord: %v", err)
-			}
-			return err
+			return dab.components.Discord.Run(ctx)
 		}).Task)
 	}
 
@@ -238,14 +230,22 @@ func (dab *DownArrowsBot) makeRedditAPI(ctx context.Context) (*RedditAPI, error)
 }
 
 func (dab *DownArrowsBot) report(ctx context.Context) error {
+	conn, err := dab.layers.Storage.GetConn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
 	dab.logger.Info("printing report for last week")
+
 	year, week := dab.layers.Report.LastWeekCoordinates()
-	report, err := dab.layers.Report.ReportWeek(ctx, year, week)
+	report, err := dab.layers.Report.ReportWeek(conn, year, week)
 	if err != nil {
 		return err
 	} else if report.Len() == 0 {
 		return errors.New("empty report")
 	}
+
 	return MarkdownReport.Execute(dab.stdOut, report)
 }
 
@@ -261,11 +261,17 @@ func (dab *DownArrowsBot) userAdd(ctx context.Context) error {
 
 	ru := NewRedditUsers(dab.logger, dab.layers.Storage, ra, dab.conf.Reddit.RedditUsersConf)
 
+	conn, err := dab.layers.Storage.GetConn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
 	usernames := dab.flagSet.Args()
 	for _, username := range usernames {
 		hidden := strings.HasPrefix(username, dab.conf.HidePrefix)
 		username = strings.TrimPrefix(username, dab.conf.HidePrefix)
-		if res := ru.Add(ctx, username, hidden, true); res.Error != nil {
+		if res := ru.Add(ctx, conn, username, hidden, true); res.Error != nil {
 			dab.logger.Errorf("error when trying to register %q: %v", username, res.Error)
 		} else if !res.Exists {
 			dab.logger.Errorf("reddit user %q doesn't exist", username)

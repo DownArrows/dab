@@ -1,7 +1,6 @@
 package main
 
 import (
-	sqlite "github.com/bvinc/go-sqlite-lite/sqlite3"
 	"html"
 	"math"
 	"sort"
@@ -13,7 +12,7 @@ import (
 // ReadableModel is a data structure that can be read from a database.
 // Only defined for documentation purposes.
 type ReadableModel interface {
-	FromDB(*sqlite.Stmt) error
+	FromDB(*SQLiteStmt) error
 }
 
 // PersistentModel is a data structure that can be read from and written to a database.
@@ -62,7 +61,7 @@ func (c Comment) ToDB() []interface{} {
 }
 
 // FromDB reads a comment from a database.
-func (c *Comment) FromDB(stmt *sqlite.Stmt) error {
+func (c *Comment) FromDB(stmt *SQLiteStmt) error {
 	var err error
 
 	if c.ID, _, err = stmt.ColumnText(0); err != nil {
@@ -191,7 +190,7 @@ func (u User) InTimezone(timezone *time.Location) User {
 }
 
 // FromDB reads a User from a database.
-func (u *User) FromDB(stmt *sqlite.Stmt) error {
+func (u *User) FromDB(stmt *SQLiteStmt) error {
 	var err error
 	var timestamp int64
 	var boolean int
@@ -295,7 +294,7 @@ type UserStats struct {
 }
 
 // FromDB reads the statistics from the results of a relevant SQL query.
-func (us *UserStats) FromDB(stmt *sqlite.Stmt) error {
+func (us *UserStats) FromDB(stmt *SQLiteStmt) error {
 	var err error
 
 	if us.Name, _, err = stmt.ColumnText(0); err != nil {
@@ -397,7 +396,7 @@ type CompendiumDetails struct {
 }
 
 // FromDB reads a CompendiumDetails from the relevant SQL query.
-func (details *CompendiumDetails) FromDB(stmt *sqlite.Stmt) error {
+func (details *CompendiumDetails) FromDB(stmt *SQLiteStmt) error {
 	var err error
 
 	if details.Count, _, err = stmt.ColumnInt64(0); err != nil {
@@ -444,7 +443,7 @@ type CompendiumDetailsTagged struct {
 }
 
 // FromDB reads a CompendiumDetailsTagged from the relevant SQL query.
-func (details *CompendiumDetailsTagged) FromDB(stmt *sqlite.Stmt) error {
+func (details *CompendiumDetailsTagged) FromDB(stmt *SQLiteStmt) error {
 	if err := details.CompendiumDetails.FromDB(stmt); err != nil {
 		return err
 	}

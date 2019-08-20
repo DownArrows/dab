@@ -53,26 +53,32 @@ func NewRedditScanner(
 func (rs *RedditScanner) Run(ctx context.Context) error {
 	var lastFullScan time.Time
 
+	conn, err := rs.storage.GetConn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
 	rs.logger.Info("starting comments scanner")
 
 	for ctx.Err() == nil {
 
 		fullScan := time.Now().Sub(lastFullScan) >= rs.fullScanInterval
 
-		users, err := rs.getUsersOrWait(ctx, fullScan)
+		users, err := rs.getUsersOrWait(ctx, conn, fullScan)
 		if err != nil {
 			return err
 		}
 
 		rs.logger.Debugf("scan pass: %d users, full scan: %t", len(users), fullScan)
-		if err := rs.Scan(ctx, users); err != nil {
+		if err := rs.Scan(ctx, conn, users); err != nil {
 			return err
 		}
 		rs.logger.Debug("scan pass done")
 
 		if fullScan {
 			lastFullScan = time.Now()
-			if err := rs.storage.UpdateInactiveStatus(ctx, rs.inactivityThreshold); err != nil {
+			if err := rs.storage.UpdateInactiveStatus(conn, rs.inactivityThreshold); err != nil {
 				return err
 			}
 		}
@@ -125,7 +131,8 @@ func (rs *RedditScanner) CloseHighScores() {
 }
 
 // Scan scans a slice of users once.
-func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
+func (rs *RedditScanner) Scan(ctx context.Context, conn *SQLiteConn, users []User) error {
+OUTER:
 	for _, user := range users {
 
 		for i := uint(0); i < rs.maxBatches; i++ {
@@ -148,7 +155,8 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 			if IsCancellation(err) {
 				return err
 			} else if err != nil {
-				rs.logger.Errorf("error while scanning user %s: %v", user.Name, err)
+				rs.logger.Errorf("error while scanning user %q, skipping: %v", user.Name, err)
+				continue OUTER
 			}
 			rs.logger.Debugf("fetched comments: %+v", comments)
 
@@ -156,11 +164,10 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 			// This method contains logic that returns an User datastructure whose metadata
 			// has been updated; in other words, it indirectly controls the behavior of the
 			// current loop.
-			user, err = rs.storage.SaveCommentsUpdateUser(ctx, comments, user, lastScan+rs.maxAge)
-			if IsCancellation(err) {
+			user, err = rs.storage.SaveCommentsUpdateUser(conn, comments, user, lastScan+rs.maxAge)
+			if err != nil {
+				// TODO might be triggered after a purge due to a foreign key constraint failure
 				return err
-			} else if err != nil {
-				rs.logger.Errorf("error while registering comments of user %s: %v", user.Name, err)
 			}
 			rs.logger.Debugf("after scanner's user update: %+v", user)
 
@@ -173,7 +180,7 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 				break
 			}
 
-			if err := rs.alertIfHighScore(ctx, comments); err != nil {
+			if err := rs.alertIfHighScore(conn, comments); err != nil {
 				rs.logger.Error(err)
 			}
 
@@ -188,7 +195,7 @@ func (rs *RedditScanner) Scan(ctx context.Context, users []User) error {
 	return nil
 }
 
-func (rs *RedditScanner) getUsersOrWait(ctx context.Context, fullScan bool) ([]User, error) {
+func (rs *RedditScanner) getUsersOrWait(ctx context.Context, conn *SQLiteConn, fullScan bool) ([]User, error) {
 	var users []User
 	var err error
 	// We could be using a channel to signal when a new user is added,
@@ -196,12 +203,12 @@ func (rs *RedditScanner) getUsersOrWait(ctx context.Context, fullScan bool) ([]U
 	// is used in production only once, when the database is empty.
 	for SleepCtx(ctx, time.Second) {
 		if fullScan {
-			users, err = rs.storage.ListUsers(ctx)
+			users, err = rs.storage.ListUsers(conn)
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			users, err = rs.storage.ListActiveUsers(ctx)
+			users, err = rs.storage.ListActiveUsers(conn)
 			if err != nil {
 				return nil, err
 			}
@@ -213,7 +220,7 @@ func (rs *RedditScanner) getUsersOrWait(ctx context.Context, fullScan bool) ([]U
 	return users, nil
 }
 
-func (rs *RedditScanner) alertIfHighScore(ctx context.Context, comments []Comment) error {
+func (rs *RedditScanner) alertIfHighScore(conn *SQLiteConn, comments []Comment) error {
 	rs.Lock()
 	defer rs.Unlock()
 
@@ -232,7 +239,7 @@ func (rs *RedditScanner) alertIfHighScore(ctx context.Context, comments []Commen
 		}
 	}
 
-	if err := rs.storage.KV().SaveMany(ctx, "highscores", highscoresID); err != nil {
+	if err := rs.storage.KV().SaveMany(conn, "highscores", highscoresID); err != nil {
 		return err
 	}
 

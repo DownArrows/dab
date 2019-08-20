@@ -20,6 +20,11 @@ const Defaults string = `{
 		"backup_path": "./dab.db.backup",
 		"cleanup_interval": "30m",
 		"path": "./dab.db",
+		"retry_connection": {
+			"times": 25,
+			"max_interval": "10s",
+			"reset_after": "5m"
+		},
 		"timeout": "15s"
 	},
 
@@ -54,11 +59,12 @@ const Defaults string = `{
 
 // StorageConf describes the configuration of the Storage layer.
 type StorageConf struct {
-	BackupMaxAge    Duration `json:"backup_max_age"`
-	BackupPath      string   `json:"backup_path"`
-	CleanupInterval Duration `json:"cleanup_interval"`
-	Path            string   `json:"path"`
-	Timeout         Duration `json:"timeout"`
+	BackupMaxAge    Duration  `json:"backup_max_age"`
+	BackupPath      string    `json:"backup_path"`
+	CleanupInterval Duration  `json:"cleanup_interval"`
+	Path            string    `json:"path"`
+	Retry           RetryConf `json:"retry_connection"`
+	Timeout         Duration  `json:"timeout"`
 }
 
 // RetryConf describes the configuration of the retry logic for a component.

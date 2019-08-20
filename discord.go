@@ -180,6 +180,7 @@ type DiscordBot struct {
 	// dependencies
 	addUser AddRedditUser
 	client  *discordgo.Session
+	conn    *SQLiteConn // a single one is enough, it's not heavily used
 	ctx     context.Context
 	logger  LevelLogger
 	storage DiscordBotStorage
@@ -258,7 +259,16 @@ func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, addUser AddRed
 
 // Run runs and blocks until the bot stops.
 func (bot *DiscordBot) Run(ctx context.Context) error {
+	var err error
+
+	bot.Lock()
 	bot.ctx = ctx
+	bot.conn, err = bot.storage.GetConn(ctx)
+	bot.Unlock()
+	if err != nil {
+		return err
+	}
+	defer bot.conn.Close()
 
 	go func() {
 		if err := bot.client.Open(); err != nil {
@@ -272,7 +282,7 @@ func (bot *DiscordBot) Run(ctx context.Context) error {
 	defer bot.client.Close()
 
 	select {
-	case err := <-bot.done:
+	case err = <-bot.done:
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
@@ -632,7 +642,9 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 		hidden := strings.HasPrefix(name, bot.hidePrefix)
 		name = TrimUsername(strings.TrimPrefix(name, bot.hidePrefix))
 
-		reply := bot.addUser(bot.ctx, name, hidden, false)
+		bot.conn.Lock()
+		reply := bot.addUser(bot.ctx, bot.conn, name, hidden, false)
+		bot.conn.Unlock()
 
 		if IsCancellation(reply.Error) {
 			continue
@@ -648,7 +660,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 	return bot.channelEmbedSend(msg.ChannelID, status)
 }
 
-func (bot *DiscordBot) editUsers(actionName string, action func(context.Context, string) error) func(DiscordMessage) error {
+func (bot *DiscordBot) editUsers(actionName string, action func(*SQLiteConn, string) error) func(DiscordMessage) error {
 	return func(msg DiscordMessage) error {
 		names := msg.Args
 		bot.logger.Infof("%s wants to %s %v", msg.Author.FQN(), actionName, names)
@@ -660,7 +672,12 @@ func (bot *DiscordBot) editUsers(actionName string, action func(context.Context,
 
 		for _, name := range names {
 			name = TrimUsername(name)
-			if err := action(bot.ctx, name); err != nil {
+
+			bot.conn.Lock()
+			err := action(bot.conn, name)
+			bot.conn.Unlock()
+
+			if err != nil {
 				status.AddField(DiscordEmbedField{Name: name, Value: fmt.Sprintf("%s %s", EmojiCrossMark, err)})
 			} else {
 				status.AddField(DiscordEmbedField{Name: name, Value: EmojiCheckMark})
@@ -674,7 +691,9 @@ func (bot *DiscordBot) editUsers(actionName string, action func(context.Context,
 func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 	username := TrimUsername(msg.Content)
 
-	query := bot.storage.GetUser(bot.ctx, username)
+	bot.conn.Lock()
+	query := bot.storage.GetUser(bot.conn, username)
+	bot.conn.Unlock()
 
 	if !query.Exists {
 		response := fmt.Sprintf("user %q not found in the database.", username)
@@ -731,7 +750,10 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 	username := TrimUsername(msg.Args[0])
 
-	userQuery := bot.storage.GetUser(bot.ctx, username)
+	bot.conn.Lock()
+	userQuery := bot.storage.GetUser(bot.conn, username)
+	bot.conn.Unlock()
+
 	if userQuery.Error != nil {
 		return userQuery.Error
 	} else if !userQuery.Exists {
@@ -741,7 +763,9 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 
 	user := userQuery.User
 
-	total, negative, err := bot.storage.GetKarma(bot.ctx, user.Name)
+	bot.conn.Lock()
+	total, negative, err := bot.storage.GetKarma(bot.conn, user.Name)
+	bot.conn.Unlock()
 	if err != nil {
 		return err
 	}
