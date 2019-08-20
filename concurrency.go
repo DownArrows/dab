@@ -217,6 +217,10 @@ func (r *Retrier) conditionalReset() {
 }
 
 func (r *Retrier) shouldRestartOn(err error) bool {
+	if err == nil {
+		return false
+	}
+
 	if IsCancellation(err) {
 		return false
 	}

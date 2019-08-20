@@ -189,7 +189,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 		if dab.components.RedditUsers.UnsuspensionWatcherEnabled {
 			tasks.SpawnCtx(dab.components.RedditUsers.UnsuspensionWatcher)
-			tasks.Spawn(func() { dab.components.Discord.SignalUnsuspensions(dab.components.RedditUsers.Unsuspensions()) })
+			tasks.Spawn(func() { dab.components.Discord.SignalUnsuspensions(dab.components.RedditUsers.OpenUnsuspensions()) })
 		}
 
 		if dab.conf.Discord.HighScores != "" {
@@ -198,6 +198,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 		tasks.SpawnCtx(func(ctx context.Context) error {
 			<-ctx.Done()
+			dab.components.RedditUsers.CloseUnsuspensions()
 			dab.components.RedditScanner.CloseSuspensions()
 			dab.components.RedditScanner.CloseHighScores()
 			return ctx.Err()

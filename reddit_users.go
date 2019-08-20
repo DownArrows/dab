@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	sqlite "github.com/bvinc/go-sqlite-lite/sqlite3"
 	"time"
 )
 
@@ -79,8 +80,13 @@ func (ru *RedditUsers) Add(ctx context.Context, username string, hidden bool, fo
 }
 
 // Unsuspensions returns a channel that alerts of newly unsuspended or undeleted users.
-func (ru *RedditUsers) Unsuspensions() <-chan User {
+func (ru *RedditUsers) OpenUnsuspensions() <-chan User {
 	return ru.unsuspensions
+}
+
+// CloseUnsuspensions closes the channel that signals unsuspended or undeleted users.
+func (ru *RedditUsers) CloseUnsuspensions() {
+	close(ru.unsuspensions)
 }
 
 // UnsuspensionWatcher is a Task to be launched independently that watches unsuspensions
@@ -91,71 +97,79 @@ func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
 		ru.logger.Debug("checking uspended/deleted users")
 
 		users, err := ru.storage.ListSuspendedAndNotFound(ctx)
-		if err != nil {
+		// necessary since the database layer isn't very reliable yet ("database locked" errors)
+		// TODO change to a simple return once this is fixed
+		if sqliteErr, ok := err.(*sqlite.Error); ok && sqliteErr != nil {
+			ru.logger.Errorf("unsuspensions/undeletions watcher database error: %v", sqliteErr)
+		} else if err != nil {
 			return err
 		}
+
 		for _, user := range users {
 			ru.logger.Debugf("checking suspended/deleted user %+v", user)
 
 			res := ru.api.AboutUser(ctx, user.Name)
-			if IsCancellation(res.Error) {
+			if res.Error != nil {
 				return res.Error
 			}
-			if res.Error != nil {
-				ru.logger.Error(res.Error)
-				continue
+
+			ru.logger.Debugf("unsuspensions/undeletions watcher found about user %+v data from Reddit %+v", user, res)
+
+			if err := ru.updateRedditUserStatus(ctx, user, res); err != nil {
+				// necessary since the database layer isn't very reliable yet ("database locked" errors)
+				// TODO change to a simple return once this is fixed
+				if sqliteErr, ok := err.(*sqlite.Error); ok && sqliteErr != nil {
+					ru.logger.Errorf("unsuspensions/undeletions watcher database error: %v", sqliteErr)
+				} else {
+					return err
+				}
 			}
-
-			/* Actions depending in change of status (from is "user", to is "res"):
-
-			 from \ to | Alive  | Suspended | Deleted
-			-----------|------------------------------
-			 Alive     | NA     | NA        | NA
-			------------------------------------------
-			 Suspended | signal | ignore    | update
-			------------------------------------------
-			 Deleted   | signal | update    | ignore
-
-			ignore: don't signal, don't update
-			signal: update the database and signal the change
-			update: update the database, don't signal the change
-			NA: not applicable (we only have suspended or deleted users to begin with)
-
-			*/
-
-			if user.NotFound && res.Exists { // undeletion
-				if err := ru.storage.FoundUser(ctx, user.Name); err != nil {
-					ru.logger.Error(err)
-					continue
-				}
-				if res.User.Suspended {
-					if err := ru.storage.SuspendUser(ctx, user.Name); err != nil {
-						ru.logger.Error(err)
-					}
-					continue // don't signal accounts that went from deleted to suspended
-				}
-			} else if user.Suspended && !res.Exists { // deletion of a suspended account
-				if err := ru.storage.NotFoundUser(ctx, user.Name); err != nil {
-					ru.logger.Error(err)
-					continue
-				}
-				continue // don't signal it, we only need to keep track of it
-			} else if user.Suspended && !res.User.Suspended { // unsuspension
-				if err := ru.storage.UnSuspendUser(ctx, user.Name); err != nil {
-					ru.logger.Error(err)
-					continue
-				}
-			} else { // no change
-				continue
-			}
-
-			user.NotFound = res.Exists
-			user.Suspended = res.User.Suspended
-			ru.unsuspensions <- res.User
 
 		}
-
 	}
-	close(ru.unsuspensions)
 	return ctx.Err()
+}
+
+func (ru *RedditUsers) updateRedditUserStatus(ctx context.Context, user User, res UserQuery) error {
+	/* Actions depending in change of status (from is "user", to is "res"):
+
+	 from \ to | Alive  | Suspended | Deleted
+	-----------|------------------------------
+	 Alive     | NA     | NA        | NA
+	------------------------------------------
+	 Suspended | signal | ignore    | update
+	------------------------------------------
+	 Deleted   | signal | update    | ignore
+
+	ignore: don't signal, don't update
+	signal: update the database and signal the change
+	update: update the database, don't signal the change
+	NA: not applicable (we only have suspended or deleted users to begin with)
+
+	*/
+
+	if user.NotFound && res.Exists { // undeletion
+		if err := ru.storage.FoundUser(ctx, user.Name); err != nil {
+			return err
+		}
+		if res.User.Suspended {
+			// don't signal accounts that went from deleted to suspended
+			return ru.storage.SuspendUser(ctx, user.Name)
+		}
+	} else if user.Suspended && !res.Exists { // deletion of a suspended account
+		// don't signal it, we only need to keep track of it
+		return ru.storage.NotFoundUser(ctx, user.Name)
+	} else if user.Suspended && !res.User.Suspended { // unsuspension
+		if err := ru.storage.UnSuspendUser(ctx, user.Name); err != nil {
+			return err
+		}
+	} else { // no change
+		return nil
+	}
+
+	user.NotFound = res.Exists
+	user.Suspended = res.User.Suspended
+	ru.unsuspensions <- res.User
+
+	return nil
 }
