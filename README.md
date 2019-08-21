@@ -246,6 +246,7 @@ and <http://golang.localhost/pkg/text/template/>.
  - `web`
     - `listen` *string* (*none*): `hostname:port` or `ip:port` or `:port` (all interfaces)
       specification for the webserver to listen to; leave out to disable
+    - `nb_db_conn` *integer* (10): number of database connections open for the web server
 
 ### Sample configuration
 

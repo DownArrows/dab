@@ -107,9 +107,10 @@ func immutableCache(handler func(http.ResponseWriter, *http.Request)) func(http.
 type WebServer struct {
 	sync.Mutex
 	compendium      CompendiumFactory
-	conn            *SQLiteConn // a single connection is acceptable since each use tends to peg the CPU and I/O anyway
+	conns           *SQLiteConnPool
 	done            chan error
 	markdownOptions blackfriday.Option
+	NbDBConn        uint
 	reports         ReportFactory
 	server          *http.Server
 	storage         WebServerStorage
@@ -123,6 +124,7 @@ func NewWebServer(conf WebConf, storage WebServerStorage, reports ReportFactory,
 		compendium:      compendium,
 		done:            make(chan error),
 		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(mdExts)),
+		NbDBConn:        conf.NbDBConn,
 		reports:         reports,
 		storage:         storage,
 	}
@@ -149,15 +151,16 @@ func (wsrv *WebServer) fatal(err error) {
 
 // Run runs the web server and blocks until it is cancelled or returns an error.
 func (wsrv *WebServer) Run(ctx context.Context) error {
-	var err error
+	wsrv.conns = NewSQLiteConnPool(ctx, wsrv.NbDBConn)
+	defer wsrv.conns.Close()
 
-	wsrv.Lock()
-	wsrv.conn, err = wsrv.storage.GetConn(ctx)
-	wsrv.Unlock()
-	if err != nil {
-		return err
+	for i := uint(0); i < wsrv.NbDBConn; i++ {
+		conn, err := wsrv.storage.GetConn(ctx)
+		if err != nil {
+			return err
+		}
+		wsrv.conns.Release(conn)
 	}
-	defer wsrv.conn.Close()
 
 	go func() {
 		wsrv.done <- wsrv.server.ListenAndServe()
@@ -166,13 +169,12 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		wsrv.server.Close()
-	case err = <-wsrv.done:
-		break
+	case err := <-wsrv.done:
+		if err != http.ErrServerClosed {
+			return err
+		}
 	}
-	if err == http.ErrServerClosed {
-		return nil
-	}
-	return err
+	return nil
 }
 
 // CSS serves the style sheets.
@@ -206,9 +208,14 @@ func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wsrv.conn.Lock()
-	report, err := wsrv.reports.ReportWeek(wsrv.conn, week, year)
-	wsrv.conn.Unlock()
+	conn, err := wsrv.conns.Acquire(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	report, err := wsrv.reports.ReportWeek(conn, week, year)
+	wsrv.conns.Release(conn)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
@@ -230,9 +237,15 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	wsrv.conn.Lock()
-	report, err := wsrv.reports.ReportWeek(wsrv.conn, week, year)
-	wsrv.conn.Unlock()
+
+	conn, err := wsrv.conns.Acquire(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	report, err := wsrv.reports.ReportWeek(conn, week, year)
+	wsrv.conns.Release(conn)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
@@ -263,9 +276,14 @@ func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
 
 // CompendiumIndex serves the compendium's index.
 func (wsrv *WebServer) CompendiumIndex(w http.ResponseWriter, r *http.Request) {
-	wsrv.conn.Lock()
-	stats, err := wsrv.compendium.Compendium(wsrv.conn)
-	wsrv.conn.Unlock()
+	conn, err := wsrv.conns.Acquire(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	stats, err := wsrv.compendium.Compendium(conn)
+	wsrv.conns.Release(conn)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -288,9 +306,14 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 	}
 	username := args[0]
 
-	wsrv.conn.Lock()
-	query := wsrv.storage.GetUser(wsrv.conn, username)
-	wsrv.conn.Unlock()
+	conn, err := wsrv.conns.Acquire(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	defer wsrv.conns.Release(conn)
+
+	query := wsrv.storage.GetUser(conn, username)
 	if !query.Exists {
 		http.Error(w, fmt.Sprintf("user %q doesn't exist", username), http.StatusNotFound)
 		return
@@ -299,9 +322,7 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wsrv.conn.Lock()
-	stats, err := wsrv.compendium.User(wsrv.conn, query.User)
-	wsrv.conn.Unlock()
+	stats, err := wsrv.compendium.User(conn, query.User)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -317,10 +338,14 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 
 // Backup triggers a backup if needed, and serves it.
 func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
-	wsrv.conn.Lock()
-	err := wsrv.storage.Backup(r.Context(), wsrv.conn)
-	wsrv.conn.Unlock()
+	conn, err := wsrv.conns.Acquire(r.Context())
 	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	defer wsrv.conns.Release(conn)
+
+	if err := wsrv.storage.Backup(r.Context(), conn); err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}

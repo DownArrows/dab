@@ -54,6 +54,10 @@ const Defaults string = `{
 		"cutoff": -50,
 		"leeway": "12h",
 		"nb_top": 5
+	},
+
+	"web": {
+		"nb_db_conn": 10
 	}
 }`
 
@@ -144,7 +148,8 @@ type DiscordBotChannelsID struct {
 
 // WebConf describes the configuration for the application's web server.
 type WebConf struct {
-	Listen string `json:"listen"`
+	Listen   string `json:"listen"`
+	NbDBConn uint   `json:"nb_db_conn"`
 }
 
 // Configuration holds the configuration for the whole application.
@@ -234,6 +239,8 @@ func (conf Configuration) HasSaneValues() error {
 		return errors.New("reports' leeway can't be negative")
 	} else if conf.Report.CutOff > 0 {
 		return errors.New("reports' cut-off can't be higher than 0")
+	} else if conf.Web.NbDBConn == 0 {
+		return errors.New("the number of database connections from the web server can't be 0")
 	}
 	return nil
 }

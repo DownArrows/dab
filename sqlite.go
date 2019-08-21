@@ -704,6 +704,58 @@ func (stmt *SQLiteStmt) logRetry(r *Retrier, err error) {
 		r.Retries, r.Times, r.Backoff, err)
 }
 
+// SQLiteConnPool is a simple pool with a limited size.
+// Do not release more conns than the set size, there's no check,
+// and it will not behave properly relatively to cancellation.
+type SQLiteConnPool struct {
+	ch   chan *SQLiteConn
+	ctx  context.Context
+	size uint
+}
+
+// NewSQLiteConnPool creates a new SQLiteConnPool with a global context.
+func NewSQLiteConnPool(ctx context.Context, size uint) *SQLiteConnPool {
+	return &SQLiteConnPool{
+		ch:   make(chan *SQLiteConn, size),
+		ctx:  ctx,
+		size: size,
+	}
+}
+
+// Acquire gets a connection or waits until it is cancelled or receives a connection.
+func (pool *SQLiteConnPool) Acquire(ctx context.Context) (*SQLiteConn, error) {
+	select {
+	case <-pool.ctx.Done():
+		return nil, pool.ctx.Err()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case conn := <-pool.ch:
+		return conn, nil
+	}
+}
+
+// Release puts a connection back into the pool.
+func (pool *SQLiteConnPool) Release(conn *SQLiteConn) {
+	pool.ch <- conn
+}
+
+// Close closes all connections; Release panics after this.
+func (pool *SQLiteConnPool) Close() error {
+	errs := NewErrorGroup()
+	nb := uint(0)
+	close(pool.ch)
+	for conn := range pool.ch {
+		if err := conn.Close(); err != nil {
+			errs.Add(err)
+		}
+		nb++
+	}
+	if nb != pool.size {
+		errs.Add(fmt.Errorf("connection pool closed %d on the expected %d", nb, pool.size))
+	}
+	return errs.ToError()
+}
+
 func isSQLiteBusyErr(err error) bool {
 	sqliteErr, ok := err.(*sqlite.Error)
 	if !ok || sqliteErr == nil {
