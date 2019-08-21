@@ -328,7 +328,7 @@ func (db *SQLiteDatabase) Backup(ctx context.Context, srcConn *SQLiteConn, opts 
 		// This is probably due to SQLite's deadlock detetection in its notify API.
 		db.logger.Debugf("backup connection %p and %p from %q to %q trying to backup all pages",
 			srcConn, destConn, db.Path, opts.DestPath)
-		err = backup.Step(-1) // -1 saves all remaning pages.
+		err = backup.Step(-1) // -1 saves all remaining pages.
 		if err != nil {
 			break
 		}
