@@ -438,25 +438,6 @@ func NewSQLiteConn(ctx context.Context, logger LevelLogger, conf SQLiteConnOptio
 	return sc, nil
 }
 
-func (sc *SQLiteConn) busy(count int) bool {
-	sc.logger.Infof("%p calling busy function with count %d", sc, count)
-	if sc.Times > -1 && count > sc.Times {
-		return false
-	}
-	// ignore its result because we don't want to trigger a busy error because of a cancellation,
-	// that would break the semantics of the error for our application
-	SleepCtx(sc.ctx, sc.Timeout)
-	return true
-}
-
-func (sc *SQLiteConn) retry(cb func() error) error {
-	return NewRetrier(sc.RetryConf, sc.logRetry).SetErrorFilter(isSQLiteBusyErr).Set(WithCtx(cb)).Task(sc.ctx)
-}
-
-func (sc *SQLiteConn) logRetry(r *Retrier, err error) {
-	sc.logger.Errorf("SQLite connection %p at %q got an error, retrying: %v", sc, sc.Path, err)
-}
-
 // Close idempotently closes the connection.
 func (sc *SQLiteConn) Close() error {
 	sc.mutex.Lock()
@@ -568,6 +549,25 @@ func (sc *SQLiteConn) MultiExecWithTx(queries []SQLQuery) error {
 		sc.logger.Debugf("executing with SQLite connection %p at %q within a transaction multiple SQL queries: %+v", sc, sc.Path, queries)
 		return sc.conn.WithTx(func() error { return sc.MultiExec(queries) })
 	})
+}
+
+func (sc *SQLiteConn) busy(count int) bool {
+	sc.logger.Infof("%p calling busy function with count %d", sc, count)
+	if sc.Times > -1 && count > sc.Times {
+		return false
+	}
+	// ignore its result because we don't want to trigger a busy error because of a cancellation,
+	// that would break the semantics of the error for our application
+	SleepCtx(sc.ctx, sc.Timeout)
+	return true
+}
+
+func (sc *SQLiteConn) retry(cb func() error) error {
+	return NewRetrier(sc.RetryConf, sc.logRetry).SetErrorFilter(isSQLiteBusyErr).Set(WithCtx(cb)).Task(sc.ctx)
+}
+
+func (sc *SQLiteConn) logRetry(r *Retrier, err error) {
+	sc.logger.Errorf("SQLite connection %p at %q got an error, retrying: %v", sc, sc.Path, err)
 }
 
 // SQLiteBackup is a wrapper for *sqlite.Backup with retries.
