@@ -262,29 +262,6 @@ type UserQuery struct {
 	Error  error
 }
 
-// String is a helper for logging queries.
-func (uq UserQuery) String() string {
-	status := []string{"name: " + uq.User.Name}
-	if uq.Exists {
-		status = append(status, "exists")
-	} else {
-		status = append(status, "does not exist")
-	}
-	if uq.User.Hidden {
-		status = append(status, "hidden")
-	}
-	if uq.User.Suspended {
-		status = append(status, "suspended")
-	}
-	if uq.User.NotFound {
-		status = append(status, "not found")
-	}
-	if uq.Error != nil {
-		status = append(status, "error: "+uq.Error.Error())
-	}
-	return strings.Join(status, ", ")
-}
-
 // UserStats describes the commenting statistics of a User over a certain period of time.
 type UserStats struct {
 	Name    string  // User name
