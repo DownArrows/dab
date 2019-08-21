@@ -108,6 +108,7 @@ type WebServer struct {
 	sync.Mutex
 	compendium      CompendiumFactory
 	conns           *SQLiteConnPool
+	dirtyReads      bool
 	done            chan error
 	markdownOptions blackfriday.Option
 	NbDBConn        uint
@@ -123,6 +124,7 @@ func NewWebServer(conf WebConf, storage WebServerStorage, reports ReportFactory,
 	wsrv := &WebServer{
 		compendium:      compendium,
 		done:            make(chan error),
+		dirtyReads:      conf.DirtyReads,
 		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(mdExts)),
 		NbDBConn:        conf.NbDBConn,
 		reports:         reports,
@@ -158,6 +160,11 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 		conn, err := wsrv.storage.GetConn(ctx)
 		if err != nil {
 			return err
+		}
+		if wsrv.dirtyReads {
+			if err := conn.ReadUncommitted(true); err != nil {
+				return err
+			}
 		}
 		wsrv.conns.Release(conn)
 	}

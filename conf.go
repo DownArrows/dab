@@ -57,6 +57,7 @@ const Defaults string = `{
 	},
 
 	"web": {
+		"dirty_reads": true,
 		"nb_db_conn": 10
 	}
 }`
@@ -148,8 +149,9 @@ type DiscordBotChannelsID struct {
 
 // WebConf describes the configuration for the application's web server.
 type WebConf struct {
-	Listen   string `json:"listen"`
-	NbDBConn uint   `json:"nb_db_conn"`
+	DirtyReads bool   `json:"dirty_reads"`
+	Listen     string `json:"listen"`
+	NbDBConn   uint   `json:"nb_db_conn"`
 }
 
 // Configuration holds the configuration for the whole application.

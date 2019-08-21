@@ -457,6 +457,11 @@ func (sc *SQLiteConn) Changes() int {
 	return sc.conn.Changes()
 }
 
+// ReadUncommitted sets whether the connection is allowed to read uncommitted data from the database.
+func (sc *SQLiteConn) ReadUncommitted(set bool) error {
+	return sc.Exec(fmt.Sprintf("PRAGMA read_uncommitted = %t", set))
+}
+
 // Backup backs the database up using the given connection to the backup file.
 // srcName is the name of the database inside the database file, which is relevant if you attach secondary databases;
 // otherwise it is "main". Similarly for destName, it is the target name of the database inside the destination file.

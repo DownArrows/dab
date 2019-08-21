@@ -244,6 +244,7 @@ and <http://golang.localhost/pkg/text/template/>.
     - `nb_top` *int* (5): maximum number of users to include in the list of statistics for the report
       (also used for the top in the compendium)
  - `web`
+    - `dirty_reads` *bool* (true): allow reading inconsistent data from the database in exchange of better concurrency
     - `listen` *string* (*none*): `hostname:port` or `ip:port` or `:port` (all interfaces)
       specification for the webserver to listen to; leave out to disable
     - `nb_db_conn` *integer* (10): number of database connections open for the web server
