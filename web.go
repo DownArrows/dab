@@ -76,6 +76,11 @@ func (mux *ServeMux) HandleFunc(pattern string, handler func(http.ResponseWriter
 	mux.actual.HandleFunc(pattern, handler)
 }
 
+// Handle wrapper.
+func (mux *ServeMux) Handle(pattern string, handler http.Handler) {
+	mux.actual.Handle(pattern, handler)
+}
+
 // ServeHTTP wrapper.
 func (mux *ServeMux) ServeHTTP(baseW http.ResponseWriter, r *http.Request) {
 	w := NewResponseWriter(baseW, r)
@@ -141,6 +146,9 @@ func NewWebServer(conf WebConf, storage WebServerStorage, reports ReportFactory,
 	mux.HandleFunc("/compendium", wsrv.CompendiumIndex)
 	mux.HandleFunc("/compendium/user/", wsrv.CompendiumUser)
 	mux.HandleFunc("/backup", wsrv.Backup)
+	if conf.RootDir != "" {
+		mux.Handle("/", http.FileServer(http.Dir(conf.RootDir)))
+	}
 
 	wsrv.server = &http.Server{Addr: conf.Listen, Handler: mux}
 

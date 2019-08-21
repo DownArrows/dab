@@ -248,6 +248,8 @@ and <http://golang.localhost/pkg/text/template/>.
     - `listen` *string* (*none*): `hostname:port` or `ip:port` or `:port` (all interfaces)
       specification for the webserver to listen to; leave out to disable
     - `nb_db_conn` *integer* (10): number of database connections open for the web server
+    - `root_dir` *string* (*none*): root directory that is served at the root URL, with automatic directory index generation,
+       and which serves `index.html` as the root of a directory if present.
 
 ### Sample configuration
 
@@ -422,7 +424,6 @@ They communicate together through channels that are passed either via a closure 
  1. get data from pushshift.io
  1. replace blackfriday with snudown
  1. fix -useradd + -log
- 1. serve files from a directory from the root URL
  1. https support and auto renewal of certificates with letsencrypt
  1. wiki with discord authentication
  1. cleanup the config file

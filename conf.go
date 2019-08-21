@@ -152,6 +152,7 @@ type WebConf struct {
 	DirtyReads bool   `json:"dirty_reads"`
 	Listen     string `json:"listen"`
 	NbDBConn   uint   `json:"nb_db_conn"`
+	RootDir    string `json:"root_dir"`
 }
 
 // Configuration holds the configuration for the whole application.
