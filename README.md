@@ -109,6 +109,9 @@ The files can have any name that doesn't clash with the application's URLs.
 By default it generates an index of the root directory and any of its sub-directory,
 or serves `index.html` if it is present at their root.
 Therefore do not put anything sensitive in the root directory.
+If you want to use the application's style sheets, you can link to them without adding a version string.
+See the sample makefile for an example of the generation of a file that can be put in the application's
+root directory and take advantage of the application's style sheets.
 
 ### Running
 

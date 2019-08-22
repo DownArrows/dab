@@ -107,18 +107,21 @@ func (mux *ServeMux) ServeHTTP(baseWriter http.ResponseWriter, r *http.Request) 
 
 func immutableCache(wsrv *WebServer, handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if version := r.URL.Query().Get("version"); version != Version.String() {
-			msg := fmt.Sprintf("Current version is %q, file for version %q is unavailable.", Version, version)
-			wsrv.errMsg(w, r, msg, http.StatusNotFound)
-			return
-		}
+		requestedVersion := r.URL.Query().Get("version")
+		// leave the empty version as a special case for easy linking from a custom HTML file without the need to constantly update it
+		if requestedVersion != "" {
+			if requestedVersion != Version.String() {
+				msg := fmt.Sprintf("Current version is %q, file for version %q is unavailable.", Version, requestedVersion)
+				wsrv.errMsg(w, r, msg, http.StatusNotFound)
+				return
+			}
 
-		if r.Header.Get("If-Modified-Since") != "" {
-			w.WriteHeader(http.StatusNotModified)
-			return
+			if r.Header.Get("If-Modified-Since") != "" {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+			w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", HTTPCacheMaxAge))
 		}
-
-		w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", HTTPCacheMaxAge))
 
 		handler(w, r)
 	}

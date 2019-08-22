@@ -33,6 +33,19 @@ test:
 README.html: README.md
 	pandoc $< --self-contained -t html > $@
 
+# Comment out the previous definition and uncomment the following to generate a file
+# that can be put in the application's root directory and use its style sheet.
+# Caution, this can easily break if the HTML templates, the CSS style sheets,
+# or pandoc's output are changed.
+#README.html: README.md
+#	pandoc $< --self-contained -t html | \
+#	sed -e 's|<h1[^>]*>|<div id="title">|' \
+#		-e 's|</h1>|</div>|' \
+#		-e 's|h2\([^>]*\)>|h1\1>|' \
+#		-e 's|h3\([^>]*\)>|h2\1>|' \
+#		-e '/<\/title>/ a \  <link rel="stylesheet" href="/css/main"/>' \
+#	> $@
+
 release: dab LICENSE README.md
 	tar cJf dab.$(LAST_TAG).linux-amd64.tar.xz $^
 	hub push origin HEAD:master
