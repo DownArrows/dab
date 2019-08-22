@@ -13,6 +13,11 @@ import (
 	"sync"
 )
 
+var (
+	markdownExtensions = blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis
+	markdownOptions    = blackfriday.WithExtensions(blackfriday.Extensions(markdownExtensions))
+)
+
 // HTTPCacheMaxAge is the maxmimum cache age one can set in response to an HTTP request.
 const HTTPCacheMaxAge = 31536000
 
@@ -111,29 +116,35 @@ func immutableCache(handler func(http.ResponseWriter, *http.Request)) func(http.
 // WebServer serves the stored data as HTML pages and a backup of the database.
 type WebServer struct {
 	sync.Mutex
-	compendium      CompendiumFactory
-	conns           *SQLiteConnPool
-	dirtyReads      bool
-	done            chan error
-	markdownOptions blackfriday.Option
-	NbDBConn        uint
-	reports         ReportFactory
-	server          *http.Server
-	storage         WebServerStorage
+
+	// configuration
+	dirtyReads bool
+	nbDBConn   uint
+
+	// dependencies
+	compendium CompendiumFactory
+	conns      *SQLiteConnPool
+	reports    ReportFactory
+	server     *http.Server
+	storage    WebServerStorage
+
+	// other
+	done chan error
 }
 
 // NewWebServer creates a new WebServer.
 func NewWebServer(conf WebConf, storage WebServerStorage, reports ReportFactory, compendium CompendiumFactory) *WebServer {
-	mdExts := blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis
 
 	wsrv := &WebServer{
-		compendium:      compendium,
-		done:            make(chan error),
-		dirtyReads:      conf.DirtyReads,
-		markdownOptions: blackfriday.WithExtensions(blackfriday.Extensions(mdExts)),
-		NbDBConn:        conf.NbDBConn,
-		reports:         reports,
-		storage:         storage,
+		// configuration
+		dirtyReads: conf.DirtyReads,
+		nbDBConn:   conf.NbDBConn,
+		// dependencies
+		compendium: compendium,
+		reports:    reports,
+		storage:    storage,
+		// other
+		done: make(chan error),
 	}
 
 	mux := NewServeMux()
@@ -161,10 +172,10 @@ func (wsrv *WebServer) fatal(err error) {
 
 // Run runs the web server and blocks until it is cancelled or returns an error.
 func (wsrv *WebServer) Run(ctx context.Context) error {
-	wsrv.conns = NewSQLiteConnPool(ctx, wsrv.NbDBConn)
+	wsrv.conns = NewSQLiteConnPool(ctx, wsrv.nbDBConn)
 	defer wsrv.conns.Close()
 
-	for i := uint(0); i < wsrv.NbDBConn; i++ {
+	for i := uint(0); i < wsrv.nbDBConn; i++ {
 		conn, err := wsrv.storage.GetConn(ctx)
 		if err != nil {
 			return err
@@ -181,11 +192,7 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
-		err := wsrv.server.Shutdown(context.Background())
-		if err != nil {
-			fmt.Printf("shutdown err: %v", err)
-		}
-		return err
+		return wsrv.server.Shutdown(context.Background())
 	case err := <-wsrv.done:
 		if err == http.ErrServerClosed {
 			return nil
@@ -371,7 +378,7 @@ func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wsrv *WebServer) commentBodyConverter(src CommentView) (interface{}, error) {
-	html := blackfriday.Run([]byte(src.Body), wsrv.markdownOptions)
+	html := blackfriday.Run([]byte(src.Body), markdownOptions)
 	return template.HTML(html), nil
 }
 
