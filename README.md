@@ -381,7 +381,7 @@ This readme is written in markdown and is compatible with github-flavored markdo
 The main problem is coordinating multiple long-running goroutines with methods acting on shared state,
 while keeping coupling low and using injection of dependencies.
 The wiring up of the "layers" and "components" is done by `DownArrowsBot` in `dab.go`;
-this the data structure and methods you want to read if you want to understand the architecture.
+this is the data structure and methods you want to read if you want to understand the architecture.
 
 A "layer" is a data structure with a collection of methods that can be called from any goroutine at any time.
 That means they have to be thread-safe, and if at all possible, be passed by value rather by reference.
@@ -391,7 +391,7 @@ Where components communicate via channels, layers communicate via interfaces.
 
 A "component" is a data structure with one or several methods that are also "tasks" (see next paragraph).
 By extension, we call a component (or "main component") several components and layers related to the same topic (eg. communicating with Reddit),
-especially in the context of configuration where they all depend on the same set of settings.
+especially in the context of the configuration where they all depend on the same set of settings.
 
 We call a `Task` (see definition in `concurrency.go`) a function that can be managed by a `TaskGroup`.
 The goal of a task group is to launch a function as a goroutine with a [context](https://golang.org/pkg/context/)
