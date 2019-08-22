@@ -12,6 +12,7 @@ Table of contents:
  - [Administrator manual](#administrator-manual)
     - [Compiling](#compiling)
     - [Reddit and Discord credentials](#reddit-and-discord-credentials)
+    - [Serving custom files](#serving-custom-files)
     - [Running](#running)
     - [Maintenance](#maintenance)
     - [Command line interface](#command-line-interface)
@@ -31,6 +32,7 @@ Table of contents:
 Reports can be seen at `/reports/<year>/<week number>`, where the week number is an [ISO week number](https://en.wikipedia.org/wiki/ISO_week_date).
 The special addresses `/reports/current` and `/reports/lastweek` are also provided to redirect to the reports of the current and previous week.
 A compendium can be seen at `/compendium`, and per-user pages at `/compendium/<user name>`.
+At the root `/` can be seen a custom web page or file, if the administrator has configured it.
 
 ### Discord commands
 
@@ -100,6 +102,14 @@ On the redesign, also go in your account's settings, and in the "Privacy & Secur
 At the time of writing, this will redirect you to the old design.
 Once you got a client ID and a secret, put the account's username, its password, the client ID and the secret inside the configuration file.
 
+### Serving custom files
+
+The web server can serve any file under a directory configured by `server.root_dir`.
+The files can have any name that doesn't clash with the application's URLs.
+By default it generates an index of the root directory and any of its sub-directory,
+or serves `index.html` if it is present at their root.
+Therefore do not put anything sensitive in the root directory.
+
 ### Running
 
 To run the bot simply call the binary. It will expect a file named `dab.conf.json` in the current directory.
@@ -124,6 +134,8 @@ If you feel the need to be sure it is actually doing something, run it with `-lo
 The bot shuts down on the following UNIX signals: SIGINT, SIGTERM, and SIGKILL.
 On Windows it will not respond to Ctrl+C.
 If the bot hangs when you try to stop it, sending it once again a shutdown signal will force its shutdown.
+
+### Web
 
 ### Maintenance
 
