@@ -126,7 +126,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	dab.logger.Info(dab.components.ConfState)
 
 	if dab.components.ConfState.Web.Enabled {
-		dab.components.Web = NewWebServer(dab.conf.Web, dab.layers.Storage, dab.layers.Report, dab.layers.Compendium)
+		dab.components.Web = NewWebServer(dab.logger, dab.layers.Storage, dab.layers.Report, dab.layers.Compendium, dab.conf.Web)
 		tasks.SpawnCtx(dab.components.Web.Run)
 	}
 
