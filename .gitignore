@@ -1,6 +1,7 @@
 *.bak
 dab
 dab.conf.json
+static/
 dab.db
 dab.db.*
 Makefile

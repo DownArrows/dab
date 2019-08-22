@@ -1,33 +1,37 @@
 # GNU Makefile to develop DAB
 #
-# Assumes amd64 linux and that the following are installed:
-#  - coreutils
+# Assumes that the following are installed:
+#  - POSIX tools
 #  - git
 #  - hub (github's command line tool)
-#  - musl
 #  - pandoc
 #  - rsync
 #  - systemd (on remote host)
 #  - xz
 #  Feel free to adapt to your needs.
+#
 HOST = # user@your.server
 LAST_TAG = $$(git tag --list --sort="v:refname" | tail -1)
 ARCHIVE_URL = # URL where to get the up to date database
+TARBALL = dab-$(LAST_TAG)-$$(uname -s)-$$(uname -p).tar.xz
+STATIC_DIR = /srv/dab
 
 dab: *.go
-	CC=musl-gcc go build -tags netgo -ldflags '-linkmode external -extldflags "-s -static"'
-	sed -i "s/$$USER/$$(echo $$USER | sed 's/./x/g')/g" dab
+	go build
+#	Fully static builds if you have installed musl.
+#	CC=musl-gcc go build -tags netgo -ldflags '-linkmode external -extldflags "-s -static"'
+#	Anonymize the binary if the USER environment variable is set.
+#	sed -i "s/$$USER/$$(echo $$USER | sed 's/./x/g')/g" dab
 
-debug: dab
-	./dab -log Debug
+dab: *.go
 
 dab.db: dab.db.xz
-	unxz -k dab.db.xz
+	unxz -k $<
 
 dab.db.xz:
 	wget $(ARCHIVE_URL)
 
-test:
+test: *.go
 	go test -race -vet=all -timeout 5s github.com/DownArrows/dab
 
 README.html: README.md
@@ -46,15 +50,24 @@ README.html: README.md
 #		-e '/<\/title>/ a \  <link rel="stylesheet" href="/css/main"/>' \
 #	> $@
 
-release: dab LICENSE README.md
-	tar cJf dab.$(LAST_TAG).linux-amd64.tar.xz $^
+tarball: dab LICENSE README.md
+	tar cJf $(TARBALL) $^
+
+release: tarball
 	hub push origin HEAD:master
 	hub push origin HEAD:master --tags
-	hub release create $(LAST_TAG) -a dab.$(LAST_TAG).linux-amd64.tar.xz
+	hub release create $(TARBALL)
 
 deploy: dab
 	rsync -z --progress ./dab $(HOST):/usr/local/bin
 	ssh $(HOST) 'systemctl restart dab'
 
+# Uncomment if you want to upload static files if you've enabled web.root_dir.
+# You could add the modified README.html, and add this target to deploy.
+#static: static/*
+#	rsync -z --progress $^ $(HOST):$(ROOT_DIR)
+
 clean:
-	rm -f dab dab.*linux*tar.xz dab.db dab.db-shm dab.db-wal README.html dab.db.backup
+	rm -f dab $(TARBALL) dab.db dab.db-shm dab.db-wal README.html dab.db.backup
+
+.PHONY: dab.db
