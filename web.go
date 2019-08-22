@@ -177,19 +177,21 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 		wsrv.conns.Release(conn)
 	}
 
-	go func() {
-		wsrv.done <- wsrv.server.ListenAndServe()
-	}()
+	go func() { wsrv.done <- wsrv.server.ListenAndServe() }()
 
 	select {
 	case <-ctx.Done():
-		wsrv.server.Close()
-	case err := <-wsrv.done:
-		if err != http.ErrServerClosed {
-			return err
+		err := wsrv.server.Shutdown(context.Background())
+		if err != nil {
+			fmt.Printf("shutdown err: %v", err)
 		}
+		return err
+	case err := <-wsrv.done:
+		if err == http.ErrServerClosed {
+			return nil
+		}
+		return err
 	}
-	return nil
 }
 
 // CSS serves the style sheets.
