@@ -212,6 +212,10 @@ func (dab *DownArrowsBot) parseFlags(args []string) error {
 		return errors.New("no argument besides usernames when adding users is accepted")
 	}
 
+	if dab.runtimeConf.Report {
+		dab.logger.Info("the -report option has been superseded by the the web reports and is deprecated")
+	}
+
 	return nil
 }
 
