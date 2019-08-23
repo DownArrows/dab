@@ -52,7 +52,7 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 	<link rel="stylesheet" href="/css/reports?version={{.Version}}">
 </head>
 <body>
-<div id="title">Report of year {{.Year}} week {{.Week}}</div>
+<div id="title"><a href="/reports">Report of year {{.Year}} week {{.Week}}</a></div>
 
 <aside class="md-link"><a href="/reports/source/{{.Year}}/{{.Week}}">source</a></aside>
 
@@ -314,7 +314,7 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 	<link rel="stylesheet" href="/css/compendium?version={{.Version}}">
 </head>
 <body>
-<div id="title">Compendium</div>
+<div id="title"><a href="/">Compendium</a></div>
 
 {{- if (.Negative | len) gt 0}}
 <nav>

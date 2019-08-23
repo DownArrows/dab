@@ -217,7 +217,7 @@ func (wsrv *WebServer) CSS(w http.ResponseWriter, r *http.Request) {
 
 // ReportIndex serves the reports' index (unimplemented).
 func (wsrv *WebServer) ReportIndex(w http.ResponseWriter, r *http.Request) {
-	wsrv.errMsg(w, r, "Index of reports unimplemented.", http.StatusNotFound)
+	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
 
 // ReportSource serves the reports in markdown format according to the year and week in the URL.
