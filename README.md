@@ -47,6 +47,7 @@ If they accept Reddit usernames, they accept them as `AGreatUsername`, `/u/AGrea
  - `karma` give negative/positive/total karma for the given username
  - `purge` (privileged) completely remove from the database one or several users
  - `register` try to register a list of usernames; if it starts with the hiding prefix the user will be hidden from reports
+ - `reregister` (privileged) re-register one or several user that were previously unregistered
  - `sep` or `separator` or `=` post a separation rule
  - `sip` or `sipthebep` quote from sipthebep
  - `unhide` don't hide a user from reports
