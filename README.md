@@ -43,6 +43,7 @@ If they accept Reddit usernames, they accept them as `AGreatUsername`, `/u/AGrea
  - `ban` (privileged) ban the mentioned user with an optional reason
  - `hide` hide a user from reports
  - `info` information about a user: creation date, registration date, suspension or deletion status, inactive status
+ - `invite` (privileged) create an invite limited to a single use within a week
  - `karma` give negative/positive/total karma for the given username
  - `purge` (privileged) completely remove from the database one or several users
  - `register` try to register a list of usernames; if it starts with the hiding prefix the user will be hidden from reports

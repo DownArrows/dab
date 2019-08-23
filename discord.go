@@ -38,7 +38,11 @@ const (
 	DiscordDefaultRoleColor   = 0
 )
 
-const discordMessageDeletionWait = 15 * time.Second
+const (
+	discordMessageDeletionWait   = 15 * time.Second
+	discordInvitesMaxUses        = 1
+	discordInvitesDaysOfValidity = 7
+)
 
 var linkReactions = []string{
 	EmojiCrossBones, EmojiFire, EmojiGrowingHeart, EmojiHighVoltage,
@@ -611,6 +615,10 @@ func (bot *DiscordBot) getCommandsDescriptors() []DiscordCommand {
 		Callback:   bot.ban,
 		HasArgs:    true,
 		Privileged: true,
+	}, {
+		Command:    "invite",
+		Callback:   bot.invite,
+		Privileged: true,
 	}}
 }
 
@@ -817,6 +825,19 @@ func (bot *DiscordBot) ban(msg DiscordMessage) error {
 	}
 
 	return nil
+}
+
+func (bot *DiscordBot) invite(msg DiscordMessage) error {
+	settings := discordgo.Invite{
+		MaxAge:    discordInvitesDaysOfValidity,
+		Uses:      discordInvitesMaxUses,
+		Temporary: false,
+	}
+	invite, err := bot.client.ChannelInviteCreate(bot.channelsID.General, settings)
+	if err != nil {
+		return err
+	}
+	return bot.channelMessageSend(msg.ChannelID, fmt.Sprintf("https://discord.gg/%s", invite.Code))
 }
 
 // TrimUsername trims reddit user names so that the application is liberal in what it accepts.
