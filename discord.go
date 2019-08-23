@@ -830,7 +830,7 @@ func (bot *DiscordBot) ban(msg DiscordMessage) error {
 func (bot *DiscordBot) invite(msg DiscordMessage) error {
 	settings := discordgo.Invite{
 		MaxAge:    discordInvitesDaysOfValidity,
-		Uses:      discordInvitesMaxUses,
+		MaxUses:   discordInvitesMaxUses,
 		Temporary: false,
 	}
 	invite, err := bot.client.ChannelInviteCreate(bot.channelsID.General, settings)
