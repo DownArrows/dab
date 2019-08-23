@@ -105,28 +105,6 @@ func (mux *ServeMux) ServeHTTP(baseWriter http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func immutableCache(wsrv *WebServer, handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		requestedVersion := r.URL.Query().Get("version")
-		// leave the empty version as a special case for easy linking from a custom HTML file without the need to constantly update it
-		if requestedVersion != "" {
-			if requestedVersion != Version.String() {
-				msg := fmt.Sprintf("Current version is %q, file for version %q is unavailable.", Version, requestedVersion)
-				wsrv.errMsg(w, r, msg, http.StatusNotFound)
-				return
-			}
-
-			if r.Header.Get("If-Modified-Since") != "" {
-				w.WriteHeader(http.StatusNotModified)
-				return
-			}
-			w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", HTTPCacheMaxAge))
-		}
-
-		handler(w, r)
-	}
-}
-
 // WebServer serves the stored data as HTML pages and a backup of the database.
 type WebServer struct {
 	sync.Mutex
@@ -163,7 +141,7 @@ func NewWebServer(logger LevelLogger, storage WebServerStorage, reports ReportFa
 	}
 
 	mux := NewServeMux(wsrv.logger)
-	mux.HandleFunc("/css/", immutableCache(wsrv, wsrv.CSS))
+	mux.HandleFunc("/css/", wsrv.immutableCache(wsrv.CSS))
 	mux.HandleFunc("/reports", wsrv.ReportIndex)
 	mux.HandleFunc("/reports/", wsrv.Report)
 	mux.HandleFunc("/reports/current", wsrv.ReportCurrent)
@@ -420,6 +398,28 @@ func (wsrv *WebServer) commentBodyConverter(src CommentView) (interface{}, error
 
 func redirectToReport(week uint8, year int, w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/reports/%d/%d", year, week), http.StatusTemporaryRedirect)
+}
+
+func (wsrv *WebServer) immutableCache(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requestedVersion := r.URL.Query().Get("version")
+		// leave the empty version as a special case for easy linking from a custom HTML file without the need to constantly update it
+		if requestedVersion != "" {
+			if requestedVersion != Version.String() {
+				msg := fmt.Sprintf("Current version is %q, file for version %q is unavailable.", Version, requestedVersion)
+				wsrv.errMsg(w, r, msg, http.StatusNotFound)
+				return
+			}
+
+			if r.Header.Get("If-Modified-Since") != "" {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+			w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", HTTPCacheMaxAge))
+		}
+
+		handler(w, r)
+	}
 }
 
 func subPath(prefix string, r *http.Request) []string {
