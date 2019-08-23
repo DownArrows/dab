@@ -56,7 +56,7 @@ type DownArrowsBot struct {
 // Typically logOut will be stderr, and output stdout.
 func NewDownArrowsBot(logOut io.Writer, output io.Writer) *DownArrowsBot {
 	dab := &DownArrowsBot{
-		flagSet: flag.NewFlagSet("DownArrowsBot", flag.ExitOnError),
+		flagSet: flag.NewFlagSet("DownArrowsBot", flag.ContinueOnError),
 		stdOut:  output,
 	}
 	dab.logOut = logOut
@@ -68,6 +68,9 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	var err error
 
 	if err := dab.parseFlags(args); err != nil {
+		if err == flag.ErrHelp {
+			return nil
+		}
 		return err
 	}
 
@@ -201,12 +204,15 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 }
 
 func (dab *DownArrowsBot) parseFlags(args []string) error {
+	dab.flagSet.SetOutput(dab.stdOut)
 	dab.flagSet.StringVar(&dab.logLvl, "log", "Info", "Logging level ("+strings.Join(LevelLoggerLevels, ", ")+").")
 	dab.flagSet.StringVar(&dab.runtimeConf.ConfPath, "config", "./dab.conf.json", "Path to the configuration file.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.InitDB, "initdb", false, "Initialize the database and exit.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.Report, "report", false, "Print the report for the last week and exit.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.UserAdd, "useradd", false, "Add one or multiple usernames to be tracked and exit.")
-	dab.flagSet.Parse(args)
+	if err := dab.flagSet.Parse(args); err != nil {
+		return err
+	}
 
 	if !dab.runtimeConf.UserAdd && dab.flagSet.NArg() > 0 {
 		return errors.New("no argument besides usernames when adding users is accepted")
