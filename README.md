@@ -254,8 +254,8 @@ and <http://golang.localhost/pkg/text/template/>.
        - `interval` *duration* (*none*): interval between each scan of the target
  - `report`
     - `cutoff` *int* (-50): ignore comments whose score is higher than this
-    - `leeway` *duration* (12h): shift back the time window for comments' inclusion in the report
-      to include those that were made late; cannot be negative
+    - `leeway` *duration* (0h) **Deprecated**: shift back the time window for comments' inclusion in the report
+      to include those that were made late; cannot be negative. Deprecated due to lack of usefulness
     - `nb_top` *int* (5): maximum number of users to include in the list of statistics for the report
       (also used for the top in the compendium)
  - `web`

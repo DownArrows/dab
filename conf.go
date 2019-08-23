@@ -52,7 +52,6 @@ const Defaults string = `{
 
 	"report": {
 		"cutoff": -50,
-		"leeway": "12h",
 		"nb_top": 5
 	},
 
@@ -124,7 +123,7 @@ type CompendiumConf struct {
 // ReportConf describes the configuration for generating reports, which is propagated to the configuration of the compendium.
 type ReportConf struct {
 	CutOff   int64    `json:"cutoff"`
-	Leeway   Duration `json:"leeway"`
+	Leeway   Duration `json:"leeway"` // Deprecated
 	NbTop    uint     `json:"nb_top"`
 	Timezone Timezone `json:"-"`
 }
@@ -238,7 +237,7 @@ func (conf Configuration) HasSaneValues() error {
 		return errors.New("high-score threshold can't be positive")
 	} else if val := conf.Reddit.UnsuspensionInterval.Value; val != 0 && val < time.Minute {
 		return errors.New("interval between batches of checks of suspended and deleted users can't be less than a minute if non-zero")
-	} else if conf.Report.Leeway.Value < 0 {
+	} else if conf.Report.Leeway.Value < 0 { // Deprecated
 		return errors.New("reports' leeway can't be negative")
 	} else if conf.Report.CutOff > 0 {
 		return errors.New("reports' cut-off can't be higher than 0")
@@ -271,6 +270,10 @@ func (conf Configuration) Deprecations() []string {
 	emptyCompendiumConf := WatchCompendiumConf{}
 	if conf.Reddit.Compendium != emptyCompendiumConf {
 		msgs = append(msgs, "reddit.compendium is deprecated")
+	}
+
+	if conf.Report.Leeway.Value != 0 {
+		msgs = append(msgs, "report.leeway is deprecated")
 	}
 
 	return msgs
