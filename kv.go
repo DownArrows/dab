@@ -72,7 +72,7 @@ func (kv *KeyValueStore) Save(conn *SQLiteConn, key string, value string) error 
 
 // SaveMany saves several values associated with a single key.
 func (kv *KeyValueStore) SaveMany(conn *SQLiteConn, key string, values []string) error {
-	new := make(map[string]struct{})
+	todo := make(map[string]struct{})
 
 	err := conn.WithTx(func() error {
 		stmt, err := conn.Prepare(kv.insertQuery)
@@ -85,17 +85,17 @@ func (kv *KeyValueStore) SaveMany(conn *SQLiteConn, key string, values []string)
 		if _, hasKey := kv.store[key]; !hasKey {
 			for _, value := range values {
 				if _, hasValue := kv.store[key][value]; !hasValue {
-					new[value] = struct{}{}
+					todo[value] = struct{}{}
 				}
 			}
 		} else {
 			for _, value := range values {
-				new[value] = struct{}{}
+				todo[value] = struct{}{}
 			}
 		}
 		kv.RUnlock()
 
-		for value := range new {
+		for value := range todo {
 			if err := stmt.Exec(key, value, time.Now().Unix()); err != nil {
 				return err
 			}
@@ -113,9 +113,9 @@ func (kv *KeyValueStore) SaveMany(conn *SQLiteConn, key string, values []string)
 
 	kv.Lock()
 	if _, ok := kv.store[key]; !ok {
-		kv.store[key] = new
+		kv.store[key] = todo
 	} else {
-		for value := range new {
+		for value := range todo {
 			kv.store[key][value] = struct{}{}
 		}
 	}
