@@ -11,9 +11,9 @@
 #  Feel free to adapt to your needs.
 #
 HOST = # user@your.server
-LAST_TAG = $$(git tag --list --sort="v:refname" | tail -1)
+TAG = $$(git describe --tags)
 ARCHIVE_URL = # URL where to get the up to date database
-TARBALL = dab-$(LAST_TAG)-$$(uname -s)-$$(uname -p).tar.xz
+TARBALL = dab-$(TAG)-$$(uname -s)-$$(uname -p).tar.xz
 STATIC_DIR = /srv/dab
 
 dab: *.go
@@ -56,7 +56,7 @@ tarball: dab LICENSE README.md
 release: tarball
 	hub push origin HEAD:master
 	hub push origin HEAD:master --tags
-	hub release create $(TARBALL)
+	hub release create -a $(TARBALL) $(TAG)
 
 deploy: dab
 	rsync -z --progress ./dab $(HOST):/usr/local/bin
@@ -68,6 +68,6 @@ deploy: dab
 #	rsync -z --progress $^ $(HOST):$(ROOT_DIR)
 
 clean:
-	rm -f dab $(TARBALL) dab.db dab.db-shm dab.db-wal README.html dab.db.backup
+	rm -f dab dab-v*.tar.xz dab.db dab.db-shm dab.db-wal README.html dab.db.backup
 
 .PHONY: dab.db
