@@ -36,7 +36,7 @@ var StorageMigrations = []SQLiteMigration{
 			if err := conn.Exec("PRAGMA foreign_keys = OFF"); err != nil {
 				return err
 			}
-			err := conn.MultiExecWithTx([]SQLQuery{
+			return conn.MultiExecWithTx([]SQLQuery{
 				// The view "users" has a new column for compatibility with User.FromDB which needs all columns.
 				{SQL: "DROP VIEW users"},
 				// The new driver is sensitive to columns' order, so rebuild user_archive correctly.
@@ -62,13 +62,6 @@ var StorageMigrations = []SQLiteMigration{
 				{SQL: "ALTER TABLE new_user_archive RENAME TO user_archive"},
 				{SQL: "PRAGMA foreign_keys = ON"},
 			})
-			if err != nil {
-				return err
-			}
-			if err := conn.Exec("PRAGMA foreign_keys = ON"); err != nil {
-				return err
-			}
-			return nil
 		},
 	},
 }
