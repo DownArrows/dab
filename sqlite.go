@@ -101,7 +101,7 @@ func (db *SQLiteDatabase) GetConn(ctx context.Context) (*SQLiteConn, error) {
 
 func (db *SQLiteDatabase) getConnDefaultOptions() SQLiteConnOptions {
 	return SQLiteConnOptions{
-		RetryConf:   db.Retry,
+		Retry:       db.Retry,
 		ForeignKeys: true,
 		Path:        db.Path,
 		OpenOptions: SQLiteDefaultOpenOptions,
@@ -382,8 +382,8 @@ func (fkc *SQLiteForeignKeyCheck) Error() string {
 
 // SQLiteConnOptions describes the connection options for an SQLiteConn.
 type SQLiteConnOptions struct {
-	RetryConf
 	ForeignKeys bool
+	Retry       RetryConf
 	OpenOptions int
 	Path        string
 	Timeout     time.Duration
@@ -476,12 +476,12 @@ func (sc *SQLiteConn) Backup(srcName string, conn *SQLiteConn, destName string) 
 		return nil, err
 	}
 	backup := &SQLiteBackup{
-		RetryConf: sc.RetryConf,
-		backup:    sqltBackup,
-		ctx:       sc.ctx,
-		destPath:  conn.Path,
-		logger:    sc.logger,
-		srcPath:   sc.Path,
+		Retry:    sc.Retry,
+		backup:   sqltBackup,
+		ctx:      sc.ctx,
+		destPath: conn.Path,
+		logger:   sc.logger,
+		srcPath:  sc.Path,
 	}
 	return backup, nil
 }
@@ -496,10 +496,10 @@ func (sc *SQLiteConn) Prepare(sql string, args ...interface{}) (*SQLiteStmt, err
 		return err
 	})
 	stmt := &SQLiteStmt{
-		ctx:       sc.ctx,
-		logger:    sc.logger,
-		RetryConf: sc.RetryConf,
-		stmt:      sqltStmt,
+		ctx:    sc.ctx,
+		logger: sc.logger,
+		Retry:  sc.Retry,
+		stmt:   sqltStmt,
 	}
 	sc.logger.Debugf("prepared SQL statement %p with query |%v| and arguments %v for connection %p on %q: %+v", stmt, sql, args, sc, sc.Path, stmt)
 	return stmt, err
@@ -558,7 +558,7 @@ func (sc *SQLiteConn) MultiExecWithTx(queries []SQLQuery) error {
 
 func (sc *SQLiteConn) busy(count int) bool {
 	sc.logger.Infof("%p calling busy function with count %d", sc, count)
-	if sc.Times > -1 && count > sc.Times {
+	if sc.Retry.Times > -1 && count > sc.Retry.Times {
 		return false
 	}
 	// ignore its result because we don't want to trigger a busy error because of a cancellation,
@@ -568,7 +568,7 @@ func (sc *SQLiteConn) busy(count int) bool {
 }
 
 func (sc *SQLiteConn) retry(cb func() error) error {
-	return NewRetrier(sc.RetryConf, sc.logRetry).SetErrorFilter(isSQLiteBusyErr).Set(WithCtx(cb)).Task(sc.ctx)
+	return NewRetrier(sc.Retry, sc.logRetry).SetErrorFilter(isSQLiteBusyErr).Set(WithCtx(cb)).Task(sc.ctx)
 }
 
 func (sc *SQLiteConn) logRetry(r *Retrier, err error) {
@@ -577,7 +577,7 @@ func (sc *SQLiteConn) logRetry(r *Retrier, err error) {
 
 // SQLiteBackup is a wrapper for *sqlite.Backup with retries.
 type SQLiteBackup struct {
-	RetryConf
+	Retry    RetryConf
 	backup   *sqlite.Backup
 	ctx      context.Context
 	destPath string
@@ -593,7 +593,7 @@ func (b *SQLiteBackup) Close() error {
 // Step saves n pages; returns io.EOF when finished.
 func (b *SQLiteBackup) Step(n int) error {
 	cb := func() error { return b.backup.Step(n) }
-	return NewRetrier(b.RetryConf, b.logRetry).SetErrorFilter(isSQLiteBusyErr).Set(WithCtx(cb)).Task(b.ctx)
+	return NewRetrier(b.Retry, b.logRetry).SetErrorFilter(isSQLiteBusyErr).Set(WithCtx(cb)).Task(b.ctx)
 }
 
 func (b *SQLiteBackup) logRetry(r *Retrier, err error) {
@@ -604,7 +604,7 @@ func (b *SQLiteBackup) logRetry(r *Retrier, err error) {
 
 // SQLiteStmt is a wrapper for sqlite.Stmt that supports automatic retry with busy errors.
 type SQLiteStmt struct {
-	RetryConf
+	Retry  RetryConf
 	ctx    context.Context
 	logger LevelLogger
 	stmt   *sqlite.Stmt
@@ -700,7 +700,7 @@ func (stmt *SQLiteStmt) Scan(cb func(*SQLiteStmt) error) error {
 }
 
 func (stmt *SQLiteStmt) retry(cb func() error) error {
-	return NewRetrier(stmt.RetryConf, stmt.logRetry).SetErrorFilter(isSQLiteBusyErr).Set(WithCtx(cb)).Task(stmt.ctx)
+	return NewRetrier(stmt.Retry, stmt.logRetry).SetErrorFilter(isSQLiteBusyErr).Set(WithCtx(cb)).Task(stmt.ctx)
 }
 
 func (stmt *SQLiteStmt) logRetry(r *Retrier, err error) {

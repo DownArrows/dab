@@ -108,36 +108,25 @@ func (mux *ServeMux) ServeHTTP(baseWriter http.ResponseWriter, r *http.Request) 
 // WebServer serves the stored data as HTML pages and a backup of the database.
 type WebServer struct {
 	sync.Mutex
-
-	// configuration
-	dirtyReads bool
-	nbDBConn   uint
-
-	// dependencies
+	WebConf
 	compendium CompendiumFactory
 	conns      *SQLiteConnPool
+	done       chan error
 	logger     LevelLogger
 	reports    ReportFactory
 	server     *http.Server
 	storage    WebServerStorage
-
-	// other
-	done chan error
 }
 
 // NewWebServer creates a new WebServer.
 func NewWebServer(logger LevelLogger, storage WebServerStorage, reports ReportFactory, compendium CompendiumFactory, conf WebConf) *WebServer {
 	wsrv := &WebServer{
-		// configuration
-		dirtyReads: conf.DirtyReads,
-		nbDBConn:   conf.NbDBConn,
-		// dependencies
+		WebConf:    conf,
 		compendium: compendium,
+		done:       make(chan error),
 		logger:     logger,
 		reports:    reports,
 		storage:    storage,
-		// other
-		done: make(chan error),
 	}
 
 	mux := NewServeMux(wsrv.logger)
@@ -151,8 +140,8 @@ func NewWebServer(logger LevelLogger, storage WebServerStorage, reports ReportFa
 	mux.HandleFunc("/compendium/user/", wsrv.CompendiumUser)
 	mux.HandleFunc("/backup", wsrv.Backup)
 	if conf.RootDir != "" {
-		wsrv.logger.Infof("web server serving the directory %q", conf.RootDir)
-		mux.Handle("/", http.FileServer(http.Dir(conf.RootDir)))
+		wsrv.logger.Infof("web server serving the directory %q", wsrv.RootDir)
+		mux.Handle("/", http.FileServer(http.Dir(wsrv.RootDir)))
 	}
 
 	wsrv.server = &http.Server{Addr: conf.Listen, Handler: mux}
@@ -162,19 +151,19 @@ func NewWebServer(logger LevelLogger, storage WebServerStorage, reports ReportFa
 
 // Run runs the web server and blocks until it is cancelled or returns an error.
 func (wsrv *WebServer) Run(ctx context.Context) error {
-	wsrv.conns = NewSQLiteConnPool(ctx, wsrv.nbDBConn)
+	wsrv.conns = NewSQLiteConnPool(ctx, wsrv.NbDBConn)
 	defer wsrv.conns.Close()
 
-	if wsrv.dirtyReads {
+	if wsrv.DirtyReads {
 		wsrv.logger.Info("web server's dirty reads of the database enabled")
 	}
 
-	for i := uint(0); i < wsrv.nbDBConn; i++ {
+	for i := uint(0); i < wsrv.NbDBConn; i++ {
 		conn, err := wsrv.storage.GetConn(ctx)
 		if err != nil {
 			return err
 		}
-		if wsrv.dirtyReads {
+		if wsrv.DirtyReads {
 			if err := conn.ReadUncommitted(true); err != nil {
 				return err
 			}
