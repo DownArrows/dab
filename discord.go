@@ -576,6 +576,11 @@ func (bot *DiscordBot) getCommandsDescriptors() []DiscordCommand {
 		HasArgs:    true,
 		Privileged: true,
 	}, {
+		Command:    "reregister",
+		Callback:   bot.editUsers("reregister", bot.storage.UnDelUser),
+		HasArgs:    true,
+		Privileged: true,
+	}, {
 		Command:    "purge",
 		Callback:   bot.editUsers("purge", bot.storage.PurgeUser),
 		HasArgs:    true,

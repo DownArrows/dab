@@ -36,6 +36,7 @@ type RedditUsersStorage interface {
 type DiscordBotStorage interface {
 	GetConn
 	DelUser(*SQLiteConn, string) error
+	UnDelUser(*SQLiteConn, string) error
 	PurgeUser(*SQLiteConn, string) error
 	HideUser(*SQLiteConn, string) error
 	UnHideUser(*SQLiteConn, string) error
@@ -265,6 +266,11 @@ func (s *Storage) AddUser(conn *SQLiteConn, username string, hidden bool, create
 // DelUser deletes a User that has the case-insensitive username.
 func (s *Storage) DelUser(conn *SQLiteConn, username string) error {
 	return s.simpleEditUser(conn, "UPDATE user_archive SET deleted = TRUE WHERE name = ? COLLATE NOCASE", username)
+}
+
+// UnDelUser undeletes a User that has the case-insensitive username.
+func (s *Storage) UnDelUser(conn *SQLiteConn, username string) error {
+	return s.simpleEditUser(conn, "UPDATE user_archive SET deleted = FALSE WHERE name = ? COLLATE NOCASE", username)
 }
 
 // HideUser hides a User that has the case-insensitive username.
