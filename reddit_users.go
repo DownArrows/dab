@@ -48,8 +48,7 @@ func (ru *RedditUsers) Add(ctx context.Context, conn *SQLiteConn, username strin
 	if query.Error != nil {
 		return query
 	} else if query.Exists {
-		query.Error = fmt.Errorf("%q already exists", username)
-		ru.logger.Error(query.Error)
+		query.Error = fmt.Errorf("user %q already exists", username)
 		return query
 	}
 

@@ -288,7 +288,9 @@ func (dab *DownArrowsBot) userAdd(ctx context.Context) error {
 		if res := ru.Add(ctx, conn, username, hidden, true); res.Error != nil {
 			dab.logger.Errorf("error when trying to register %q: %v", username, res.Error)
 		} else if !res.Exists {
-			dab.logger.Errorf("reddit user %q doesn't exist", username)
+			dab.logger.Errorf("user %q not found on Reddit", username)
+		} else {
+			dab.logger.Infof("successfully registered user %q", res.User.Name)
 		}
 	}
 	return nil
