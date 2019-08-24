@@ -106,7 +106,7 @@ Once you got a client ID and a secret, put the account's username, its password,
 
 ### Serving custom files
 
-The web server can serve any file under a directory configured by `server.root_dir`.
+The web server can serve any file under a directory configured by `web.root_dir`.
 The files can have any name that doesn't clash with the application's URLs.
 By default it generates an index of the root directory and any of its sub-directory,
 or serves `index.html` if it is present at their root.
