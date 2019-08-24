@@ -184,9 +184,9 @@ and each option follows the pattern `<option's key> <type> (<default>): <explana
 All keys *must* be in lower case.
 
 There are three application-specific types, which are JSON strings interpreted according to Go functions:
-[timezone](http://golang.localhost/pkg/time/#LoadLocation),
-[duration](http://golang.localhost/pkg/time/#ParseDuration),
-and [template](http://golang.localhost/pkg/text/template/).
+[timezone](http://golang.org/pkg/time/#LoadLocation),
+[duration](http://golang.org/pkg/time/#ParseDuration),
+and [template](http://golang.org/pkg/text/template/).
 
  - `hide_prefix` *string* (hide/): prefix you can add to user names to hide them from reports (used by `-useradd` and on Discord)
  - `timezone` *timezone* (UTC): timezone used to format dates and compute weeks and years
