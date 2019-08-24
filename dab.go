@@ -218,6 +218,10 @@ func (dab *DownArrowsBot) parseFlags(args []string) error {
 		return err
 	}
 
+	if dab.flagSet.NArg() > 0 {
+		return errors.New("the application doesn't take any argument other than those given to its options as single strings")
+	}
+
 	if dab.runtimeConf.Report {
 		dab.logger.Info("the -report option has been superseded by the the web reports and is deprecated")
 	}
