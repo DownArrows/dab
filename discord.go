@@ -44,10 +44,14 @@ const (
 	discordInvitesDaysOfValidity = 7
 )
 
-var linkReactions = []string{
-	EmojiCrossBones, EmojiFire, EmojiGrowingHeart, EmojiHighVoltage,
-	EmojiOkHand, EmojiOneHundred, EmojiThumbUp, EmojiWhiteFlower,
-}
+var (
+	matchRedditLink     = regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`)
+	matchDiscordMention = regexp.MustCompile(`<@([0-9]{1,21})>`)
+	linkReactions       = []string{
+		EmojiCrossBones, EmojiFire, EmojiGrowingHeart, EmojiHighVoltage,
+		EmojiOkHand, EmojiOneHundred, EmojiThumbUp, EmojiWhiteFlower,
+	}
+)
 
 // DiscordMessage exists because discordgo's data structures aren't well adapted to our needs,
 // and typing "*discordgo.<DataStructure>" all the time gets tiring.
@@ -204,10 +208,8 @@ type DiscordBot struct {
 	welcome        *template.Template
 
 	// miscellaneous
-	commands   []DiscordCommand
-	done       chan error
-	redditLink *regexp.Regexp
-	mention    *regexp.Regexp
+	commands []DiscordCommand
+	done     chan error
 }
 
 // NewDiscordBot returns a new DiscordBot.
@@ -242,9 +244,7 @@ func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, addUser AddRed
 		timezone:       conf.Timezone.Value,
 		welcome:        welcome,
 
-		done:       make(chan error),
-		redditLink: regexp.MustCompile(`(?s:.*reddit\.com/r/\w+/comments/.*)`),
-		mention:    regexp.MustCompile(`<@([0-9]{1,21})>`),
+		done: make(chan error),
 	}
 
 	bot.commands = bot.getCommandsDescriptors()
@@ -535,7 +535,7 @@ func (bot *DiscordBot) command(msg DiscordMessage) error {
 
 func (bot *DiscordBot) isLoggableRedditLink(msg DiscordMessage) bool {
 	return (msg.ChannelID == bot.channelsID.General && // won't be true if General is not set (ie left empty)
-		bot.redditLink.MatchString(msg.Content) &&
+		matchRedditLink.MatchString(msg.Content) &&
 		!strings.Contains(strings.ToLower(msg.Content), bot.noLog))
 }
 
@@ -804,7 +804,7 @@ func (bot *DiscordBot) ban(msg DiscordMessage) error {
 		}
 	}
 
-	matches := bot.mention.FindStringSubmatch(msg.Args[0])
+	matches := matchDiscordMention.FindStringSubmatch(msg.Args[0])
 	if len(matches) == 0 {
 		if err := bot.channelErrorSend(msg.ChannelID, msg.Author.ID, "Invalid user mention."); err != nil {
 			return err

@@ -22,6 +22,9 @@ const (
 	RedditAPIRequestWait   = time.Second
 )
 
+// MatchValidRedditUsername checks if a string is a valid username on Reddit.
+var MatchValidRedditUsername = regexp.MustCompile("^[[:word:]-]+$")
+
 // RedditScannerAPI provides methods for RedditScanner to interact with Reddit.
 type RedditScannerAPI interface {
 	UserComments(context.Context, User, uint) ([]Comment, User, error)
@@ -201,12 +204,9 @@ func (ra *RedditAPI) UserComments(ctx context.Context, user User, nb uint) ([]Co
 // It returns an error without making a request if username contains characters that are forbidden by Reddit.
 func (ra *RedditAPI) AboutUser(ctx context.Context, username string) UserQuery {
 	query := UserQuery{User: User{Name: username}}
-	sane, err := regexp.MatchString(`^[[:word:]-]+$`, username)
-	if err != nil {
-		query.Error = err
-		return query
-	} else if !sane {
-		query.Error = fmt.Errorf("username %s contains forbidden characters or is empty", username)
+
+	if !MatchValidRedditUsername.MatchString(username) {
+		query.Error = fmt.Errorf("user name %q is an invalid Reddit user name", username)
 		return query
 	}
 
