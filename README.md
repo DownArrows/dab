@@ -175,7 +175,7 @@ The command line interface only affects the overall behavior of the program:
  - `-initdb` Initialize the database and exit.
  - `-log` Logging level (`Error`, `Info`, `Debug`). Defaults to `Info`.
  - `-report` Print the report for last week on the standard output and exit.
- - `-useradd` Add one or multiple usernames to be tracked and exit.
+ - `-useradd` Add one or multiple usernames separated by a white space or a comma to be tracked and exit.
 
 ### Configuration
 
@@ -440,7 +440,6 @@ They communicate together through channels that are passed either via a closure 
  1. ability to use multiple reddit accounts and proxies
  1. get data from pushshift.io
  1. replace blackfriday with snudown
- 1. fix -useradd + -log
  1. https support and auto renewal of certificates with letsencrypt
  1. wiki with discord authentication
  1. cleanup the config file

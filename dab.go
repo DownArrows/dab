@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"regexp"
 	"strings"
 	"text/template"
 )
@@ -14,6 +15,8 @@ var Version = SemVer{1, 16, 0}
 
 // DefaultChannelSize is the size of the channels that are used throughout of the application, unless there's a need for a specific size.
 const DefaultChannelSize = 100
+
+var userAddSeparators = regexp.MustCompile("[ ,]")
 
 // DownArrowsBot and its methods contain very little logic.
 // All it does is pass dependencies around and connect components
@@ -30,7 +33,7 @@ type DownArrowsBot struct {
 		ConfPath string
 		InitDB   bool
 		Report   bool
-		UserAdd  bool
+		UserAdd  string
 	}
 
 	conf Configuration
@@ -115,7 +118,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return dab.report(ctx)
 	}
 
-	if dab.runtimeConf.UserAdd {
+	if dab.runtimeConf.UserAdd != "" {
 		if !dab.components.ConfState.Reddit.Enabled {
 			return dab.components.ConfState.Reddit.Error
 		}
@@ -209,13 +212,10 @@ func (dab *DownArrowsBot) parseFlags(args []string) error {
 	dab.flagSet.StringVar(&dab.runtimeConf.ConfPath, "config", "./dab.conf.json", "Path to the configuration file.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.InitDB, "initdb", false, "Initialize the database and exit.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.Report, "report", false, "Print the report for the last week and exit.")
-	dab.flagSet.BoolVar(&dab.runtimeConf.UserAdd, "useradd", false, "Add one or multiple usernames to be tracked and exit.")
+	dab.flagSet.StringVar(&dab.runtimeConf.UserAdd, "useradd", "",
+		"Add one or multiple usernames separated by a white space or a comma to be tracked and exit.")
 	if err := dab.flagSet.Parse(args); err != nil {
 		return err
-	}
-
-	if !dab.runtimeConf.UserAdd && dab.flagSet.NArg() > 0 {
-		return errors.New("no argument besides usernames when adding users is accepted")
 	}
 
 	if dab.runtimeConf.Report {
@@ -277,7 +277,7 @@ func (dab *DownArrowsBot) userAdd(ctx context.Context) error {
 	}
 	defer conn.Close()
 
-	usernames := dab.flagSet.Args()
+	usernames := userAddSeparators.Split(dab.runtimeConf.UserAdd, -1)
 	for _, username := range usernames {
 		hidden := strings.HasPrefix(username, dab.conf.HidePrefix)
 		username = strings.TrimPrefix(username, dab.conf.HidePrefix)
