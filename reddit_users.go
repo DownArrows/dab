@@ -117,6 +117,9 @@ func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
 			ru.logger.Debugf("unsuspensions/undeletions watcher found about user %+v data from Reddit %+v", user, res)
 
 			if err := conn.WithTx(func() error { return ru.updateRedditUserStatus(conn, user, res) }); err != nil {
+				if IsSQLiteForeignKeyErr(err) { // indicates that the user has been purged
+					continue
+				}
 				return err
 			}
 
