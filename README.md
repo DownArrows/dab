@@ -434,7 +434,7 @@ They communicate together through channels that are passed either via a closure 
 
  1. post reports on a subreddit and keep them up to date for a little while
  1. database corrections from DTB's
- 1. better browsability of the web reports
+ 1. links previous/next in the web reports, and reports index
  1. backup discord messages
  1. ability to use multiple reddit accounts and proxies
  1. get data from pushshift.io
@@ -442,4 +442,3 @@ They communicate together through channels that are passed either via a closure 
  1. https support and auto renewal of certificates with letsencrypt
  1. wiki with discord authentication
  1. cleanup the config file
- 1. deprecate useless command line options
