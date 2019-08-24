@@ -183,10 +183,10 @@ The list below shows every option, where a sub-list corresponds to a dictionary,
 and each option follows the pattern `<option's key> <type> (<default>): <explanation>`.
 All keys *must* be in lower case.
 
-There are three application-specific types: timezone, duration, and templates.
-They are JSON strings validated and interpreted respectively according to
-<http://golang.localhost/pkg/time/#ParseDuration>, <http://golang.localhost/pkg/time/#LoadLocation>,
-and <http://golang.localhost/pkg/text/template/>.
+There are three application-specific types, which are JSON strings interpreted according to Go functions:
+[timezone](http://golang.localhost/pkg/time/#LoadLocation),
+[duration](http://golang.localhost/pkg/time/#ParseDuration),
+and [template](http://golang.localhost/pkg/text/template/).
 
  - `hide_prefix` *string* (hide/): prefix you can add to usernames to hide them from reports (used by `-useradd` and on Discord)
  - `timezone` *timezone* (UTC): timezone used to format dates and compute weeks and years
