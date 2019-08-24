@@ -211,7 +211,7 @@ func (dab *DownArrowsBot) parseFlags(args []string) error {
 	dab.flagSet.StringVar(&dab.logLvl, "log", "Info", "Logging level ("+strings.Join(LevelLoggerLevels, ", ")+").")
 	dab.flagSet.StringVar(&dab.runtimeConf.ConfPath, "config", "./dab.conf.json", "Path to the configuration file.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.InitDB, "initdb", false, "Initialize the database and exit.")
-	dab.flagSet.BoolVar(&dab.runtimeConf.Report, "report", false, "Print the report for the last week and exit.")
+	dab.flagSet.BoolVar(&dab.runtimeConf.Report, "report", false, "Print the report for the last week and exit (deprecated).")
 	dab.flagSet.StringVar(&dab.runtimeConf.UserAdd, "useradd", "",
 		"Add one or multiple usernames separated by a white space or a comma to be tracked and exit.")
 	if err := dab.flagSet.Parse(args); err != nil {
