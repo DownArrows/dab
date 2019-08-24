@@ -654,20 +654,28 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 
 		hidden := strings.HasPrefix(name, bot.hidePrefix)
 		name = TrimUsername(strings.TrimPrefix(name, bot.hidePrefix))
-
 		bot.conn.Lock()
 		reply := bot.addUser(bot.ctx, bot.conn, name, hidden, false)
 		bot.conn.Unlock()
 
+		var embedName string
+		if hidden {
+			embedName = fmt.Sprintf("%s (hidden)", reply.User.Name)
+		} else {
+			embedName = reply.User.Name
+		}
+
+		var embedValue string
 		if IsCancellation(reply.Error) {
 			continue
 		} else if reply.Error != nil {
-			status.AddField(DiscordEmbedField{Name: reply.User.Name, Value: fmt.Sprintf("%s %s", EmojiCrossMark, reply.Error)})
+			embedValue = fmt.Sprintf("%s %s", EmojiCrossMark, reply.Error)
 		} else if !reply.Exists {
-			status.AddField(DiscordEmbedField{Name: reply.User.Name, Value: EmojiCrossMark + " not found"})
+			embedValue = EmojiCrossMark + " not found"
 		} else {
-			status.AddField(DiscordEmbedField{Name: reply.User.Name, Value: EmojiCheckMark})
+			embedValue = EmojiCheckMark
 		}
+		status.AddField(DiscordEmbedField{Name: embedName, Value: embedValue})
 	}
 
 	return bot.channelEmbedSend(msg.ChannelID, status)
