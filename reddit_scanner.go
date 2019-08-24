@@ -166,7 +166,10 @@ OUTER:
 			// current loop.
 			user, err = rs.storage.SaveCommentsUpdateUser(conn, comments, user, lastScan+rs.maxAge)
 			if err != nil {
-				// TODO might be triggered after a purge due to a foreign key constraint failure
+				if IsSQLiteForeignKeyErr(err) { // triggered after a PurgeUser
+					rs.logger.Debugf("saving the comments of %q resulted in a foreign key constraint error, skipping", user.Name)
+					continue OUTER
+				}
 				return err
 			}
 			rs.logger.Debugf("after scanner's user update: %+v", user)

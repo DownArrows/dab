@@ -761,6 +761,15 @@ func (pool *SQLiteConnPool) Close() error {
 	return errs.ToError()
 }
 
+// IsSQLiteForeignKeyErr tests if the error is an error with a foreign key constraint.
+func IsSQLiteForeignKeyErr(err error) bool {
+	sqliteErr, ok := err.(*sqlite.Error)
+	if !ok || sqliteErr == nil {
+		return false
+	}
+	return sqliteErr.Code() == sqlite.CONSTRAINT_FOREIGNKEY
+}
+
 func isSQLiteBusyErr(err error) bool {
 	sqliteErr, ok := err.(*sqlite.Error)
 	if !ok || sqliteErr == nil {
