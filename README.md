@@ -174,7 +174,7 @@ The command line interface only affects the overall behavior of the program:
  - `-initdb` Initialize the database and exit.
  - `-log` Logging level (`Error`, `Info`, `Debug`). Defaults to `Info`.
  - `-report` Print the report for last week on the standard output and exit.
- - `-useradd` Add one or multiple usernames separated by a white space or a comma to be tracked and exit.
+ - `-useradd` (deprecated) Add one or multiple usernames separated by a white space or a comma to be tracked and exit.
 
 ### Configuration
 
