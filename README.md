@@ -138,7 +138,6 @@ If you feel the need to be sure it is actually doing something, run it with `-lo
 
 The bot shuts down on the following UNIX signals: SIGINT, SIGTERM, and SIGKILL.
 On Windows it will not respond to Ctrl+C.
-If the bot hangs when you try to stop it, sending it once again a shutdown signal will force its shutdown.
 
 ### Web
 

@@ -28,12 +28,7 @@ func main() {
 		cancel()
 	case <-sig:
 		cancel()
-		select {
-		case err = <-done:
-			break
-		case s := <-sig:
-			err = fmt.Errorf("forced shutdown with signal %s", s)
-		}
+		err = <-done
 	}
 
 	if err != nil && !IsCancellation(err) {
