@@ -38,15 +38,15 @@ At the root `/` can be seen a custom web page or file, if the administrator has 
 
 Commands must start with the configured prefix (defaults to `!`), and if they take arguments, must be separated from them by a single white space.
 Some are reserved to privileged users (the server's owner and a specific role).
-If they accept Reddit usernames, they accept them as `AGreatUsername`, `/u/AGreatUsername`, and `u/AGreatUsername`.
+If they accept Reddit user names, they accept them as `AGreatUsername`, `/u/AGreatUsername`, and `u/AGreatUsername`.
 
  - `ban` (privileged) ban the mentioned user with an optional reason
  - `hide` hide a user from reports
  - `info` information about a user: creation date, registration date, suspension or deletion status, inactive status
  - `invite` (privileged) create an invite limited to a single use within a week
- - `karma` give negative/positive/total karma for the given username
+ - `karma` give negative/positive/total karma for the given user name
  - `purge` (privileged) completely remove from the database one or several users
- - `register` try to register a list of usernames; if it starts with the hiding prefix the user will be hidden from reports
+ - `register` try to register a list of user names; if it starts with the hiding prefix the user will be hidden from reports
  - `reregister` (privileged) re-register one or several user that were previously unregistered
  - `sep` or `separator` or `=` post a separation rule
  - `sip` or `sipthebep` quote from sipthebep
@@ -102,7 +102,7 @@ On the old design, go in the account's preferences, tab "apps" and click on "are
 and select the "script" option. If it whines about not having an URL, give it `http://example.org/`, it won't matter.
 On the redesign, also go in your account's settings, and in the "Privacy & Security" tab go on "App authorization".
 At the time of writing, this will redirect you to the old design.
-Once you got a client ID and a secret, put the account's username, its password, the client ID and the secret inside the configuration file.
+Once you got a client ID and a secret, put the account's user name, its password, the client ID and the secret inside the configuration file.
 
 ### Serving custom files
 
@@ -174,7 +174,7 @@ The command line interface only affects the overall behavior of the program:
  - `-initdb` Initialize the database and exit.
  - `-log` Logging level (`Error`, `Info`, `Debug`). Defaults to `Info`.
  - `-report` Print the report for last week on the standard output and exit.
- - `-useradd` (deprecated) Add one or multiple usernames separated by a white space or a comma to be tracked and exit.
+ - `-useradd` (deprecated) Add one or multiple user names separated by a white space or a comma to be tracked and exit.
 
 ### Configuration
 
@@ -188,7 +188,7 @@ There are three application-specific types, which are JSON strings interpreted a
 [duration](http://golang.localhost/pkg/time/#ParseDuration),
 and [template](http://golang.localhost/pkg/text/template/).
 
- - `hide_prefix` *string* (hide/): prefix you can add to usernames to hide them from reports (used by `-useradd` and on Discord)
+ - `hide_prefix` *string* (hide/): prefix you can add to user names to hide them from reports (used by `-useradd` and on Discord)
  - `timezone` *timezone* (UTC): timezone used to format dates and compute weeks and years
  - `database`
     - `backup_max_age` *duration* (24h): if the backup is older than that when a backup is requested,
@@ -248,9 +248,9 @@ and [template](http://golang.localhost/pkg/text/template/).
     - `unsuspension_interval` *duration* (*none*): interval between each batch of checks for suspended or deleted users;
       leave out to disable, else must be at least one minute
     - `user_agent` *template* (*none*): user agent of the bot on reddit; `OS` and `Version` are provided; leave out to disable the Reddit component
-    - `username` *string* (*none*): Reddit username for the bot's account; leave out to disable the Reddit component
+    - `username` *string* (*none*): Reddit user name for the bot's account; leave out to disable the Reddit component
     - `watch_submissions` *array of dictionaries* **Deprecated**:
-       - `target` *string* (*none*): a username whose submissions will be watched, or a sub;
+       - `target` *string* (*none*): a user name whose submissions will be watched, or a sub;
           a username must start with `/u/`, and a sub with `/r/`
        - `interval` *duration* (*none*): interval between each scan of the target
  - `report`
