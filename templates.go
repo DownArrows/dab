@@ -148,6 +148,8 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 		<p class="suspended"><strong>Account suspended</strong></p>
 	{{else if .User.NotFound -}}
 		<p><strong>Account deleted</strong></p>
+	{{else if .User.New -}}
+		<p><em>Not fully scanned yet.</em></p>
 	{{end -}}
 	<table>
 		<tr>
