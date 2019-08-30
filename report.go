@@ -122,8 +122,13 @@ type Report struct {
 
 // Head returns a data structure that describes a summary of the Report.
 func (r Report) Head() ReportHead {
+	var total int64
+	for _, stats := range r.Stats {
+		total += stats.Delta
+	}
 	return ReportHead{
 		Number:  len(r.rawComments),
+		Total:   total,
 		Average: r.Stats.AveragesToSummaries().Sort().Limit(r.MaxStatsSummaries),
 		Delta:   r.Stats.DeltasToSummaries().Sort().Limit(r.MaxStatsSummaries),
 		Start:   r.Start,
@@ -155,6 +160,7 @@ func (r Report) Len() int {
 // ReportHead describes a summary of a Report suitable for a use in a template.
 type ReportHead struct {
 	Number  int            // Number of comments in the report
+	Total   int64          // Total karma loss
 	Average StatsSummaries // List of users with the lowest average karma
 	Delta   StatsSummaries // List of users with the biggest loss of karma
 	Start   time.Time      // Sart date of the report

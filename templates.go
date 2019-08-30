@@ -59,7 +59,8 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 <article>
 <h1>Summary</h1>
 {{- with .Head}}
-	<p>{{.Number}} comments under {{.CutOff}} from {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}</p>
+	<p>From {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}.</p>
+	<p>{{.Number}} comments under {{.CutOff}} adding up to {{.Total}} collective negative karma change.</p>
 
 	<h2>Top {{.Delta | len}} total negative karma change for this week</h2>
 	<ol>
