@@ -48,7 +48,7 @@ type DiscordBotStorage interface {
 type ReportFactoryStorage interface {
 	GetConn
 	GetCommentsBelowBetween(*SQLiteConn, int64, time.Time, time.Time) ([]Comment, error)
-	StatsBetween(*SQLiteConn, int64, time.Time, time.Time) (UserStatsMap, error)
+	StatsBetween(*SQLiteConn, int64, time.Time, time.Time) (StatsCollection, error)
 }
 
 // WebServerStorage is the storage interface for the WebServer.
@@ -62,15 +62,15 @@ type WebServerStorage interface {
 type CompendiumStorage interface {
 	GetConn
 	// Index
-	CompendiumPerUser(*SQLiteConn) ([]*CompendiumDetailsTagged, error)
-	CompendiumPerUserNegative(*SQLiteConn) ([]*CompendiumDetailsTagged, error)
+	CompendiumPerUser(*SQLiteConn) (StatsCollection, error)
+	CompendiumPerUserNegative(*SQLiteConn) (StatsCollection, error)
 	ListRegisteredUsers(*SQLiteConn) ([]User, error)
 	TopComments(*SQLiteConn, uint) ([]Comment, error)
 	// User pages
-	CompendiumUserPerSub(*SQLiteConn, string) ([]*CompendiumDetailsTagged, error)
-	CompendiumUserPerSubNegative(*SQLiteConn, string) ([]*CompendiumDetailsTagged, error)
-	CompendiumUserSummary(*SQLiteConn, string) (*CompendiumDetails, error)
-	CompendiumUserSummaryNegative(*SQLiteConn, string) (*CompendiumDetails, error)
+	CompendiumUserPerSub(*SQLiteConn, string) (StatsCollection, error)
+	CompendiumUserPerSubNegative(*SQLiteConn, string) (StatsCollection, error)
+	CompendiumUserSummary(*SQLiteConn, string) (Stats, error)
+	CompendiumUserSummaryNegative(*SQLiteConn, string) (Stats, error)
 	TopCommentsUser(*SQLiteConn, string, uint) ([]Comment, error)
 }
 
@@ -471,12 +471,13 @@ func (s *Storage) GetKarma(conn *SQLiteConn, username string) (int64, int64, err
 
 // StatsBetween returns the commenting statistics of all non-hidden users below a score, between since and until.
 // To be used within a transaction.
-func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.Time) (UserStatsMap, error) {
-	sql := `SELECT
-			comments.author AS author,
-			AVG(comments.score) AS average,
-			SUM(comments.score) AS delta,
-			COUNT(comments.id) AS count
+func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.Time) (StatsCollection, error) {
+	return s.selectStats(conn, StatsRead{Name: true}, `
+		SELECT
+			COUNT(comments.id),
+			SUM(comments.score) AS total,
+			ROUND(AVG(comments.score)),
+			comments.author
 		FROM users JOIN comments
 		ON comments.author = users.name
 		WHERE
@@ -484,32 +485,20 @@ func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.
 			AND users.hidden IS FALSE
 			AND comments.created BETWEEN ? AND ?
 		GROUP BY comments.author
-		HAVING MIN(comments.score) <= ?`
-
-	stats := UserStatsMap{}
-	cb := func(stmt *SQLiteStmt) error {
-		data := &UserStats{}
-		if err := data.FromDB(stmt); err != nil {
-			return err
-		}
-		stats[data.Name] = *data
-		return nil
-	}
-
-	err := conn.Select(sql, cb, since.Unix(), until.Unix(), score)
-	return stats, err
+		HAVING MIN(comments.score) <= ?
+		ORDER BY total`, since.Unix(), until.Unix(), score)
 }
 
 // CompendiumPerUser returns the per-user statistics of all users, for use with the compendium.
 // To be used within a transaction.
-func (s *Storage) CompendiumPerUser(conn *SQLiteConn) ([]*CompendiumDetailsTagged, error) {
-	return s.compendiumDetailsTagged(conn, `
+func (s *Storage) CompendiumPerUser(conn *SQLiteConn) (StatsCollection, error) {
+	return s.selectStats(conn, StatsRead{Name: true, Latest: true}, `
 		SELECT
 			COUNT(comments.id),
-			AVG(comments.score),
 			SUM(comments.score) AS karma,
-			MAX(comments.created),
-			comments.author
+			ROUND(AVG(comments.score)),
+			comments.author,
+			MAX(comments.created)
 		FROM users JOIN comments
 		ON comments.author = users.name
 		WHERE users.hidden IS FALSE
@@ -519,14 +508,14 @@ func (s *Storage) CompendiumPerUser(conn *SQLiteConn) ([]*CompendiumDetailsTagge
 
 // CompendiumPerUserNegative returns the per-user statistics of all users taking only into account negative comments.
 // For use with the compendium. To be used within a transaction.
-func (s *Storage) CompendiumPerUserNegative(conn *SQLiteConn) ([]*CompendiumDetailsTagged, error) {
-	return s.compendiumDetailsTagged(conn, `
+func (s *Storage) CompendiumPerUserNegative(conn *SQLiteConn) (StatsCollection, error) {
+	return s.selectStats(conn, StatsRead{Name: true, Latest: true}, `
 		SELECT
 			COUNT(comments.id),
-			AVG(comments.score),
 			SUM(comments.score) AS karma,
-			MAX(comments.created),
-			comments.author
+			ROUND(AVG(comments.score)),
+			comments.author,
+			MAX(comments.created)
 		FROM users JOIN comments
 		ON comments.author = users.name
 		WHERE
@@ -538,10 +527,10 @@ func (s *Storage) CompendiumPerUserNegative(conn *SQLiteConn) ([]*CompendiumDeta
 
 // CompendiumUserPerSub returns the commenting statistics for a single user, for use with the compendium.
 // To be used within a transaction.
-func (s *Storage) CompendiumUserPerSub(conn *SQLiteConn, username string) ([]*CompendiumDetailsTagged, error) {
-	return s.compendiumDetailsTagged(conn, `
+func (s *Storage) CompendiumUserPerSub(conn *SQLiteConn, username string) (StatsCollection, error) {
+	return s.selectStats(conn, StatsRead{Name: true, Latest: true}, `
 		SELECT
-			COUNT(score), AVG(score), SUM(score) AS karma, MAX(created), sub
+			COUNT(score), SUM(score) AS karma, ROUND(AVG(score)), sub, MAX(created)
 		FROM comments WHERE author = ?
 		GROUP BY sub
 		ORDER BY karma ASC`, username)
@@ -549,10 +538,10 @@ func (s *Storage) CompendiumUserPerSub(conn *SQLiteConn, username string) ([]*Co
 
 // CompendiumUserPerSubNegative returns the commenting statistics for a single user and negative comments only, for use with the compendium.
 // To be used within a transaction.
-func (s *Storage) CompendiumUserPerSubNegative(conn *SQLiteConn, username string) ([]*CompendiumDetailsTagged, error) {
-	return s.compendiumDetailsTagged(conn, `
+func (s *Storage) CompendiumUserPerSubNegative(conn *SQLiteConn, username string) (StatsCollection, error) {
+	return s.selectStats(conn, StatsRead{Name: true, Latest: true}, `
 		SELECT
-			COUNT(score), AVG(score), SUM(score) AS karma, MAX(created), sub
+			COUNT(score), SUM(score) AS karma, ROUND(AVG(score)), sub, MAX(created)
 		FROM comments WHERE author = ? AND score < 0
 		GROUP BY sub
 		ORDER BY karma ASC`, username)
@@ -560,32 +549,36 @@ func (s *Storage) CompendiumUserPerSubNegative(conn *SQLiteConn, username string
 
 // CompendiumUserSummary returns the summary of the commenting statistics for a single user, for use with the compendium.
 // To be used within a transaction.
-func (s *Storage) CompendiumUserSummary(conn *SQLiteConn, username string) (*CompendiumDetails, error) {
-	sql := "SELECT COUNT(score), AVG(score), SUM(score), MAX(created) FROM comments WHERE author = ?"
-	stats := &CompendiumDetails{}
-	err := conn.Select(sql, stats.FromDB, username)
-	return stats, err
+func (s *Storage) CompendiumUserSummary(conn *SQLiteConn, username string) (Stats, error) {
+	sql := "SELECT COUNT(score), SUM(score), ROUND(AVG(score)), MAX(created) FROM comments WHERE author = ?"
+	stats, err := s.selectStats(conn, StatsRead{Latest: true}, sql, username)
+	if err != nil {
+		return Stats{}, err
+	}
+	return stats[0], nil
 }
 
 // CompendiumUserSummaryNegative returns the summary of the commenting statistics for a single user, for use with the compendium.
 // Negative comments only. To be used within a transaction.
-func (s *Storage) CompendiumUserSummaryNegative(conn *SQLiteConn, username string) (*CompendiumDetails, error) {
-	sql := "SELECT COUNT(score), AVG(score), SUM(score), MAX(created) FROM comments WHERE author = ? AND score < 0"
-	stats := &CompendiumDetails{}
-	err := conn.Select(sql, stats.FromDB, username)
-	return stats, err
+func (s *Storage) CompendiumUserSummaryNegative(conn *SQLiteConn, username string) (Stats, error) {
+	sql := "SELECT COUNT(score), SUM(score), ROUND(AVG(score)), MAX(created) FROM comments WHERE author = ? AND score < 0"
+	stats, err := s.selectStats(conn, StatsRead{Latest: true}, sql, username)
+	if err != nil {
+		return Stats{}, err
+	}
+	return stats[0], nil
 }
 
-func (s *Storage) compendiumDetailsTagged(conn *SQLiteConn, sql string, args ...interface{}) ([]*CompendiumDetailsTagged, error) {
-	var stats []*CompendiumDetailsTagged
+func (s *Storage) selectStats(conn *SQLiteConn, statsRead StatsRead, sql string, args ...interface{}) (StatsCollection, error) {
+	var data StatsCollection
 	cb := func(stmt *SQLiteStmt) error {
-		detail := &CompendiumDetailsTagged{}
-		if err := detail.FromDB(stmt); err != nil {
+		stats := &Stats{}
+		if err := stats.FromDB(stmt, statsRead); err != nil {
 			return err
 		}
-		stats = append(stats, detail)
+		data = append(data, *stats)
 		return nil
 	}
 	err := conn.Select(sql, cb, args...)
-	return stats, err
+	return data, err
 }

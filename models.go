@@ -3,7 +3,6 @@ package main
 import (
 	"html"
 	"math"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -262,169 +261,167 @@ type UserQuery struct {
 	Error  error
 }
 
-// UserStats describes the commenting statistics of a User over a certain period of time.
-type UserStats struct {
-	Name    string  // User name
-	Average float64 // Average karma for the time span considered
-	Delta   int64   // Karma loss for the time span considered
-	Count   uint64  // Number of comments made by that user
+// StatsRead tells which optional fields should be read from an SQL statement when populating a Stats data structure.
+type StatsRead struct {
+	Name   bool
+	Latest bool
+}
+
+// Stats describes the statistical data that is presented by the application.
+type Stats struct {
+	Count   uint64
+	Sum     int64
+	Average float64
+	Name    string
+	Latest  time.Time
 }
 
 // FromDB reads the statistics from the results of a relevant SQL query.
-func (us *UserStats) FromDB(stmt *SQLiteStmt) error {
+func (s *Stats) FromDB(stmt *SQLiteStmt, read StatsRead) error {
 	var err error
-
-	if us.Name, _, err = stmt.ColumnText(0); err != nil {
-		return err
-	}
-
-	if us.Average, _, err = stmt.ColumnDouble(1); err != nil {
-		return err
-	}
-
-	if us.Delta, _, err = stmt.ColumnInt64(2); err != nil {
-		return err
-	}
+	var pos int
 
 	var count int64
-	if count, _, err = stmt.ColumnInt64(3); err != nil {
+	if count, _, err = stmt.ColumnInt64(pos); err != nil {
 		return err
 	}
-	us.Count = uint64(count)
+	s.Count = uint64(count)
+	pos++
+
+	if s.Sum, _, err = stmt.ColumnInt64(pos); err != nil {
+		return err
+	}
+	pos++
+
+	if s.Average, _, err = stmt.ColumnDouble(pos); err != nil {
+		return err
+	}
+	pos++
+
+	if read.Name {
+		if s.Name, _, err = stmt.ColumnText(pos); err != nil {
+			return err
+		}
+		pos++
+	}
+
+	if read.Latest {
+		var latest int64
+		if latest, _, err = stmt.ColumnInt64(pos); err != nil {
+			return err
+		}
+		s.Latest = time.Unix(latest, 0)
+		pos++
+	}
 
 	return nil
 }
 
-// UserStatsMap  maps user names to corresponding their UserStats for faster lookup.
-type UserStatsMap map[string]UserStats
-
-// DeltasToSummaries converts all the UserStats to statistical summaries where the summary is the UserStats.Delta.
-func (usm UserStatsMap) DeltasToSummaries() StatsSummaries {
-	return usm.toSummaries(func(us UserStats) int64 { return us.Delta })
-}
-
-// AveragesToSummaries converts all the UserStats to statistical summaries where the summary is the UserStats.Average.
-func (usm UserStatsMap) AveragesToSummaries() StatsSummaries {
-	return usm.toSummaries(func(us UserStats) int64 { return int64(math.Round(us.Average)) })
-}
-
-func (usm UserStatsMap) toSummaries(summary func(UserStats) int64) StatsSummaries {
-	stats := make([]StatsSummary, 0, len(usm))
-	for name, data := range usm {
-		stats = append(stats, StatsSummary{
-			Name:    name,
-			Count:   data.Count,
-			Summary: summary(data),
-		})
+// ToView converts the Stats to a data structure suitable for use in a template.
+func (s Stats) ToView(n uint, timezone *time.Location) StatsView {
+	view := StatsView{Stats: s, Number: n}
+	view.Average = math.Round(view.Average)
+	if timezone != nil {
+		view.Latest = view.Latest.In(timezone)
 	}
-	return stats
+	return view
 }
 
-// StatsSummary is an abstract representation of a value corresponding
-// to a statistical summary of a collection of things related to a User.
-type StatsSummary struct {
-	Name    string // User name
-	Count   uint64 // Number of things considered
-	Summary int64  // Summary number for the things considered
+// StatsCollection is a slice of Stats onto which specific operations can be made.
+type StatsCollection []Stats
+
+// ToMap retuns a map that associates a name with statistics.
+func (sc StatsCollection) ToMap() map[string]Stats {
+	data := make(map[string]Stats)
+	for _, stats := range sc {
+		data[stats.Name] = stats
+	}
+	return data
 }
 
-// StatsSummaries is a slice of StatsSummaries that has custom operations.
-type StatsSummaries []StatsSummary
+// ToView converts every the Stats to data structures suitable for use in a template.
+func (sc StatsCollection) ToView(timezone *time.Location) []StatsView {
+	views := make([]StatsView, 0, len(sc))
+	for n, stats := range sc {
+		views = append(views, stats.ToView(uint(n+1), timezone))
+	}
+	return views
+}
 
-// Limit returns a StatsSummaries clipped the given maximum of elements.
-func (s StatsSummaries) Limit(limit uint) StatsSummaries {
-	length := uint(len(s))
+// Stats returns global Stats about the collection.
+func (sc StatsCollection) Stats() Stats {
+	return Stats{
+		Count:   sc.Count(),
+		Sum:     sc.Sum(),
+		Average: sc.Average(),
+		Latest:  sc.Latest(),
+	}
+}
+
+// Count is the global count.
+func (sc StatsCollection) Count() uint64 {
+	var count uint64
+	for _, stats := range sc {
+		count += stats.Count
+	}
+	return count
+}
+
+// Sum is the global sum.
+func (sc StatsCollection) Sum() int64 {
+	var sum int64
+	for _, stats := range sc {
+		sum += stats.Sum
+	}
+	return sum
+}
+
+// Average is the global average.
+func (sc StatsCollection) Average() float64 {
+	avg := sc[0].Average
+	for _, stats := range sc[1:] {
+		avg = (avg + stats.Average) / 2
+	}
+	return avg
+}
+
+// Latest is the global most recent time.
+func (sc StatsCollection) Latest() time.Time {
+	var latest time.Time
+	for _, stats := range sc {
+		if stats.Latest.After(latest) {
+			latest = stats.Latest
+		}
+	}
+	return latest
+}
+
+// OrderByAverage orders the collection by average.
+func (sc StatsCollection) OrderByAverage() StatsCollection {
+	length := len(sc)
+	out := make(StatsCollection, length)
+	copy(out, sc)
+	Sort{
+		Len:  func() int { return length },
+		Less: func(i, j int) bool { return out[i].Average < out[j].Average },
+		Swap: func(i, j int) { out[i], out[j] = out[j], out[i] },
+	}.Do()
+	return out
+}
+
+// Limit clips the collection to a limit.
+func (sc StatsCollection) Limit(limit uint) StatsCollection {
+	length := uint(len(sc))
 	if length > limit {
 		length = limit
 	}
-	result := make([]StatsSummary, length)
-	copy(result, s)
-	return result
+	out := make(StatsCollection, length)
+	copy(out, sc)
+	return out
 }
 
-// Len returns the length of the collection of StatsSummary.
-func (s StatsSummaries) Len() int {
-	return len(s)
-}
-
-// Less returns whether the StatsSummary in position i is logically before the one in position j.
-func (s StatsSummaries) Less(i, j int) bool {
-	return s[i].Summary < s[j].Summary
-}
-
-// Swap swaps the StatsSummary in position i with the one in position j.
-func (s StatsSummaries) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
-// Sort sorts the StatsSummaries according to their Summary field.
-func (s StatsSummaries) Sort() StatsSummaries {
-	sort.Sort(s)
-	return s
-}
-
-// CompendiumDetails describes a single item in a compendium page.
-type CompendiumDetails struct {
-	Average float64
-	Count   int64
-	Karma   int64
-	Latest  time.Time
-	Number  uint
-}
-
-// FromDB reads a CompendiumDetails from the relevant SQL query.
-func (details *CompendiumDetails) FromDB(stmt *SQLiteStmt) error {
-	var err error
-
-	if details.Count, _, err = stmt.ColumnInt64(0); err != nil {
-		return err
-	}
-
-	if details.Average, _, err = stmt.ColumnDouble(1); err != nil {
-		return err
-	}
-
-	if details.Karma, _, err = stmt.ColumnInt64(2); err != nil {
-		return err
-	}
-
-	var latest int64
-	if latest, _, err = stmt.ColumnInt64(3); err != nil {
-		return err
-	}
-	details.Latest = time.Unix(latest, 0)
-
-	return nil
-}
-
-// Normalize makes the data suitable suitable for use in a view.
-// n sets the position in the collection (set to 0 if not relevant), and timezone sets the time zone of the dates.
-func (details *CompendiumDetails) Normalize(n uint, timezone *time.Location) {
-	details.Average = math.Round(details.Average)
-	details.Latest = details.Latest.In(timezone)
-	details.Number = n
-}
-
-// KarmaPerComment gives the average karma score per comment that has been counted.
-func (details *CompendiumDetails) KarmaPerComment() float64 {
-	if details.Count == 0 || details.Karma == 0 {
-		return 0
-	}
-	return float64(math.Round(float64(details.Karma) / float64(details.Count)))
-}
-
-// CompendiumDetailsTagged is a variant of the CompendiumDetails with a string tag.
-type CompendiumDetailsTagged struct {
-	CompendiumDetails
-	Tag string
-}
-
-// FromDB reads a CompendiumDetailsTagged from the relevant SQL query.
-func (details *CompendiumDetailsTagged) FromDB(stmt *SQLiteStmt) error {
-	if err := details.CompendiumDetails.FromDB(stmt); err != nil {
-		return err
-	}
-	tag, _, err := stmt.ColumnText(4)
-	details.Tag = tag
-	return err
+// StatsView is a data structure describing Stats such as it is suitable for use in a template.
+type StatsView struct {
+	Stats
+	Number uint
 }

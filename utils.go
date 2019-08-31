@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -75,6 +76,34 @@ func SemVerFromInt(encoded int) SemVer {
 	patch := encoded % 256
 
 	return SemVer{byte(major), byte(minor), byte(patch)}
+}
+
+// Sort allows to sort anything without copy-pasting nor generics.
+type Sort struct {
+	Len  func() int
+	Less func(int, int) bool
+	Swap func(int, int)
+}
+
+// Do the sort.
+func (s Sort) Do() {
+	sort.Sort(sorter{sort: s})
+}
+
+type sorter struct {
+	sort Sort
+}
+
+func (s sorter) Len() int {
+	return s.sort.Len()
+}
+
+func (s sorter) Less(i, j int) bool {
+	return s.sort.Less(i, j)
+}
+
+func (s sorter) Swap(i, j int) {
+	s.sort.Swap(i, j)
 }
 
 // SliceHasString tests if the slice of strings has a string.

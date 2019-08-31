@@ -1,7 +1,6 @@
 package main
 
 import (
-	"math"
 	"time"
 )
 
@@ -41,7 +40,7 @@ func (rf ReportFactory) ReportWeek(conn *SQLiteConn, weekNum uint8, year int) (R
 // Report generates a Report between two arbitrary dates.
 func (rf ReportFactory) Report(conn *SQLiteConn, start, end time.Time) (Report, error) {
 	var comments []Comment
-	var stats UserStatsMap
+	var stats StatsCollection
 
 	err := conn.WithTx(func() error {
 		var err error
@@ -106,31 +105,26 @@ func (rf ReportFactory) Now() time.Time {
 // Report describes the commenting activity between two dates that may correspond to a week number.
 // It is suitable for use in a template.
 type Report struct {
-	rawComments       []Comment      // Comments as taken from the database
-	Week              uint8          // Week ISO number of the report
-	Year              int            // Year of the report
-	Start             time.Time      // Start date of the report including any "leeway"
-	End               time.Time      // End date of the report including any "leeway"
-	Stats             UserStatsMap   // Statistics for all users
-	MaxStatsSummaries uint           // Max number of statistics to put in the report's headers to summarize the week
-	Timezone          *time.Location // Timezone of dates
-	CutOff            int64          // Max score of the comments included in the report
-	Version           SemVer         // Version of the software with which the report was made
+	rawComments       []Comment       // Comments as taken from the database
+	Week              uint8           // Week ISO number of the report
+	Year              int             // Year of the report
+	Start             time.Time       // Start date of the report including any "leeway"
+	End               time.Time       // End date of the report including any "leeway"
+	Stats             StatsCollection // Statistics for all users
+	MaxStatsSummaries uint            // Max number of statistics to put in the report's headers to summarize the week
+	Timezone          *time.Location  // Timezone of dates
+	CutOff            int64           // Max score of the comments included in the report
+	Version           SemVer          // Version of the software with which the report was made
 
 	CommentBodyConverter CommentBodyConverter // Optionnal function to convert comments' body to anything
 }
 
 // Head returns a data structure that describes a summary of the Report.
 func (r Report) Head() ReportHead {
-	var total int64
-	for _, stats := range r.Stats {
-		total += stats.Delta
-	}
 	return ReportHead{
-		Number:  len(r.rawComments),
-		Total:   total,
-		Average: r.Stats.AveragesToSummaries().Sort().Limit(r.MaxStatsSummaries),
-		Delta:   r.Stats.DeltasToSummaries().Sort().Limit(r.MaxStatsSummaries),
+		Global:  r.Stats.Stats().ToView(0, r.Timezone),
+		Average: r.Stats.OrderByAverage().Limit(r.MaxStatsSummaries).ToView(r.Timezone),
+		Delta:   r.Stats.Limit(r.MaxStatsSummaries).ToView(r.Timezone),
 		Start:   r.Start,
 		End:     r.End,
 		CutOff:  r.CutOff,
@@ -140,13 +134,14 @@ func (r Report) Head() ReportHead {
 // Comments returns a slice of data structures describing comments that are suitable for use in templates.
 func (r Report) Comments() []ReportComment {
 	n := r.Len()
+	byName := r.Stats.ToMap()
 	views := make([]ReportComment, 0, n)
 	for i := 0; i < n; i++ {
 		comment := r.rawComments[i]
-		stats := r.Stats[comment.Author]
+		number := uint(i + 1)
 		views = append(views, ReportComment{
-			CommentView: comment.ToView(uint(i+1), r.Timezone, r.CommentBodyConverter),
-			Average:     int64(math.Round(stats.Average)),
+			CommentView: comment.ToView(number, r.Timezone, r.CommentBodyConverter),
+			Stats:       byName[comment.Author].ToView(number, r.Timezone),
 		})
 	}
 	return views
@@ -159,17 +154,16 @@ func (r Report) Len() int {
 
 // ReportHead describes a summary of a Report suitable for a use in a template.
 type ReportHead struct {
-	Number  int            // Number of comments in the report
-	Total   int64          // Total karma loss
-	Average StatsSummaries // List of users with the lowest average karma
-	Delta   StatsSummaries // List of users with the biggest loss of karma
-	Start   time.Time      // Sart date of the report
-	End     time.Time      // End date of the report
-	CutOff  int64          // Maximum comment score for inclusion in the report
+	Global  StatsView   // Global Stats
+	Average []StatsView // List of users with the lowest average karma
+	Delta   []StatsView // List of users with the biggest loss of karma
+	Start   time.Time   // Sart date of the report
+	End     time.Time   // End date of the report
+	CutOff  int64       // Maximum comment score for inclusion in the report
 }
 
 // ReportComment is a specialized version of CommentView for use in Report.
 type ReportComment struct {
 	CommentView
-	Average int64 // Average karma for that user
+	Stats StatsView // Stats for that user
 }

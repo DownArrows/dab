@@ -301,8 +301,8 @@ func TestCRUDComments(t *testing.T) {
 			if count != stats.Count {
 				t.Errorf("expected count for user %s to be %d, not %d", user.Name, count, stats.Count)
 			}
-			if delta != stats.Delta {
-				t.Errorf("expected delta for user %s to be %d, not %d", user.Name, delta, stats.Delta)
+			if delta != stats.Sum {
+				t.Errorf("expected delta for user %s to be %d, not %d", user.Name, delta, stats.Sum)
 			}
 		}
 	})

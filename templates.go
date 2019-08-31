@@ -8,17 +8,17 @@ import (
 // MarkdownReport is the template for reports in markdow format.
 var MarkdownReport = text.Must(text.New("MarkdownReport").Parse(`
 {{- with .Head -}}
-{{.Number}} comments under {{.CutOff}} from {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}.
+{{.Global.Count}} comments under {{.CutOff}} from {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}.
 
 Top {{.Delta | len}} total negative karma change for this week:
 {{range .Delta}}
-- **{{.Summary}}** with {{.Count}} posts,
+- **{{.Sum}}** with {{.Count}} posts,
 by [/u/{{.Name}}](https://www.reddit.com/user/{{.Name}})
 {{- end}}
 
 Top {{.Average | len}} lowest average karma per comment:
 {{range .Average}}
-- **{{.Summary}}** with {{.Count}} posts,
+- **{{.Average}}** with {{.Count}} posts,
 by [/u/{{.Name}}](https://www.reddit.com/user/{{.Name}})
 {{- end}}
 {{- end}}
@@ -28,7 +28,7 @@ by [/u/{{.Name}}](https://www.reddit.com/user/{{.Name}})
 {{range .Comments -}}
 # \#{{.Number}}
 
-Author: [/u/{{.Author}}](https://www.reddit.com/user/{{.Author}}) ({{.Average}} week average)
+Author: [/u/{{.Author}}](https://www.reddit.com/user/{{.Author}}) ({{.Stats.Average}} week average)
 
 Score: **{{.Score}}**
 
@@ -60,19 +60,19 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 <h1>Summary</h1>
 {{- with .Head}}
 	<p>From {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}.</p>
-	<p>{{.Number}} comments under {{.CutOff}} adding up to {{.Total}} collective negative karma change.</p>
+	<p>{{.Global.Count}} comments under {{.CutOff}} adding up to {{.Global.Sum}} collective negative karma change.</p>
 
 	<h2>Top {{.Delta | len}} total negative karma change for this week</h2>
 	<ol>
 	{{- range .Delta}}
-	<li><strong>{{.Summary}}</strong> with {{.Count}} posts, by <a href="/compendium/user/{{.Name}}">{{.Name}}</a></li>
+	<li><strong>{{.Sum}}</strong> with {{.Count}} posts, by <a href="/compendium/user/{{.Name}}">{{.Name}}</a></li>
 	{{- end}}
 	</ol>
 
 	<h2>Top {{.Average | len}} lowest average karma per comment</h2>
 	<ol>
 	{{- range .Average}}
-	<li><strong>{{.Summary}}</strong> with {{.Count}} posts, by <a href="/compendium/user/{{.Name}}">{{.Name}}</a></li>
+	<li><strong>{{.Average}}</strong> with {{.Count}} posts, by <a href="/compendium/user/{{.Name}}">{{.Name}}</a></li>
 	{{- end}}
 	</ol>
 {{- end -}}
@@ -86,7 +86,7 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 	<table>
 	<tr>
 		<td>Author</td>
-		<td><a href="/compendium/user/{{.Author}}">{{.Author}}</a> ({{.Average}} week average)</td>
+		<td><a href="/compendium/user/{{.Author}}">{{.Author}}</a> ({{.Stats.Average}} week average)</td>
 	</tr>
 	<tr>
 		<td>Date</td>
@@ -186,11 +186,11 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 		</tr>
 		<tr>
 			<td>Total karma<td>
-			<td><strong>{{.Summary.Karma}}</strong>, and <strong>{{.SummaryNegative.Karma}}</strong> if negative only<td>
+			<td><strong>{{.Summary.Sum}}</strong>, and <strong>{{.SummaryNegative.Sum}}</strong> if negative only<td>
 		</tr>
 		<tr>
 			<td>Average per comment<td>
-			<td><strong>{{.Summary.KarmaPerComment}}</strong>, and <strong>{{.SummaryNegative.KarmaPerComment}}</strong> if negative only<td>
+			<td><strong>{{.Summary.Average}}</strong>, and <strong>{{.SummaryNegative.Average}}</strong> if negative only<td>
 		</tr>
 		{{- end}}
 	</table>
@@ -250,14 +250,14 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 {{range .Negative -}}
 <tr>
 	<td>{{.Number}}</td>
-	<td><a href="https://www.reddit.com/r/{{.Tag}}/">{{.Tag}}</a></td>
-	<td>{{.Karma}}</td>
-	<td>{{.Count}}</td>
-	<td>{{.Average}}</td>
+	<td><a href="https://www.reddit.com/r/{{.Name}}/">{{.Name}}</a></td>
+	<td>{{.Stats.Sum}}</td>
+	<td>{{.Stats.Count}}</td>
+	<td>{{.Stats.Average}}</td>
 	<td>
-		<span class="detail">{{.Latest.Format "15:04"}}</span>
-		<span>{{.Latest.Format "2006-01-02"}}</span>
-		<span class="detail">{{.Latest.Format "MST"}}</span>
+		<span class="detail">{{.Stats.Latest.Format "15:04"}}</span>
+		<span>{{.Stats.Latest.Format "2006-01-02"}}</span>
+		<span class="detail">{{.Stats.Latest.Format "MST"}}</span>
 	</td>
 </tr>
 {{end -}}
@@ -286,14 +286,14 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 {{range .All -}}
 <tr>
 	<td>{{.Number}}</td>
-	<td><a href="https://www.reddit.com/r/{{.Tag}}/">{{.Tag}}</a></td>
-	<td>{{.Karma}}</td>
-	<td>{{.Count}}</td>
-	<td>{{.Average}}</td>
+	<td><a href="https://www.reddit.com/r/{{.Name}}/">{{.Name}}</a></td>
+	<td>{{.Stats.Sum}}</td>
+	<td>{{.Stats.Count}}</td>
+	<td>{{.Stats.Average}}</td>
 	<td>
-		<span class="detail">{{.Latest.Format "15:04"}}</span>
-		<span>{{.Latest.Format "2006-01-02"}}</span>
-		<span class="detail">{{.Latest.Format "MST"}}</span>
+		<span class="detail">{{.Stats.Latest.Format "15:04"}}</span>
+		<span>{{.Stats.Latest.Format "2006-01-02"}}</span>
+		<span class="detail">{{.Stats.Latest.Format "MST"}}</span>
 	</td>
 </tr>
 {{end -}}
@@ -398,14 +398,14 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 {{range .Negative -}}
 <tr>
 	<td>{{.Number}}</td>
-	<td><a href="/compendium/user/{{.Tag}}">{{.Tag}}</a></td>
-	<td>{{.Karma}}</td>
-	<td>{{.Count}}</td>
-	<td>{{.Average}}</td>
+	<td><a href="/compendium/user/{{.Name}}">{{.Name}}</a></td>
+	<td>{{.Stats.Sum}}</td>
+	<td>{{.Stats.Count}}</td>
+	<td>{{.Stats.Average}}</td>
 	<td>
-		<span class="detail">{{.Latest.Format "15:04"}}</span>
-		<span>{{.Latest.Format "2006-01-02"}}</span>
-		<span class="detail">{{.Latest.Format "MST"}}</span>
+		<span class="detail">{{.Stats.Latest.Format "15:04"}}</span>
+		<span>{{.Stats.Latest.Format "2006-01-02"}}</span>
+		<span class="detail">{{.Stats.Latest.Format "MST"}}</span>
 	</td>
 </tr>
 {{end -}}
@@ -433,14 +433,14 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 {{range .All -}}
 <tr>
 	<td>{{.Number}}</td>
-	<td><a href="/compendium/user/{{.Tag}}">{{.Tag}}</a></td>
-	<td>{{.Karma}}</td>
-	<td>{{.Count}}</td>
-	<td>{{.Average}}</td>
+	<td><a href="/compendium/user/{{.Name}}">{{.Name}}</a></td>
+	<td>{{.Stats.Sum}}</td>
+	<td>{{.Stats.Count}}</td>
+	<td>{{.Stats.Average}}</td>
 	<td>
-		<span class="detail">{{.Latest.Format "15:04"}}</span>
-		<span>{{.Latest.Format "2006-01-02"}}</span>
-		<span class="detail">{{.Latest.Format "MST"}}</span>
+		<span class="detail">{{.Stats.Latest.Format "15:04"}}</span>
+		<span>{{.Stats.Latest.Format "2006-01-02"}}</span>
+		<span class="detail">{{.Stats.Latest.Format "MST"}}</span>
 	</td>
 </tr>
 {{end -}}
