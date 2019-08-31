@@ -111,7 +111,11 @@ func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
 
 			res := ru.api.AboutUser(ctx, user.Name)
 			if res.Error != nil {
-				return res.Error
+				if IsCancellation(res.Error) {
+					return res.Error
+				}
+				ru.logger.Errorf("unsuspensions/undeletions watcher network error, skipping %q: %v", user.Name, res.Error)
+				continue
 			}
 
 			ru.logger.Debugf("unsuspensions/undeletions watcher found about user %+v data from Reddit %+v", user, res)
