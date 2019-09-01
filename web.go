@@ -153,26 +153,12 @@ func NewWebServer(logger LevelLogger, storage WebServerStorage, reports ReportFa
 
 // Run runs the web server and blocks until it is cancelled or returns an error.
 func (wsrv *WebServer) Run(ctx context.Context) error {
-	// Connections
-	wsrv.conns = NewSQLiteConnPool(ctx, wsrv.NbDBConn)
+	pool, err := wsrv.initDBPool(ctx)
+	if err != nil {
+		return err
+	}
+	wsrv.conns = pool
 	defer wsrv.conns.Close()
-
-	if wsrv.DirtyReads {
-		wsrv.logger.Info("web server's dirty reads of the database enabled")
-	}
-
-	for i := uint(0); i < wsrv.NbDBConn; i++ {
-		conn, err := wsrv.storage.GetConn(ctx)
-		if err != nil {
-			return err
-		}
-		if wsrv.DirtyReads {
-			if err := conn.ReadUncommitted(true); err != nil {
-				return err
-			}
-		}
-		wsrv.conns.Release(conn)
-	}
 
 	listener, err := wsrv.getListener()
 	if err != nil {
@@ -191,6 +177,29 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 		}
 		return err
 	}
+}
+
+func (wsrv *WebServer) initDBPool(ctx context.Context) (*SQLiteConnPool, error) {
+	pool := NewSQLiteConnPool(ctx, wsrv.NbDBConn)
+
+	if wsrv.DirtyReads {
+		wsrv.logger.Info("web server's dirty reads of the database enabled")
+	}
+
+	for i := uint(0); i < wsrv.NbDBConn; i++ {
+		conn, err := wsrv.storage.GetConn(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if wsrv.DirtyReads {
+			if err := conn.ReadUncommitted(true); err != nil {
+				return nil, err
+			}
+		}
+		pool.Release(conn)
+	}
+
+	return pool, nil
 }
 
 func (wsrv *WebServer) getListener() (net.Listener, error) {
