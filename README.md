@@ -134,6 +134,8 @@ If you want to run it with [systemd](https://en.wikipedia.org/wiki/Systemd), her
 	ExecStart=/usr/local/bin/dab -log Error -config /etc/dab.conf.json
 	Restart=on-failure
 
+It also partially supports systemd's socket activation, with a limitation to a single socket for the moment being.
+
 If you feel the need to be sure it is actually doing something, run it with `-log Debug`.
 
 The bot shuts down on the following UNIX signals: SIGINT, SIGTERM, and SIGKILL.

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/russross/blackfriday"
 	"html/template"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -152,6 +153,7 @@ func NewWebServer(logger LevelLogger, storage WebServerStorage, reports ReportFa
 
 // Run runs the web server and blocks until it is cancelled or returns an error.
 func (wsrv *WebServer) Run(ctx context.Context) error {
+	// Connections
 	wsrv.conns = NewSQLiteConnPool(ctx, wsrv.NbDBConn)
 	defer wsrv.conns.Close()
 
@@ -172,7 +174,11 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 		wsrv.conns.Release(conn)
 	}
 
-	go func() { wsrv.done <- wsrv.server.ListenAndServe() }()
+	listener, err := wsrv.getListener()
+	if err != nil {
+		return err
+	}
+	go func() { wsrv.done <- wsrv.server.Serve(listener) }()
 
 	wsrv.logger.Infof("web server listening on %s", wsrv.server.Addr)
 
@@ -185,6 +191,19 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 		}
 		return err
 	}
+}
+
+func (wsrv *WebServer) getListener() (net.Listener, error) {
+	if nb, err := strconv.Atoi(os.Getenv("LISTEN_FDS")); err == nil {
+		if nb > 1 {
+			return nil, errors.New("too many file descriptors set in environment variable LISTEN_FDS")
+		}
+		if nb == 1 {
+			return net.FileListener(os.NewFile(3, "web_server_socket"))
+		}
+	}
+
+	return net.Listen("tcp", wsrv.server.Addr)
 }
 
 // CSS serves the style sheets.
