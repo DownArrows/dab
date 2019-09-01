@@ -69,8 +69,6 @@ type CompendiumStorage interface {
 	// User pages
 	CompendiumUserPerSub(*SQLiteConn, string) (StatsCollection, error)
 	CompendiumUserPerSubNegative(*SQLiteConn, string) (StatsCollection, error)
-	CompendiumUserSummary(*SQLiteConn, string) (Stats, error)
-	CompendiumUserSummaryNegative(*SQLiteConn, string) (Stats, error)
 	TopCommentsUser(*SQLiteConn, string, uint) ([]Comment, error)
 }
 
@@ -545,28 +543,6 @@ func (s *Storage) CompendiumUserPerSubNegative(conn *SQLiteConn, username string
 		FROM comments WHERE author = ? AND score < 0
 		GROUP BY sub
 		ORDER BY karma ASC`, username)
-}
-
-// CompendiumUserSummary returns the summary of the commenting statistics for a single user, for use with the compendium.
-// To be used within a transaction.
-func (s *Storage) CompendiumUserSummary(conn *SQLiteConn, username string) (Stats, error) {
-	sql := "SELECT COUNT(score), SUM(score), ROUND(AVG(score)), MAX(created) FROM comments WHERE author = ?"
-	stats, err := s.selectStats(conn, StatsRead{Latest: true}, sql, username)
-	if err != nil {
-		return Stats{}, err
-	}
-	return stats[0], nil
-}
-
-// CompendiumUserSummaryNegative returns the summary of the commenting statistics for a single user, for use with the compendium.
-// Negative comments only. To be used within a transaction.
-func (s *Storage) CompendiumUserSummaryNegative(conn *SQLiteConn, username string) (Stats, error) {
-	sql := "SELECT COUNT(score), SUM(score), ROUND(AVG(score)), MAX(created) FROM comments WHERE author = ? AND score < 0"
-	stats, err := s.selectStats(conn, StatsRead{Latest: true}, sql, username)
-	if err != nil {
-		return Stats{}, err
-	}
-	return stats[0], nil
 }
 
 func (s *Storage) selectStats(conn *SQLiteConn, statsRead StatsRead, sql string, args ...interface{}) (StatsCollection, error) {

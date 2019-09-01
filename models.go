@@ -350,10 +350,12 @@ func (sc StatsCollection) ToView(timezone *time.Location) []StatsView {
 
 // Stats returns global Stats about the collection.
 func (sc StatsCollection) Stats() Stats {
+	count := sc.Count()
+	sum := sc.Sum()
 	return Stats{
-		Count:   sc.Count(),
-		Sum:     sc.Sum(),
-		Average: sc.Average(),
+		Count:   count,
+		Sum:     sum,
+		Average: float64(sum) / float64(count),
 		Latest:  sc.Latest(),
 	}
 }
@@ -374,15 +376,6 @@ func (sc StatsCollection) Sum() int64 {
 		sum += stats.Sum
 	}
 	return sum
-}
-
-// Average is the global average.
-func (sc StatsCollection) Average() float64 {
-	avg := sc[0].Average
-	for _, stats := range sc[1:] {
-		avg = (avg + stats.Average) / 2
-	}
-	return avg
 }
 
 // Latest is the global most recent time.
