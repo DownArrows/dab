@@ -208,6 +208,7 @@ and [template](http://golang.org/pkg/text/template/).
       **Deprecated**: starting with version 1.8.0 this option has no effect.
     - `general` *string* (*none*): Discord ID of the main channel where loggable links are taken from and welcome messages are posted;
       required to have welcome messages and logged links, disabled if left empty
+    - `graveyard` *string* (copy of `general`): Discord ID of the channel where to post messages about (un)suspensions and (un)deletions
     - `hide_prefix` *string* (*none*): Discord-specific hide prefix when registering users (overrides the global hide prefix)
     - `highscores` *string* (*none*): Discord ID of the channel where links to high-scoring comments are posted; disabled if left empty
     - `highscore_threshold` *int* (-1000): score at and below which a comment will be linked to in the highscore channel

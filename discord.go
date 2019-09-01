@@ -448,7 +448,7 @@ func (bot *DiscordBot) SignalSuspensions(suspensions <-chan User) {
 			state = "deleted"
 		}
 		msg := fmt.Sprintf("RIP /u/%s %s (%s)", user.Name, EmojiPrayingHands, state)
-		if err := bot.channelMessageSend(bot.channelsID.General, msg); err != nil {
+		if err := bot.channelMessageSend(bot.channelsID.Graveyard, msg); err != nil {
 			bot.logger.Errorf("error when signaling a suspension or deletion: %v", err)
 		}
 	}
@@ -459,7 +459,7 @@ func (bot *DiscordBot) SignalSuspensions(suspensions <-chan User) {
 func (bot *DiscordBot) SignalUnsuspensions(ch <-chan User) {
 	for user := range ch {
 		msg := fmt.Sprintf("%s /u/%s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
-		if err := bot.channelMessageSend(bot.channelsID.General, msg); err != nil {
+		if err := bot.channelMessageSend(bot.channelsID.Graveyard, msg); err != nil {
 			bot.logger.Errorf("error when signaling an unsuspensions: %v", err)
 		}
 	}

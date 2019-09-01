@@ -142,8 +142,9 @@ type DiscordBotConf struct {
 // DiscordBotChannelsID describes the channels used by the Discord bot.
 type DiscordBotChannelsID struct {
 	General    string `json:"general"`
-	Log        string `json:"log"`
+	Graveyard  string `json:"graveyard"`
 	HighScores string `json:"highscores"`
+	Log        string `json:"log"`
 }
 
 // WebConf describes the configuration for the application's web server.
@@ -212,6 +213,10 @@ func NewConfiguration(path string) (Configuration, error) {
 	conf.Reddit.RedditScannerConf.HighScoreThreshold = conf.Discord.HighScoreThreshold
 	if conf.Discord.DiscordBotConf.HidePrefix == "" {
 		conf.Discord.DiscordBotConf.HidePrefix = conf.HidePrefix
+	}
+
+	if conf.Discord.DiscordBotConf.Graveyard == "" {
+		conf.Discord.DiscordBotConf.Graveyard = conf.Discord.DiscordBotConf.General
 	}
 
 	return conf, nil
