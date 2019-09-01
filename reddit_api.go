@@ -335,6 +335,9 @@ func (ra *RedditAPI) rawRequest(ctx context.Context, makeReq func() (*http.Reque
 	ra.prepareRequest(ctx, req)
 	rawRes, err := ra.client.Do(req)
 	if err != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
 		return redditResponse{Error: err}
 	}
 
