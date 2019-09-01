@@ -44,6 +44,7 @@ Post text:
 
 // HTMLReportPage is the template for single reports in HTML format.
 var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
+<html lang="en">
 <head>
 	<meta charset="utf-8"/>
 	<meta name="viewport" content="initial-scale=1"/>
@@ -111,10 +112,12 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 
 <footer><a href="#title">back to top</a></footer>
 
-</body>`))
+</body>
+</html>`))
 
 // HTMLCompendiumUserPage is the template for the compendium page of a single user, in HTML format.
 var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(`<!DOCTYPE html>
+<html lang="en">
 <head>
 	<meta charset="utf-8"/>
 	<meta name="viewport" content="initial-scale=1"/>
@@ -305,10 +308,12 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 {{- end}}
 
 </main>
-</body>`))
+</body>
+</html>`))
 
 // HTMLCompendium is the HTML template for the compendium's index.
 var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
+<html lang="en">
 <head>
 	<meta charset="utf-8"/>
 	<meta name="viewport" content="initial-scale=1"/>
@@ -455,7 +460,8 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 <p>No comment with negative karma yet.</p>
 {{end -}}
 
-</body>`))
+</body>
+</html>`))
 
 // CSSMain is the main CSS stylesheet, to be served along the result of the HTML templates.
 const CSSMain = `:root {
