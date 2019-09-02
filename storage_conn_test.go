@@ -275,7 +275,7 @@ func TestCRUDComments(t *testing.T) {
 	})
 
 	t.Run("statistics", func(t *testing.T) {
-		allStats, err := conn.StatsBetween(reportCutoff, reportStart, reportEnd)
+		allStats, err := conn.StatsBetween(reportStart, reportEnd)
 		if err != nil {
 			t.Fatal(err)
 		}

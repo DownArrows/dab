@@ -46,13 +46,14 @@ func (rf ReportFactory) Report(conn StorageConn, start, end time.Time) (Report, 
 		if err != nil {
 			return err
 		}
-		stats, err = conn.StatsBetween(rf.cutOff, start, end)
+		stats, err = conn.StatsBetween(start, end)
 		return err
 	})
 
 	report := Report{
 		rawComments:       comments,
-		Stats:             stats,
+		Stats:             stats.Filter(func(s Stats) bool { return s.Sum < rf.cutOff }),
+		Global:            stats.Stats(),
 		Start:             start,
 		End:               end,
 		MaxStatsSummaries: rf.NbTop,
@@ -108,6 +109,7 @@ type Report struct {
 	Year              int             // Year of the report
 	Start             time.Time       // Start date of the report including any "leeway"
 	End               time.Time       // End date of the report including any "leeway"
+	Global            Stats           // Statistics that summarize the whole report
 	Stats             StatsCollection // Statistics for all users
 	MaxStatsSummaries uint            // Max number of statistics to put in the report's headers to summarize the week
 	Timezone          *time.Location  // Timezone of dates
@@ -120,7 +122,7 @@ type Report struct {
 // Head returns a data structure that describes a summary of the Report.
 func (r Report) Head() ReportHead {
 	return ReportHead{
-		Global:  r.Stats.Stats().ToView(0, r.Timezone),
+		Global:  r.Global.ToView(0, r.Timezone),
 		Average: r.Stats.OrderByAverage().Limit(r.MaxStatsSummaries).ToView(r.Timezone),
 		Delta:   r.Stats.Limit(r.MaxStatsSummaries).ToView(r.Timezone),
 		Start:   r.Start,

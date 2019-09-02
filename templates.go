@@ -45,8 +45,8 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 <h1>Summary</h1>
 {{- with .Head}}
 	{{- $dateFormat := "02 Jan 06 15:04 MST"}}
-	<p>From {{.Start.Format $dateFormat}} to {{.End.Format $dateFormat}}.</p>
-	<p>{{.Global.Count}} comments under {{.CutOff}} adding up to {{.Global.Sum}} collective negative karma change.</p>
+	<p>{{.Global.Count}} comments under {{.CutOff}} from {{.Start.Format $dateFormat}} to {{.End.Format $dateFormat}}.</p>
+	<p>Collective karma change for the week: <strong>{{.Global.Sum}}</strong>.</p>
 
 	<h2>Top {{.Delta | len}} total negative karma change for this week</h2>
 	<ol>

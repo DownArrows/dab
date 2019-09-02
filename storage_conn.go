@@ -294,7 +294,7 @@ func (conn StorageConn) GetKarma(username string) (int64, int64, error) {
 
 // StatsBetween returns the commenting statistics of all non-hidden users below a score, between since and until.
 // To be used within a transaction.
-func (conn StorageConn) StatsBetween(score int64, since, until time.Time) (StatsCollection, error) {
+func (conn StorageConn) StatsBetween(since, until time.Time) (StatsCollection, error) {
 	return conn.selectStats(StatsRead{Name: true}, `
 		SELECT
 			COUNT(comments.id),
@@ -308,8 +308,7 @@ func (conn StorageConn) StatsBetween(score int64, since, until time.Time) (Stats
 			AND users.hidden IS FALSE
 			AND comments.created BETWEEN ? AND ?
 		GROUP BY comments.author
-		HAVING MIN(comments.score) <= ?
-		ORDER BY total`, since.Unix(), until.Unix(), score)
+		ORDER BY total`, since.Unix(), until.Unix())
 }
 
 // CompendiumPerUser returns the per-user statistics of all users, for use with the compendium.
