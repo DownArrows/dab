@@ -128,6 +128,7 @@ func (r Report) Head() ReportHead {
 		Start:   r.Start,
 		End:     r.End,
 		CutOff:  r.CutOff,
+		Len:     r.Len(),
 	}
 }
 
@@ -160,6 +161,7 @@ type ReportHead struct {
 	Start   time.Time   // Sart date of the report
 	End     time.Time   // End date of the report
 	CutOff  int64       // Maximum comment score for inclusion in the report
+	Len     int         // Number of comments in the report
 }
 
 // ReportComment is a specialized version of CommentView for use in Report.
