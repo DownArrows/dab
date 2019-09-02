@@ -294,6 +294,10 @@ func (bot *DiscordBot) fatal(err error) {
 	bot.done <- err
 }
 
+func (bot *DiscordBot) fatalf(msg string, args ...interface{}) {
+	bot.fatal(fmt.Errorf(msg, args...))
+}
+
 func (bot *DiscordBot) isDMChannel(channelID string) (bool, error) {
 	channel, err := bot.client.Channel(channelID)
 	if err != nil {
@@ -341,13 +345,13 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) {
 
 	// set status
 	if err := bot.client.UpdateStatus(0, "Downvote Counter"); err != nil {
-		bot.fatal(fmt.Errorf("couldn't set status on discord: %v", err))
+		bot.fatalf("couldn't set status on discord: %v", err)
 		return
 	}
 
 	// guild-related information and checks
 	if nb := len(r.Guilds); nb != 1 {
-		bot.fatal(fmt.Errorf("the bot needs to be in one and only one discord server (found in %d server(s))", nb))
+		bot.fatalf("the bot needs to be in one and only one discord server (found in %d server(s))", nb)
 		return
 	}
 
@@ -356,7 +360,8 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) {
 
 	guild, err := bot.client.Guild(bot.guildID)
 	if err != nil {
-		bot.fatal(fmt.Errorf("error when getting information about guild %q: %v", bot.guildID, err))
+		bot.fatalf("error when getting information about guild %q: %v", bot.guildID, err)
+		return
 	}
 
 	bot.adminID = guild.OwnerID
@@ -364,7 +369,7 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) {
 	if bot.privilegedRole == "" {
 		bot.logger.Info("no privileged discord role has been set, only the server's owner can use privileged commands")
 	} else if !rolesHaveRoleID(guild.Roles, bot.privilegedRole) {
-		bot.fatal(fmt.Errorf("the discord server doesn't have a role with ID %s", bot.privilegedRole))
+		bot.fatalf("the discord server doesn't have a role with ID %s", bot.privilegedRole)
 		return
 	}
 
@@ -379,7 +384,7 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) {
 		}
 
 		if _, err := bot.client.Channel(channelID); err != nil {
-			bot.fatal(fmt.Errorf("discord channel %s: %v", name, err))
+			bot.fatalf("discord channel %s: %v", name, err)
 			return
 		}
 	}
@@ -403,8 +408,7 @@ func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
 	bot.logger.Debugf("welcoming discord user %s", data.Member.FQN())
 	if err := bot.welcome.Execute(&msg, data); err != nil {
 		bot.fatal(err)
-	}
-	if err := bot.channelMessageSend(bot.channelsID.General, msg.String()); err != nil {
+	} else if err := bot.channelMessageSend(bot.channelsID.General, msg.String()); err != nil {
 		bot.logger.Error(err)
 	}
 }
