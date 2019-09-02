@@ -115,7 +115,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 {{range . -}}
 <tr>
 	<td>{{.Number}}</td>
-	<td><a href="https://www.reddit.com/r/{{.Name}}/">{{.Name}}</a></td>
+	<td><a href="/compendium/user/{{.Name}}">{{.Name}}</a></td>
 	<td>{{.Stats.Sum}}</td>
 	<td>{{.Stats.Count}}</td>
 	<td>{{.Stats.Average}}</td>
