@@ -552,4 +552,4 @@ Post text:
 {{range .BodyLines -}}
 > {{.}}
 {{end}}
-{{- end}}`))
+{{end}}`))
