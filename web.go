@@ -117,11 +117,11 @@ type WebServer struct {
 	logger     LevelLogger
 	reports    ReportFactory
 	server     *http.Server
-	storage    WebServerStorage
+	storage    *Storage
 }
 
 // NewWebServer creates a new WebServer.
-func NewWebServer(logger LevelLogger, storage WebServerStorage, reports ReportFactory, compendium CompendiumFactory, conf WebConf) *WebServer {
+func NewWebServer(logger LevelLogger, storage *Storage, reports ReportFactory, compendium CompendiumFactory, conf WebConf) *WebServer {
 	wsrv := &WebServer{
 		WebConf:    conf,
 		compendium: compendium,

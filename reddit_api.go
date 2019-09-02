@@ -25,17 +25,6 @@ const (
 // MatchValidRedditUsername checks if a string is a valid username on Reddit.
 var MatchValidRedditUsername = regexp.MustCompile("^[[:word:]-]+$")
 
-// RedditScannerAPI provides methods for RedditScanner to interact with Reddit.
-type RedditScannerAPI interface {
-	UserComments(context.Context, User, uint) ([]Comment, User, error)
-}
-
-// RedditUsersAPI provides methods for RedditUsers to interact with Reddit.
-type RedditUsersAPI interface {
-	AboutUser(context.Context, string) UserQuery
-	WikiPage(context.Context, string, string) (string, error)
-}
-
 const accessTokenRawURL = "https://www.reddit.com/api/v1/access_token"
 
 var requestBaseURL = &url.URL{

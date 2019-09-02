@@ -9,9 +9,9 @@ import (
 // RedditScanner is a component that efficiently scans users' comments and saves them.
 type RedditScanner struct {
 	// dependencies
-	api     RedditScannerAPI
+	api     *RedditAPI
 	logger  LevelLogger
-	storage RedditScannerStorage
+	storage *Storage
 
 	// communication with the outside
 	sync.Mutex
@@ -28,12 +28,7 @@ type RedditScanner struct {
 }
 
 // NewRedditScanner creates a new RedditScanner.
-func NewRedditScanner(
-	logger LevelLogger,
-	storage RedditScannerStorage,
-	api RedditScannerAPI,
-	conf RedditScannerConf,
-) *RedditScanner {
+func NewRedditScanner(logger LevelLogger, storage *Storage, api *RedditAPI, conf RedditScannerConf) *RedditScanner {
 	return &RedditScanner{
 		api:     api,
 		logger:  logger,

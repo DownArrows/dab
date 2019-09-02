@@ -8,20 +8,6 @@ import (
 	"time"
 )
 
-// ReadableModel is a data structure that can be read from a database.
-// Only defined for documentation purposes.
-type ReadableModel interface {
-	FromDB(*SQLiteStmt) error
-}
-
-// PersistentModel is a data structure that can be read from and written to a database.
-// Only defined for documentation purposes.
-type PersistentModel interface {
-	ReadableModel
-	InitializationQueries() []SQLQuery
-	ToDB() []interface{}
-}
-
 // Comment is a Reddit comment.
 type Comment struct {
 	ID        string

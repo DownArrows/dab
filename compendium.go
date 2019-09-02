@@ -9,13 +9,13 @@ import (
 type CompendiumFactory struct {
 	// Number of most downvoted comments.
 	NbTop   uint
-	storage CompendiumStorage
+	storage *Storage
 	// Timezone of the dates.
 	Timezone *time.Location
 }
 
 // NewCompendiumFactory returns a new CompendiumFactory.
-func NewCompendiumFactory(storage CompendiumStorage, conf CompendiumConf) CompendiumFactory {
+func NewCompendiumFactory(storage *Storage, conf CompendiumConf) CompendiumFactory {
 	return CompendiumFactory{
 		NbTop:    conf.NbTop,
 		storage:  storage,

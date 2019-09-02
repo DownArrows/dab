@@ -166,7 +166,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 	if dab.components.ConfState.Discord.Enabled {
 		var err error
-		dab.components.Discord, err = NewDiscordBot(dab.layers.Storage, dab.logger, dab.components.RedditUsers.Add, dab.conf.Discord.DiscordBotConf)
+		dab.components.Discord, err = NewDiscordBot(dab.logger, dab.layers.Storage, dab.components.RedditUsers.Add, dab.conf.Discord.DiscordBotConf)
 		if err != nil {
 			return err
 		}

@@ -191,7 +191,7 @@ type DiscordBot struct {
 	conn    *SQLiteConn // a single one is enough, it's not heavily used
 	ctx     context.Context
 	logger  LevelLogger
-	storage DiscordBotStorage
+	storage *Storage
 
 	// state information
 	ID string
@@ -213,7 +213,7 @@ type DiscordBot struct {
 }
 
 // NewDiscordBot returns a new DiscordBot.
-func NewDiscordBot(storage DiscordBotStorage, logger LevelLogger, addUser AddRedditUser, conf DiscordBotConf) (*DiscordBot, error) {
+func NewDiscordBot(logger LevelLogger, storage *Storage, addUser AddRedditUser, conf DiscordBotConf) (*DiscordBot, error) {
 	discordgo.Logger = func(msgL, caller int, format string, dgArgs ...interface{}) {
 		args := []interface{}{msgL, caller}
 		args = append(args, dgArgs...)

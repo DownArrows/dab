@@ -10,12 +10,12 @@ type ReportFactory struct {
 	cutOff   int64         // Max acceptable comment score for inclusion in the report
 	leeway   time.Duration // Shift of the report's start and end date
 	NbTop    uint          // Number of items to summarize the weeks with statistics
-	storage  ReportFactoryStorage
+	storage  *Storage
 	Timezone *time.Location // Timezone used to compute weeks, years and corresponding start/end dates
 }
 
 // NewReportFactory returns a ReportFactory.
-func NewReportFactory(storage ReportFactoryStorage, conf ReportConf) ReportFactory {
+func NewReportFactory(storage *Storage, conf ReportConf) ReportFactory {
 	return ReportFactory{
 		storage:  storage,
 		leeway:   conf.Leeway.Value,

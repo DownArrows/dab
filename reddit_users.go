@@ -11,9 +11,9 @@ type AddRedditUser func(context.Context, *SQLiteConn, string, bool, bool) UserQu
 
 // RedditUsers is a data structure to manage Reddit users by interacting with both the database and Reddit.
 type RedditUsers struct {
-	api     RedditUsersAPI
+	api     *RedditAPI
 	logger  LevelLogger
-	storage RedditUsersStorage
+	storage *Storage
 
 	unsuspensions              chan User
 	unsuspensionInterval       time.Duration
@@ -21,12 +21,7 @@ type RedditUsers struct {
 }
 
 // NewRedditUsers creates a RedditUsers.
-func NewRedditUsers(
-	logger LevelLogger,
-	storage RedditUsersStorage,
-	api RedditUsersAPI,
-	conf RedditUsersConf,
-) *RedditUsers {
+func NewRedditUsers(logger LevelLogger, storage *Storage, api *RedditAPI, conf RedditUsersConf) *RedditUsers {
 	return &RedditUsers{
 		api:     api,
 		logger:  logger,
