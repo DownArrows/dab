@@ -5,45 +5,27 @@ import (
 	text "text/template"
 )
 
-// MarkdownReport is the template for reports in markdow format.
-var MarkdownReport = text.Must(text.New("MarkdownReport").Parse(`
-{{- with .Head -}}
-{{.Global.Count}} comments under {{.CutOff}} from {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}.
+// HTMLTemplate is a wrapper for html/template.Template that allows to easily add sub-templates in a chain.
+type HTMLTemplate struct {
+	html.Template
+}
 
-Top {{.Delta | len}} total negative karma change for this week:
-{{range .Delta}}
-- **{{.Sum}}** with {{.Count}} posts,
-by [/u/{{.Name}}](https://www.reddit.com/user/{{.Name}})
-{{- end}}
+// NewHTMLTemplate creates a new empty template.
+func NewHTMLTemplate(name string) *HTMLTemplate {
+	return &HTMLTemplate{Template: *html.New(name)}
+}
 
-Top {{.Average | len}} lowest average karma per comment:
-{{range .Average}}
-- **{{.Average}}** with {{.Count}} posts,
-by [/u/{{.Name}}](https://www.reddit.com/user/{{.Name}})
-{{- end}}
-{{- end}}
+// MustAddParse adds a sub-tree to the template, and panics if there's an error.
+func (tmpl *HTMLTemplate) MustAddParse(name, body string) *HTMLTemplate {
+	root := &tmpl.Template
+	updated := html.Must(root.AddParseTree(name, html.Must(html.New("").Parse(body)).Tree))
+	tmpl.Template = *updated
+	return tmpl
+}
 
-* * *
-
-{{range .Comments -}}
-# \#{{.Number}}
-
-Author: [/u/{{.Author}}](https://www.reddit.com/user/{{.Author}}) ({{.Stats.Average}} week average)
-
-Score: **{{.Score}}**
-
-Link: [{{.Permalink}}](https://np.reddit.com{{.Permalink}})
-
-Post text:
-
-{{range .BodyLines -}}
-> {{.}}
-{{end}}
-{{end -}}
-`))
-
-// HTMLReportPage is the template for single reports in HTML format.
-var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
+// HTMLTemplates regroups every HTML template so as to easily share common snippets.
+var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("Report",
+	`<!DOCTYPE html>
 <html lang="en">
 <head>
 	<meta charset="utf-8"/>
@@ -113,10 +95,9 @@ var HTMLReportPage = html.Must(html.New("HTMLReportPage").Parse(`<!DOCTYPE html>
 <footer><a href="#title">back to top</a></footer>
 
 </body>
-</html>`))
-
-// HTMLCompendiumUserPage is the template for the compendium page of a single user, in HTML format.
-var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(`<!DOCTYPE html>
+</html>`,
+).MustAddParse("CompendiumUser",
+	`<!DOCTYPE html>
 <html lang="en">
 <head>
 	<meta charset="utf-8"/>
@@ -309,10 +290,9 @@ var HTMLCompendiumUserPage = html.Must(html.New("HTMLCompendiumUserPage").Parse(
 
 </main>
 </body>
-</html>`))
-
-// HTMLCompendium is the HTML template for the compendium's index.
-var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
+</html>`,
+).MustAddParse("Compendium",
+	`<!DOCTYPE html>
 <html lang="en">
 <head>
 	<meta charset="utf-8"/>
@@ -461,7 +441,7 @@ var HTMLCompendium = html.Must(html.New("HTMLCompendium").Parse(`<!DOCTYPE html>
 {{end -}}
 
 </body>
-</html>`))
+</html>`)
 
 // CSSMain is the main CSS stylesheet, to be served along the result of the HTML templates.
 const CSSMain = `:root {
@@ -612,3 +592,39 @@ table.tags tr {
 .suspended {
 	color: crimson;
 }`
+
+// MarkdownReport is the template for reports in markdow format.
+var MarkdownReport = text.Must(text.New("MarkdownReport").Parse(`
+{{- with .Head -}}
+{{.Global.Count}} comments under {{.CutOff}} from {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}.
+
+Top {{.Delta | len}} total negative karma change for this week:
+{{range .Delta}}
+- **{{.Sum}}** with {{.Count}} posts,
+by [/u/{{.Name}}](https://www.reddit.com/user/{{.Name}})
+{{- end}}
+
+Top {{.Average | len}} lowest average karma per comment:
+{{range .Average}}
+- **{{.Average}}** with {{.Count}} posts,
+by [/u/{{.Name}}](https://www.reddit.com/user/{{.Name}})
+{{- end}}
+{{- end}}
+
+* * *
+
+{{range .Comments -}}
+# \#{{.Number}}
+
+Author: [/u/{{.Author}}](https://www.reddit.com/user/{{.Author}}) ({{.Stats.Average}} week average)
+
+Score: **{{.Score}}**
+
+Link: [{{.Permalink}}](https://np.reddit.com{{.Permalink}})
+
+Post text:
+
+{{range .BodyLines -}}
+> {{.}}
+{{end}}
+{{- end}}`))

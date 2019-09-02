@@ -287,7 +287,7 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 	report.CommentBodyConverter = wsrv.commentBodyConverter
 
 	w.Header().Set("Content-Type", "text/html")
-	if err := HTMLReportPage.Execute(w, report); err != nil {
+	if err := HTMLTemplates.ExecuteTemplate(w, "Report", report); err != nil {
 		panic(err)
 	}
 }
@@ -320,7 +320,7 @@ func (wsrv *WebServer) CompendiumIndex(w http.ResponseWriter, r *http.Request) {
 	compendium.CommentBodyConverter = wsrv.commentBodyConverter
 
 	w.Header().Set("Content-Type", "text/html")
-	if err := HTMLCompendium.Execute(w, compendium); err != nil {
+	if err := HTMLTemplates.ExecuteTemplate(w, "Compendium", compendium); err != nil {
 		panic(err)
 	}
 }
@@ -360,7 +360,7 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 	stats.CommentBodyConverter = wsrv.commentBodyConverter
 
 	w.Header().Set("Content-Type", "text/html")
-	if err := HTMLCompendiumUserPage.Execute(w, stats); err != nil {
+	if err := HTMLTemplates.ExecuteTemplate(w, "CompendiumUser", stats); err != nil {
 		panic(err)
 	}
 }
