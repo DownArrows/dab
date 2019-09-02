@@ -61,14 +61,10 @@ type WebServerStorage interface {
 // CompendiumStorage is the storage interface for the Compendium.
 type CompendiumStorage interface {
 	GetConn
-	// Index
-	CompendiumPerUser(*SQLiteConn) (StatsCollection, error)
-	CompendiumPerUserNegative(*SQLiteConn) (StatsCollection, error)
+	CompendiumPerUser(*SQLiteConn) (StatsCollection, StatsCollection, error)
+	CompendiumUserPerSub(*SQLiteConn, string) (StatsCollection, StatsCollection, error)
 	ListRegisteredUsers(*SQLiteConn) ([]User, error)
 	TopComments(*SQLiteConn, uint) ([]Comment, error)
-	// User pages
-	CompendiumUserPerSub(*SQLiteConn, string) (StatsCollection, error)
-	CompendiumUserPerSubNegative(*SQLiteConn, string) (StatsCollection, error)
 	TopCommentsUser(*SQLiteConn, string, uint) ([]Comment, error)
 }
 
@@ -488,15 +484,20 @@ func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.
 }
 
 // CompendiumPerUser returns the per-user statistics of all users, for use with the compendium.
-// To be used within a transaction.
-func (s *Storage) CompendiumPerUser(conn *SQLiteConn) (StatsCollection, error) {
-	return s.selectStats(conn, StatsRead{Name: true, Latest: true}, `
+func (s *Storage) CompendiumPerUser(conn *SQLiteConn) (StatsCollection, StatsCollection, error) {
+	return s.compendiumSelectStats(conn, `
 		SELECT
+		/* All comments */
 			COUNT(comments.id),
 			SUM(comments.score) AS karma,
 			AVG(comments.score),
 			comments.author,
-			MAX(comments.created)
+			MAX(comments.created),
+		/* Only negative comments */
+			COUNT(CASE WHEN comments.score < 0 THEN 1 ELSE NULL END),
+			SUM(CASE WHEN comments.score < 0 THEN comments.score ELSE NULL END),
+			AVG(CASE WHEN comments.score < 0 THEN comments.score ELSE NULL END),
+			MAX(CASE WHEN comments.score < 0 THEN comments.created ELSE NULL END)
 		FROM users JOIN comments
 		ON comments.author = users.name
 		WHERE users.hidden IS FALSE
@@ -504,45 +505,48 @@ func (s *Storage) CompendiumPerUser(conn *SQLiteConn) (StatsCollection, error) {
 		ORDER BY karma ASC`)
 }
 
-// CompendiumPerUserNegative returns the per-user statistics of all users taking only into account negative comments.
-// For use with the compendium. To be used within a transaction.
-func (s *Storage) CompendiumPerUserNegative(conn *SQLiteConn) (StatsCollection, error) {
-	return s.selectStats(conn, StatsRead{Name: true, Latest: true}, `
-		SELECT
-			COUNT(comments.id),
-			SUM(comments.score) AS karma,
-			AVG(comments.score),
-			comments.author,
-			MAX(comments.created)
-		FROM users JOIN comments
-		ON comments.author = users.name
-		WHERE
-			users.hidden IS FALSE
-			AND comments.score < 0
-		GROUP BY author
-		ORDER BY karma ASC`)
-}
-
 // CompendiumUserPerSub returns the commenting statistics for a single user, for use with the compendium.
-// To be used within a transaction.
-func (s *Storage) CompendiumUserPerSub(conn *SQLiteConn, username string) (StatsCollection, error) {
-	return s.selectStats(conn, StatsRead{Name: true, Latest: true}, `
+func (s *Storage) CompendiumUserPerSub(conn *SQLiteConn, username string) (StatsCollection, StatsCollection, error) {
+	return s.compendiumSelectStats(conn, `
 		SELECT
-			COUNT(score), SUM(score) AS karma, AVG(score), sub, MAX(created)
+		/* All comments */
+			COUNT(score), SUM(score) AS karma, AVG(score), sub, MAX(created),
+		/* Only negative comments */
+			COUNT(CASE WHEN score < 0 THEN 1 ELSE NULL END),
+			SUM(CASE WHEN score < 0 THEN score ELSE NULL END),
+			AVG(CASE WHEN score < 0 THEN score ELSE NULL END),
+			MAX(CASE WHEN score < 0 THEN created ELSE NULL END)
 		FROM comments WHERE author = ?
 		GROUP BY sub
 		ORDER BY karma ASC`, username)
 }
 
-// CompendiumUserPerSubNegative returns the commenting statistics for a single user and negative comments only, for use with the compendium.
-// To be used within a transaction.
-func (s *Storage) CompendiumUserPerSubNegative(conn *SQLiteConn, username string) (StatsCollection, error) {
-	return s.selectStats(conn, StatsRead{Name: true, Latest: true}, `
-		SELECT
-			COUNT(score), SUM(score) AS karma, AVG(score), sub, MAX(created)
-		FROM comments WHERE author = ? AND score < 0
-		GROUP BY sub
-		ORDER BY karma ASC`, username)
+func (s *Storage) compendiumSelectStats(conn *SQLiteConn, sql string, args ...interface{}) (StatsCollection, StatsCollection, error) {
+	var all StatsCollection
+	var negative StatsCollection
+
+	allRead := StatsRead{Name: true, Latest: true}
+	negRead := StatsRead{Start: 5, Latest: true}
+
+	cb := func(stmt *SQLiteStmt) error {
+		allStats := &Stats{}
+		negStats := &Stats{}
+		if err := allStats.FromDB(stmt, allRead); err != nil {
+			return err
+		}
+		all = append(all, *allStats)
+
+		if err := negStats.FromDB(stmt, negRead); err != nil {
+			return err
+		}
+		negStats.Name = allStats.Name
+		negative = append(negative, *negStats)
+
+		return nil
+	}
+
+	err := conn.Select(sql, cb, args...)
+	return all, negative, err
 }
 
 func (s *Storage) selectStats(conn *SQLiteConn, statsRead StatsRead, sql string, args ...interface{}) (StatsCollection, error) {

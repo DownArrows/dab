@@ -263,6 +263,7 @@ type UserQuery struct {
 
 // StatsRead tells which optional fields should be read from an SQL statement when populating a Stats data structure.
 type StatsRead struct {
+	Start  uint
 	Name   bool
 	Latest bool
 }
@@ -279,7 +280,7 @@ type Stats struct {
 // FromDB reads the statistics from the results of a relevant SQL query.
 func (s *Stats) FromDB(stmt *SQLiteStmt, read StatsRead) error {
 	var err error
-	var pos int
+	pos := int(read.Start)
 
 	var count int64
 	if count, _, err = stmt.ColumnInt64(pos); err != nil {
@@ -389,6 +390,18 @@ func (sc StatsCollection) Latest() time.Time {
 	return latest
 }
 
+// Filter makes a copy of the collection without the elements for which the callback returns false.
+func (sc StatsCollection) Filter(filter func(Stats) bool) StatsCollection {
+	length := len(sc)
+	out := make(StatsCollection, 0, length)
+	for _, stats := range sc {
+		if filter(stats) {
+			out = append(out, stats)
+		}
+	}
+	return out
+}
+
 // OrderByAverage orders the collection by average.
 func (sc StatsCollection) OrderByAverage() StatsCollection {
 	length := len(sc)
@@ -397,6 +410,19 @@ func (sc StatsCollection) OrderByAverage() StatsCollection {
 	Sort{
 		Len:  func() int { return length },
 		Less: func(i, j int) bool { return out[i].Average < out[j].Average },
+		Swap: func(i, j int) { out[i], out[j] = out[j], out[i] },
+	}.Do()
+	return out
+}
+
+// OrderBySum orders the collection by sums.
+func (sc StatsCollection) OrderBySum() StatsCollection {
+	length := len(sc)
+	out := make(StatsCollection, length)
+	copy(out, sc)
+	Sort{
+		Len:  func() int { return length },
+		Less: func(i, j int) bool { return out[i].Sum < out[j].Sum },
 		Swap: func(i, j int) { out[i], out[j] = out[j], out[i] },
 	}.Do()
 	return out

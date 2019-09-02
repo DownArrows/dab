@@ -33,24 +33,18 @@ func (cf CompendiumFactory) Compendium(conn *SQLiteConn) (*Compendium, error) {
 
 	err := conn.WithTx(func() error {
 		var err error
-		var stats StatsCollection
 
 		c.Users, err = cf.storage.ListRegisteredUsers(conn)
 		if err != nil {
 			return err
 		}
 
-		stats, err = cf.storage.CompendiumPerUser(conn)
+		all, negative, err := cf.storage.CompendiumPerUser(conn)
 		if err != nil {
 			return err
 		}
-		c.All = stats.ToView(c.Timezone)
-
-		stats, err = cf.storage.CompendiumPerUserNegative(conn)
-		if err != nil {
-			return err
-		}
-		c.Negative = stats.ToView(c.Timezone)
+		c.All = all.ToView(c.Timezone)
+		c.Negative = negative.Filter(func(s Stats) bool { return s.Sum < 0 }).OrderBySum().ToView(c.Timezone)
 
 		c.rawTopComments, err = cf.storage.TopComments(conn, c.NbTop)
 		return err
@@ -79,29 +73,18 @@ func (cf CompendiumFactory) User(conn *SQLiteConn, user User) (*CompendiumUser, 
 	}
 
 	err := conn.WithTx(func() error {
-		var err error
-		var statsColl StatsCollection
-
-		statsColl, err = cf.storage.CompendiumUserPerSub(conn, user.Name)
+		all, rawNegative, err := cf.storage.CompendiumUserPerSub(conn, user.Name)
 		if err != nil {
 			return err
 		}
-		cu.All = statsColl.ToView(cu.Timezone)
-		cu.Summary = statsColl.Stats().ToView(0, cu.Timezone)
-
-		statsColl, err = cf.storage.CompendiumUserPerSubNegative(conn, user.Name)
-		if err != nil {
-			return err
-		}
-		cu.Negative = statsColl.ToView(cu.Timezone)
-		cu.SummaryNegative = statsColl.Stats().ToView(0, cu.Timezone)
+		cu.All = all.ToView(cu.Timezone)
+		cu.Summary = all.Stats().ToView(0, cu.Timezone)
+		negative := rawNegative.Filter(func(s Stats) bool { return s.Sum < 0 })
+		cu.Negative = negative.OrderBySum().ToView(cu.Timezone)
+		cu.SummaryNegative = negative.Stats().ToView(0, cu.Timezone)
 
 		cu.rawTopComments, err = cf.storage.TopCommentsUser(conn, user.Name, cu.NbTop)
-		if err != nil {
-			return err
-		}
-
-		return nil
+		return err
 	})
 	if err != nil {
 		return nil, err
