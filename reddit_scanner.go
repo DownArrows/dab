@@ -73,7 +73,7 @@ func (rs *RedditScanner) Run(ctx context.Context) error {
 
 		if fullScan {
 			lastFullScan = time.Now()
-			if err := rs.storage.UpdateInactiveStatus(conn, rs.inactivityThreshold); err != nil {
+			if err := conn.UpdateInactiveStatus(rs.inactivityThreshold); err != nil {
 				return err
 			}
 		}
@@ -126,7 +126,7 @@ func (rs *RedditScanner) CloseHighScores() {
 }
 
 // Scan scans a slice of users once.
-func (rs *RedditScanner) Scan(ctx context.Context, conn *SQLiteConn, users []User) error {
+func (rs *RedditScanner) Scan(ctx context.Context, conn StorageConn, users []User) error {
 OUTER:
 	for _, user := range users {
 
@@ -159,7 +159,7 @@ OUTER:
 			// This method contains logic that returns an User datastructure whose metadata
 			// has been updated; in other words, it indirectly controls the behavior of the
 			// current loop.
-			user, err = rs.storage.SaveCommentsUpdateUser(conn, comments, user, lastScan+rs.maxAge)
+			user, err = conn.SaveCommentsUpdateUser(comments, user, lastScan+rs.maxAge)
 			if err != nil {
 				if IsSQLiteForeignKeyErr(err) { // triggered after a PurgeUser
 					rs.logger.Debugf("saving the comments of %q resulted in a foreign key constraint error, skipping", user.Name)
@@ -193,7 +193,7 @@ OUTER:
 	return nil
 }
 
-func (rs *RedditScanner) getUsersOrWait(ctx context.Context, conn *SQLiteConn, fullScan bool) ([]User, error) {
+func (rs *RedditScanner) getUsersOrWait(ctx context.Context, conn StorageConn, fullScan bool) ([]User, error) {
 	var users []User
 	var err error
 	// We could be using a channel to signal when a new user is added,
@@ -201,12 +201,12 @@ func (rs *RedditScanner) getUsersOrWait(ctx context.Context, conn *SQLiteConn, f
 	// is used in production only once, when the database is empty.
 	for SleepCtx(ctx, time.Second) {
 		if fullScan {
-			users, err = rs.storage.ListUsers(conn)
+			users, err = conn.ListUsers()
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			users, err = rs.storage.ListActiveUsers(conn)
+			users, err = conn.ListActiveUsers()
 			if err != nil {
 				return nil, err
 			}
@@ -218,7 +218,7 @@ func (rs *RedditScanner) getUsersOrWait(ctx context.Context, conn *SQLiteConn, f
 	return users, nil
 }
 
-func (rs *RedditScanner) alertIfHighScore(conn *SQLiteConn, comments []Comment) error {
+func (rs *RedditScanner) alertIfHighScore(conn StorageConn, comments []Comment) error {
 	rs.Lock()
 	defer rs.Unlock()
 

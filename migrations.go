@@ -11,7 +11,7 @@ var StorageMigrations = []SQLiteMigration{
 	{
 		From: SemVer{1, 10, 1},
 		To:   SemVer{1, 11, 0},
-		Exec: func(conn *SQLiteConn) error {
+		Exec: func(conn SQLiteConn) error {
 			return conn.MultiExecWithTx([]SQLQuery{
 				{SQL: `CREATE TABLE key_value (
 					key TEXT NOT NULL,
@@ -32,7 +32,7 @@ var StorageMigrations = []SQLiteMigration{
 	}, {
 		From: SemVer{1, 11, 0},
 		To:   SemVer{1, 12, 0},
-		Exec: func(conn *SQLiteConn) error {
+		Exec: func(conn SQLiteConn) error {
 			if err := conn.Exec("PRAGMA foreign_keys = OFF"); err != nil {
 				return err
 			}

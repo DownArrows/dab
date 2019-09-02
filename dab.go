@@ -113,7 +113,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return nil
 	}
 
-	dab.layers.Report = NewReportFactory(dab.layers.Storage, dab.conf.Report)
+	dab.layers.Report = NewReportFactory(dab.conf.Report)
 	if dab.runtimeConf.Report {
 		return dab.report(ctx)
 	}
@@ -125,7 +125,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return dab.userAdd(ctx)
 	}
 
-	dab.layers.Compendium = NewCompendiumFactory(dab.layers.Storage, dab.conf.Compendium)
+	dab.layers.Compendium = NewCompendiumFactory(dab.conf.Compendium)
 
 	tasks := NewTaskGroup(ctx)
 
@@ -147,7 +147,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		}
 
 		dab.components.RedditScanner = NewRedditScanner(dab.logger, dab.layers.Storage, redditAPI, dab.conf.Reddit.RedditScannerConf)
-		dab.components.RedditUsers = NewRedditUsers(dab.logger, dab.layers.Storage, redditAPI, dab.conf.Reddit.RedditUsersConf)
+		dab.components.RedditUsers = NewRedditUsers(dab.logger, redditAPI, dab.conf.Reddit.RedditUsersConf)
 
 		retrier := NewRetrier(dab.conf.Reddit.Retry, func(r *Retrier, err error) {
 			dab.logger.Errorf("error in reddit component, restarting (%d retries, %s backoff): %v", r.Retries, r.Backoff, err)
@@ -166,7 +166,13 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 	if dab.components.ConfState.Discord.Enabled {
 		var err error
-		dab.components.Discord, err = NewDiscordBot(dab.logger, dab.layers.Storage, dab.components.RedditUsers.Add, dab.conf.Discord.DiscordBotConf)
+
+		discordConn, err := dab.layers.Storage.GetConn(ctx)
+		if err != nil {
+			return err
+		}
+
+		dab.components.Discord, err = NewDiscordBot(dab.logger, discordConn, dab.components.RedditUsers.Add, dab.conf.Discord.DiscordBotConf)
 		if err != nil {
 			return err
 		}
@@ -186,7 +192,11 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		tasks.Spawn(func() { dab.components.Discord.SignalSuspensions(dab.components.RedditScanner.OpenSuspensions()) })
 
 		if dab.components.RedditUsers.UnsuspensionWatcherEnabled {
-			tasks.SpawnCtx(dab.components.RedditUsers.UnsuspensionWatcher)
+			tasks.SpawnCtx(func(ctx context.Context) error {
+				return dab.layers.Storage.WithConn(ctx, func(conn StorageConn) error {
+					return dab.components.RedditUsers.UnsuspensionWatcher(ctx, conn)
+				})
+			})
 			tasks.Spawn(func() { dab.components.Discord.SignalUnsuspensions(dab.components.RedditUsers.OpenUnsuspensions()) })
 		}
 
@@ -273,7 +283,7 @@ func (dab *DownArrowsBot) userAdd(ctx context.Context) error {
 		return err
 	}
 
-	ru := NewRedditUsers(dab.logger, dab.layers.Storage, ra, dab.conf.Reddit.RedditUsersConf)
+	ru := NewRedditUsers(dab.logger, ra, dab.conf.Reddit.RedditUsersConf)
 
 	conn, err := dab.layers.Storage.GetConn(ctx)
 	if err != nil {

@@ -15,7 +15,7 @@ type KeyValueStore struct {
 }
 
 // NewKeyValueStore creates a new KeyValueStore with the given SQLite database onto the given table, which it assumes has total control of.
-func NewKeyValueStore(conn *SQLiteConn, table string) (*KeyValueStore, error) {
+func NewKeyValueStore(conn SQLiteConn, table string) (*KeyValueStore, error) {
 	kv := &KeyValueStore{
 		insertQuery: fmt.Sprintf("INSERT INTO %s(key, value, created) VALUES (?, ?, ?)", table),
 		store:       make(map[string]map[string]struct{}),
@@ -33,7 +33,7 @@ func NewKeyValueStore(conn *SQLiteConn, table string) (*KeyValueStore, error) {
 	return kv, nil
 }
 
-func (kv *KeyValueStore) init(conn *SQLiteConn) error {
+func (kv *KeyValueStore) init(conn SQLiteConn) error {
 	return conn.Exec(fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
 			key TEXT NOT NULL,
@@ -43,7 +43,7 @@ func (kv *KeyValueStore) init(conn *SQLiteConn) error {
 		) WITHOUT ROWID`, kv.table))
 }
 
-func (kv *KeyValueStore) readAll(conn *SQLiteConn) error {
+func (kv *KeyValueStore) readAll(conn SQLiteConn) error {
 	return conn.Select("SELECT key, value FROM "+kv.table, func(stmt *SQLiteStmt) error {
 		key, _, err := stmt.ColumnText(0)
 		if err != nil {
@@ -66,12 +66,12 @@ func (kv *KeyValueStore) readAll(conn *SQLiteConn) error {
 
 // Save saves a value associated to a key.
 // Any number of values can be associated to a key.
-func (kv *KeyValueStore) Save(conn *SQLiteConn, key string, value string) error {
+func (kv *KeyValueStore) Save(conn SQLiteConn, key string, value string) error {
 	return kv.SaveMany(conn, key, []string{value})
 }
 
 // SaveMany saves several values associated with a single key.
-func (kv *KeyValueStore) SaveMany(conn *SQLiteConn, key string, values []string) error {
+func (kv *KeyValueStore) SaveMany(conn SQLiteConn, key string, values []string) error {
 	todo := make(map[string]struct{})
 
 	err := conn.WithTx(func() error {

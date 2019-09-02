@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"html"
 	"math"
 	"strconv"
@@ -429,4 +430,40 @@ func (sc StatsCollection) Limit(limit uint) StatsCollection {
 type StatsView struct {
 	Stats
 	Number uint
+}
+
+// SQLiteForeignKeyCheck describes a foreign key error in a single row.
+type SQLiteForeignKeyCheck struct {
+	ValidRowID   bool // RowID can be NULL, contrarily to the rest.
+	Table        string
+	RowID        int64
+	Parent       string
+	ForeignKeyID int
+}
+
+// FromDB reads the error from the results of "PRAGMA foreign_key_check".
+func (fkc *SQLiteForeignKeyCheck) FromDB(stmt *SQLiteStmt) error {
+	var err error
+	if fkc.Table, _, err = stmt.ColumnText(0); err != nil {
+		return err
+	}
+
+	if fkc.RowID, fkc.ValidRowID, err = stmt.ColumnInt64(1); err != nil {
+		return err
+	}
+
+	if fkc.Parent, _, err = stmt.ColumnText(2); err != nil {
+		return err
+	}
+
+	fkc.ForeignKeyID, _, err = stmt.ColumnInt(3)
+	return err
+}
+
+// Error summarizes the error the data structure describes.
+func (fkc *SQLiteForeignKeyCheck) Error() string {
+	if !fkc.ValidRowID {
+		return fmt.Sprintf("a row in %q failed to reference key #%d in %q", fkc.Table, fkc.ForeignKeyID, fkc.Parent)
+	}
+	return fmt.Sprintf("row #%d in %q failed to reference key #%d in %q", fkc.RowID, fkc.Table, fkc.ForeignKeyID, fkc.Parent)
 }

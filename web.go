@@ -112,7 +112,7 @@ type WebServer struct {
 	sync.Mutex
 	WebConf
 	compendium CompendiumFactory
-	conns      *SQLiteConnPool
+	conns      StorageConnPool
 	done       chan error
 	logger     LevelLogger
 	reports    ReportFactory
@@ -179,24 +179,20 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 	}
 }
 
-func (wsrv *WebServer) initDBPool(ctx context.Context) (*SQLiteConnPool, error) {
-	pool := NewSQLiteConnPool(ctx, wsrv.NbDBConn)
-
-	if wsrv.DirtyReads {
-		wsrv.logger.Info("web server's dirty reads of the database enabled")
+func (wsrv *WebServer) initDBPool(ctx context.Context) (StorageConnPool, error) {
+	pool, err := wsrv.storage.MakePool(ctx, wsrv.NbDBConn)
+	if err != nil {
+		return pool, err
 	}
 
-	for i := uint(0); i < wsrv.NbDBConn; i++ {
-		conn, err := wsrv.storage.GetConn(ctx)
+	if wsrv.DirtyReads {
+		err = pool.ForEach(ctx, func(conn StorageConn) error {
+			return conn.ReadUncommitted(true)
+		})
 		if err != nil {
-			return nil, err
+			return pool, err
 		}
-		if wsrv.DirtyReads {
-			if err := conn.ReadUncommitted(true); err != nil {
-				return nil, err
-			}
-		}
-		pool.Release(conn)
+		wsrv.logger.Info("web server has enabled dirty reads of the database")
 	}
 
 	return pool, nil
@@ -246,16 +242,14 @@ func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn, err := wsrv.conns.Acquire(r.Context())
+	var report Report
+	err = wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
+		var err error
+		report, err = wsrv.reports.ReportWeek(conn, week, year)
+		return err
+	})
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusServiceUnavailable)
-		return
-	}
-
-	report, err := wsrv.reports.ReportWeek(conn, week, year)
-	wsrv.conns.Release(conn)
-	if err != nil {
-		wsrv.err(w, r, err, http.StatusServiceUnavailable)
+		wsrv.err(w, r, err, http.StatusInternalServerError)
 		return
 	} else if report.Len() == 0 {
 		wsrv.errMsg(w, r, fmt.Sprintf("Empty report for %d/%d.", year, week), http.StatusNotFound)
@@ -276,16 +270,14 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn, err := wsrv.conns.Acquire(r.Context())
+	var report Report
+	err = wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
+		var err error
+		report, err = wsrv.reports.ReportWeek(conn, week, year)
+		return err
+	})
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusServiceUnavailable)
-		return
-	}
-
-	report, err := wsrv.reports.ReportWeek(conn, week, year)
-	wsrv.conns.Release(conn)
-	if err != nil {
-		wsrv.err(w, r, err, http.StatusServiceUnavailable)
+		wsrv.err(w, r, err, http.StatusInternalServerError)
 		return
 	} else if report.Len() == 0 {
 		wsrv.errMsg(w, r, fmt.Sprintf("Empty report for %d/%d.", year, week), http.StatusNotFound)
@@ -314,23 +306,21 @@ func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
 
 // CompendiumIndex serves the compendium's index.
 func (wsrv *WebServer) CompendiumIndex(w http.ResponseWriter, r *http.Request) {
-	conn, err := wsrv.conns.Acquire(r.Context())
-	if err != nil {
-		wsrv.err(w, r, err, http.StatusServiceUnavailable)
-		return
-	}
-
-	stats, err := wsrv.compendium.Compendium(conn)
-	wsrv.conns.Release(conn)
+	var compendium Compendium
+	err := wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
+		var err error
+		compendium, err = wsrv.compendium.Compendium(conn)
+		return err
+	})
 	if err != nil {
 		wsrv.err(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	stats.CommentBodyConverter = wsrv.commentBodyConverter
+	compendium.CommentBodyConverter = wsrv.commentBodyConverter
 
 	w.Header().Set("Content-Type", "text/html")
-	if err := HTMLCompendium.Execute(w, stats); err != nil {
+	if err := HTMLCompendium.Execute(w, compendium); err != nil {
 		panic(err)
 	}
 }
@@ -352,7 +342,7 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 	}
 	defer wsrv.conns.Release(conn)
 
-	query := wsrv.storage.GetUser(conn, username)
+	query := conn.GetUser(username)
 	if !query.Exists {
 		wsrv.errMsg(w, r, fmt.Sprintf("User %q doesn't exist.", username), http.StatusNotFound)
 		return
@@ -377,15 +367,11 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 
 // Backup triggers a backup if needed, and serves it.
 func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
-	conn, err := wsrv.conns.Acquire(r.Context())
+	err := wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
+		return wsrv.storage.Backup(r.Context(), conn)
+	})
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusServiceUnavailable)
-		return
-	}
-	defer wsrv.conns.Release(conn)
-
-	if err := wsrv.storage.Backup(r.Context(), conn); err != nil {
-		wsrv.err(w, r, err, http.StatusServiceUnavailable)
+		wsrv.err(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -404,7 +390,8 @@ func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
 func (wsrv *WebServer) err(w http.ResponseWriter, r *http.Request, err error, code int) {
 	var msg string
 	if IsCancellation(err) {
-		msg = "server shutting down"
+		msg = "Server shutting down."
+		code = http.StatusServiceUnavailable
 	} else {
 		str := fmt.Sprint(err)
 		msg = fmt.Sprintf("%s%s.", strings.ToUpper(str[0:1]), str[1:])

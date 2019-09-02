@@ -7,17 +7,15 @@ import (
 // ReportFactory generates data structures that define reports about the comments made between two dates,
 // and provides method to deal with week numbers, so as to easily generate reports for a specific week.
 type ReportFactory struct {
-	cutOff   int64         // Max acceptable comment score for inclusion in the report
-	leeway   time.Duration // Shift of the report's start and end date
-	NbTop    uint          // Number of items to summarize the weeks with statistics
-	storage  *Storage
+	cutOff   int64          // Max acceptable comment score for inclusion in the report
+	leeway   time.Duration  // Shift of the report's start and end date
+	NbTop    uint           // Number of items to summarize the weeks with statistics
 	Timezone *time.Location // Timezone used to compute weeks, years and corresponding start/end dates
 }
 
 // NewReportFactory returns a ReportFactory.
-func NewReportFactory(storage *Storage, conf ReportConf) ReportFactory {
+func NewReportFactory(conf ReportConf) ReportFactory {
 	return ReportFactory{
-		storage:  storage,
 		leeway:   conf.Leeway.Value,
 		Timezone: conf.Timezone.Value,
 		cutOff:   conf.CutOff,
@@ -26,7 +24,7 @@ func NewReportFactory(storage *Storage, conf ReportConf) ReportFactory {
 }
 
 // ReportWeek generates a Report for an ISO week number and a year.
-func (rf ReportFactory) ReportWeek(conn *SQLiteConn, weekNum uint8, year int) (Report, error) {
+func (rf ReportFactory) ReportWeek(conn StorageConn, weekNum uint8, year int) (Report, error) {
 	start, end := rf.WeekYearToDates(weekNum, year)
 	report, err := rf.Report(conn, start.Add(-rf.leeway), end.Add(-rf.leeway))
 	if err != nil {
@@ -38,17 +36,17 @@ func (rf ReportFactory) ReportWeek(conn *SQLiteConn, weekNum uint8, year int) (R
 }
 
 // Report generates a Report between two arbitrary dates.
-func (rf ReportFactory) Report(conn *SQLiteConn, start, end time.Time) (Report, error) {
+func (rf ReportFactory) Report(conn StorageConn, start, end time.Time) (Report, error) {
 	var comments []Comment
 	var stats StatsCollection
 
 	err := conn.WithTx(func() error {
 		var err error
-		comments, err = rf.storage.GetCommentsBelowBetween(conn, rf.cutOff, start, end)
+		comments, err = conn.GetCommentsBelowBetween(rf.cutOff, start, end)
 		if err != nil {
 			return err
 		}
-		stats, err = rf.storage.StatsBetween(conn, rf.cutOff, start, end)
+		stats, err = conn.StatsBetween(rf.cutOff, start, end)
 		return err
 	})
 

@@ -7,13 +7,12 @@ import (
 )
 
 // AddRedditUser is a function for when the only thing needed is to add users by checking through Reddit first.
-type AddRedditUser func(context.Context, *SQLiteConn, string, bool, bool) UserQuery
+type AddRedditUser func(context.Context, StorageConn, string, bool, bool) UserQuery
 
 // RedditUsers is a data structure to manage Reddit users by interacting with both the database and Reddit.
 type RedditUsers struct {
-	api     *RedditAPI
-	logger  LevelLogger
-	storage *Storage
+	api    *RedditAPI
+	logger LevelLogger
 
 	unsuspensions              chan User
 	unsuspensionInterval       time.Duration
@@ -21,11 +20,10 @@ type RedditUsers struct {
 }
 
 // NewRedditUsers creates a RedditUsers.
-func NewRedditUsers(logger LevelLogger, storage *Storage, api *RedditAPI, conf RedditUsersConf) *RedditUsers {
+func NewRedditUsers(logger LevelLogger, api *RedditAPI, conf RedditUsersConf) *RedditUsers {
 	return &RedditUsers{
-		api:     api,
-		logger:  logger,
-		storage: storage,
+		api:    api,
+		logger: logger,
 
 		unsuspensions:              make(chan User, DefaultChannelSize),
 		unsuspensionInterval:       conf.UnsuspensionInterval.Value,
@@ -36,10 +34,10 @@ func NewRedditUsers(logger LevelLogger, storage *Storage, api *RedditAPI, conf R
 // Add registers the a user, sets it to "hidden" or not,
 // and with the argument forceSuspended can add the user even if it was found to be suspended.
 // Case-insensitive.
-func (ru *RedditUsers) Add(ctx context.Context, conn *SQLiteConn, username string, hidden, forceSuspended bool) UserQuery {
+func (ru *RedditUsers) Add(ctx context.Context, conn StorageConn, username string, hidden, forceSuspended bool) UserQuery {
 	query := UserQuery{User: User{Name: username}}
 
-	query = ru.storage.GetUser(conn, username)
+	query = conn.GetUser(username)
 	if query.Error != nil {
 		return query
 	} else if query.Exists {
@@ -59,12 +57,12 @@ func (ru *RedditUsers) Add(ctx context.Context, conn *SQLiteConn, username strin
 		}
 	}
 
-	if err := ru.storage.AddUser(conn, query.User.Name, hidden, query.User.Created); err != nil {
+	if err := conn.AddUser(query.User.Name, hidden, query.User.Created); err != nil {
 		query.Error = err
 	}
 
 	if query.User.Suspended {
-		if err := ru.storage.SuspendUser(conn, query.User.Name); err != nil {
+		if err := conn.SuspendUser(query.User.Name); err != nil {
 			query.Error = err
 		}
 	}
@@ -84,19 +82,13 @@ func (ru *RedditUsers) CloseUnsuspensions() {
 
 // UnsuspensionWatcher is a Task to be launched independently that watches unsuspensions
 // and send the unsuspended users User to the channel returned by Unsuspensions.
-func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
-	conn, err := ru.storage.GetConn(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
+func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context, conn StorageConn) error {
 	ru.logger.Infof("watching unsuspensions/undeletions with interval %s", ru.unsuspensionInterval)
 
 	for SleepCtx(ctx, ru.unsuspensionInterval) {
 		ru.logger.Debug("checking uspended/deleted users")
 
-		users, err := ru.storage.ListSuspendedAndNotFound(conn)
+		users, err := conn.ListSuspendedAndNotFound()
 		if err != nil {
 			return err
 		}
@@ -127,7 +119,7 @@ func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context) error {
 	return ctx.Err()
 }
 
-func (ru *RedditUsers) updateRedditUserStatus(conn *SQLiteConn, user User, res UserQuery) error {
+func (ru *RedditUsers) updateRedditUserStatus(conn StorageConn, user User, res UserQuery) error {
 	/* Actions depending in change of status (from is "user", to is "res"):
 
 	 from \ to | Alive  | Suspended | Deleted
@@ -146,12 +138,12 @@ func (ru *RedditUsers) updateRedditUserStatus(conn *SQLiteConn, user User, res U
 	*/
 
 	if user.NotFound && res.Exists { // undeletion
-		if err := ru.storage.FoundUser(conn, user.Name); err != nil {
+		if err := conn.FoundUser(user.Name); err != nil {
 			return err
 		}
 		if res.User.Suspended {
 			// don't signal accounts that went from deleted to suspended
-			return ru.storage.SuspendUser(conn, user.Name)
+			return conn.SuspendUser(user.Name)
 		}
 	} else if user.Suspended && !res.Exists { // deletion of a suspended account
 		// if the user was already found not to exist anymore, don't pointlessly update
@@ -159,9 +151,9 @@ func (ru *RedditUsers) updateRedditUserStatus(conn *SQLiteConn, user User, res U
 			return nil
 		}
 		// don't signal it, we only need to keep track of it
-		return ru.storage.NotFoundUser(conn, user.Name)
+		return conn.NotFoundUser(user.Name)
 	} else if user.Suspended && !res.User.Suspended { // unsuspension
-		if err := ru.storage.UnSuspendUser(conn, user.Name); err != nil {
+		if err := conn.UnSuspendUser(user.Name); err != nil {
 			return err
 		}
 	} else { // no change

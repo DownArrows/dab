@@ -188,10 +188,9 @@ type DiscordBot struct {
 	// dependencies
 	addUser AddRedditUser
 	client  *discordgo.Session
-	conn    *SQLiteConn // a single one is enough, it's not heavily used
+	conn    StorageConn // a single one is enough, it's not heavily used
 	ctx     context.Context
 	logger  LevelLogger
-	storage *Storage
 
 	// state information
 	ID string
@@ -213,7 +212,7 @@ type DiscordBot struct {
 }
 
 // NewDiscordBot returns a new DiscordBot.
-func NewDiscordBot(logger LevelLogger, storage *Storage, addUser AddRedditUser, conf DiscordBotConf) (*DiscordBot, error) {
+func NewDiscordBot(logger LevelLogger, conn StorageConn, addUser AddRedditUser, conf DiscordBotConf) (*DiscordBot, error) {
 	discordgo.Logger = func(msgL, caller int, format string, dgArgs ...interface{}) {
 		args := []interface{}{msgL, caller}
 		args = append(args, dgArgs...)
@@ -233,8 +232,8 @@ func NewDiscordBot(logger LevelLogger, storage *Storage, addUser AddRedditUser, 
 	bot := &DiscordBot{
 		addUser: addUser,
 		client:  session,
+		conn:    conn,
 		logger:  logger,
-		storage: storage,
 
 		channelsID:     conf.DiscordBotChannelsID,
 		hidePrefix:     conf.HidePrefix,
@@ -267,11 +266,8 @@ func (bot *DiscordBot) Run(ctx context.Context) error {
 
 	bot.Lock()
 	bot.ctx = ctx
-	bot.conn, err = bot.storage.GetConn(ctx)
 	bot.Unlock()
-	if err != nil {
-		return err
-	}
+
 	defer bot.conn.Close()
 
 	go func() {
@@ -576,17 +572,17 @@ func (bot *DiscordBot) getCommandsDescriptors() []DiscordCommand {
 		HasArgs:  true,
 	}, {
 		Command:    "unregister",
-		Callback:   bot.editUsers("unregister", bot.storage.DelUser),
+		Callback:   bot.editUsers("unregister", bot.conn.DelUser),
 		HasArgs:    true,
 		Privileged: true,
 	}, {
 		Command:    "reregister",
-		Callback:   bot.editUsers("reregister", bot.storage.UnDelUser),
+		Callback:   bot.editUsers("reregister", bot.conn.UnDelUser),
 		HasArgs:    true,
 		Privileged: true,
 	}, {
 		Command:    "purge",
-		Callback:   bot.editUsers("purge", bot.storage.PurgeUser),
+		Callback:   bot.editUsers("purge", bot.conn.PurgeUser),
 		HasArgs:    true,
 		Privileged: true,
 	}, {
@@ -595,11 +591,11 @@ func (bot *DiscordBot) getCommandsDescriptors() []DiscordCommand {
 		HasArgs:  true,
 	}, {
 		Command:  "hide",
-		Callback: bot.editUsers("hide", bot.storage.HideUser),
+		Callback: bot.editUsers("hide", bot.conn.HideUser),
 		HasArgs:  true,
 	}, {
 		Command:  "unhide",
-		Callback: bot.editUsers("unhide", bot.storage.UnHideUser),
+		Callback: bot.editUsers("unhide", bot.conn.UnHideUser),
 		HasArgs:  true,
 	}, {
 		Command: "sip",
@@ -681,7 +677,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 	return bot.channelEmbedSend(msg.ChannelID, status)
 }
 
-func (bot *DiscordBot) editUsers(actionName string, action func(*SQLiteConn, string) error) func(DiscordMessage) error {
+func (bot *DiscordBot) editUsers(actionName string, action func(string) error) func(DiscordMessage) error {
 	return func(msg DiscordMessage) error {
 		names := msg.Args
 		bot.logger.Infof("%s wants to %s %v", msg.Author.FQN(), actionName, names)
@@ -695,7 +691,7 @@ func (bot *DiscordBot) editUsers(actionName string, action func(*SQLiteConn, str
 			name = TrimUsername(name)
 
 			bot.conn.Lock()
-			err := action(bot.conn, name)
+			err := action(name)
 			bot.conn.Unlock()
 
 			if err != nil {
@@ -713,7 +709,7 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 	username := TrimUsername(msg.Content)
 
 	bot.conn.Lock()
-	query := bot.storage.GetUser(bot.conn, username)
+	query := bot.conn.GetUser(username)
 	bot.conn.Unlock()
 
 	if !query.Exists {
@@ -772,7 +768,7 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 	username := TrimUsername(msg.Args[0])
 
 	bot.conn.Lock()
-	userQuery := bot.storage.GetUser(bot.conn, username)
+	userQuery := bot.conn.GetUser(username)
 	bot.conn.Unlock()
 
 	if userQuery.Error != nil {
@@ -785,7 +781,7 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 	user := userQuery.User
 
 	bot.conn.Lock()
-	total, negative, err := bot.storage.GetKarma(bot.conn, user.Name)
+	total, negative, err := bot.conn.GetKarma(user.Name)
 	bot.conn.Unlock()
 	if err != nil {
 		return err

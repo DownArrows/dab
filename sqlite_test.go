@@ -26,7 +26,7 @@ func TestSQLiteConn(t *testing.T) {
 	expected := []string{"value1", "value2", "value3", "value4"}
 
 	t.Run("create connection", func(t *testing.T) {
-		if conn, err := NewSQLiteConn(ctx, NewTestLevelLogger(t), connOpts); err != nil {
+		if conn, err := NewBaseSQLiteConn(ctx, NewTestLevelLogger(t), connOpts); err != nil {
 			t.Fatal(err)
 		} else {
 			conn.Close()
@@ -34,7 +34,7 @@ func TestSQLiteConn(t *testing.T) {
 	})
 
 	t.Run("exec create table", func(t *testing.T) {
-		conn, err := NewSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
+		conn, err := NewBaseSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -46,7 +46,7 @@ func TestSQLiteConn(t *testing.T) {
 	})
 
 	t.Run("prepared statement insert", func(t *testing.T) {
-		conn, err := NewSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
+		conn, err := NewBaseSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -69,7 +69,7 @@ func TestSQLiteConn(t *testing.T) {
 	})
 
 	t.Run("select previously inserted values", func(t *testing.T) {
-		conn, err := NewSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
+		conn, err := NewBaseSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -96,7 +96,7 @@ func TestSQLiteConn(t *testing.T) {
 	})
 
 	t.Run("multi exec", func(t *testing.T) {
-		conn, err := NewSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
+		conn, err := NewBaseSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
 		if err != nil {
 			t.Fatal(err)
 		}

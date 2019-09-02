@@ -42,14 +42,14 @@ func TestCRUDUsers(t *testing.T) {
 
 	t.Run("add", func(t *testing.T) {
 		for _, user := range users {
-			if err := s.AddUser(conn, user.Name, false, user.Created); err != nil {
+			if err := conn.AddUser(user.Name, false, user.Created); err != nil {
 				t.Fatal(err)
 			}
 		}
 	})
 
 	t.Run("get", func(t *testing.T) {
-		query := s.GetUser(conn, users[0].Name)
+		query := conn.GetUser(users[0].Name)
 		if query.Error != nil {
 			t.Fatal(query.Error)
 		}
@@ -64,7 +64,7 @@ func TestCRUDUsers(t *testing.T) {
 	})
 
 	t.Run("list", func(t *testing.T) {
-		list, err := s.ListUsers(conn)
+		list, err := conn.ListUsers()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -76,12 +76,12 @@ func TestCRUDUsers(t *testing.T) {
 
 	// Leave this case at the end so as not to complicate the previous ones.
 	t.Run("delete", func(t *testing.T) {
-		err := s.DelUser(conn, users[1].Name)
+		err := conn.DelUser(users[1].Name)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		list, err := s.ListUsers(conn)
+		list, err := conn.ListUsers()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -223,7 +223,7 @@ func TestCRUDComments(t *testing.T) {
 	t.Run("save users", func(t *testing.T) {
 		t.Helper()
 		for _, user := range users {
-			if err := s.AddUser(conn, user.Name, false, user.Created); err != nil {
+			if err := conn.AddUser(user.Name, false, user.Created); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -231,14 +231,14 @@ func TestCRUDComments(t *testing.T) {
 
 	t.Run("save", func(t *testing.T) {
 		for user, comments := range data {
-			if _, err := s.SaveCommentsUpdateUser(conn, comments, user, maxAge); err != nil {
+			if _, err := conn.SaveCommentsUpdateUser(comments, user, maxAge); err != nil {
 				t.Fatal(err)
 			}
 		}
 	})
 
 	t.Run("read", func(t *testing.T) {
-		comments, err := s.GetCommentsBelowBetween(conn, reportCutoff, reportStart, reportEnd)
+		comments, err := conn.GetCommentsBelowBetween(reportCutoff, reportStart, reportEnd)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -275,7 +275,7 @@ func TestCRUDComments(t *testing.T) {
 	})
 
 	t.Run("statistics", func(t *testing.T) {
-		allStats, err := s.StatsBetween(conn, reportCutoff, reportStart, reportEnd)
+		allStats, err := conn.StatsBetween(reportCutoff, reportStart, reportEnd)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -308,11 +308,11 @@ func TestCRUDComments(t *testing.T) {
 	})
 
 	t.Run("update and read inactivity", func(t *testing.T) {
-		if err := s.UpdateInactiveStatus(conn, time.Hour); err != nil {
+		if err := conn.UpdateInactiveStatus(time.Hour); err != nil {
 			t.Fatal(err)
 		}
 
-		active, err := s.ListActiveUsers(conn)
+		active, err := conn.ListActiveUsers()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -325,12 +325,12 @@ func TestCRUDComments(t *testing.T) {
 
 	// See end of the list of test cases for a successful purge.
 	t.Run("purge fail", func(t *testing.T) {
-		err := s.PurgeUser(conn, "NotUser")
+		err := conn.PurgeUser("NotUser")
 		if err == nil {
 			t.Error("NotUser doesn't exist and should lead to an error")
 		}
 
-		active, err := s.ListUsers(conn)
+		active, err := conn.ListUsers()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -339,7 +339,7 @@ func TestCRUDComments(t *testing.T) {
 			t.Errorf("list of users should be left unchanged, instead of getting %v", active)
 		}
 
-		comments, err := s.GetCommentsBelowBetween(conn, reportCutoff, reportStart, reportEnd)
+		comments, err := conn.GetCommentsBelowBetween(reportCutoff, reportStart, reportEnd)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -349,7 +349,7 @@ func TestCRUDComments(t *testing.T) {
 	})
 
 	t.Run("get karma", func(t *testing.T) {
-		total, negative, err := s.GetKarma(conn, users[1].Name)
+		total, negative, err := conn.GetKarma(users[1].Name)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -370,12 +370,12 @@ func TestCRUDComments(t *testing.T) {
 
 	// Leave that test case at the end so as not to complicate the previous ones.
 	t.Run("purge", func(t *testing.T) {
-		err := s.PurgeUser(conn, users[0].Name)
+		err := conn.PurgeUser(users[0].Name)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		active, err := s.ListUsers(conn)
+		active, err := conn.ListUsers()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -384,7 +384,7 @@ func TestCRUDComments(t *testing.T) {
 			t.Errorf("after purge there should be %d users left, not %d: %+v", len(users)-1, len(active), active)
 		}
 
-		comments, err := s.GetCommentsBelowBetween(conn, reportCutoff, reportStart, reportEnd)
+		comments, err := conn.GetCommentsBelowBetween(reportCutoff, reportStart, reportEnd)
 		if err != nil {
 			t.Fatal(err)
 		}
