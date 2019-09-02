@@ -474,7 +474,7 @@ func (s *Storage) StatsBetween(conn *SQLiteConn, score int64, since, until time.
 		SELECT
 			COUNT(comments.id),
 			SUM(comments.score) AS total,
-			ROUND(AVG(comments.score)),
+			AVG(comments.score),
 			comments.author
 		FROM users JOIN comments
 		ON comments.author = users.name
@@ -494,7 +494,7 @@ func (s *Storage) CompendiumPerUser(conn *SQLiteConn) (StatsCollection, error) {
 		SELECT
 			COUNT(comments.id),
 			SUM(comments.score) AS karma,
-			ROUND(AVG(comments.score)),
+			AVG(comments.score),
 			comments.author,
 			MAX(comments.created)
 		FROM users JOIN comments
@@ -511,7 +511,7 @@ func (s *Storage) CompendiumPerUserNegative(conn *SQLiteConn) (StatsCollection, 
 		SELECT
 			COUNT(comments.id),
 			SUM(comments.score) AS karma,
-			ROUND(AVG(comments.score)),
+			AVG(comments.score),
 			comments.author,
 			MAX(comments.created)
 		FROM users JOIN comments
@@ -528,7 +528,7 @@ func (s *Storage) CompendiumPerUserNegative(conn *SQLiteConn) (StatsCollection, 
 func (s *Storage) CompendiumUserPerSub(conn *SQLiteConn, username string) (StatsCollection, error) {
 	return s.selectStats(conn, StatsRead{Name: true, Latest: true}, `
 		SELECT
-			COUNT(score), SUM(score) AS karma, ROUND(AVG(score)), sub, MAX(created)
+			COUNT(score), SUM(score) AS karma, AVG(score), sub, MAX(created)
 		FROM comments WHERE author = ?
 		GROUP BY sub
 		ORDER BY karma ASC`, username)
@@ -539,7 +539,7 @@ func (s *Storage) CompendiumUserPerSub(conn *SQLiteConn, username string) (Stats
 func (s *Storage) CompendiumUserPerSubNegative(conn *SQLiteConn, username string) (StatsCollection, error) {
 	return s.selectStats(conn, StatsRead{Name: true, Latest: true}, `
 		SELECT
-			COUNT(score), SUM(score) AS karma, ROUND(AVG(score)), sub, MAX(created)
+			COUNT(score), SUM(score) AS karma, AVG(score), sub, MAX(created)
 		FROM comments WHERE author = ? AND score < 0
 		GROUP BY sub
 		ORDER BY karma ASC`, username)
