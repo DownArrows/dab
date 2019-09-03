@@ -46,19 +46,19 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 {{- with .Head}}
 	{{- $dateFormat := "02 Jan 06 15:04 MST"}}
 	<p>{{.Len}} comments under {{.CutOff}} from {{.Start.Format $dateFormat}} to {{.End.Format $dateFormat}}.</p>
-	<p>Collective karma change for the week: {{.Global.Sum}}.</p>
+	<p>Collective karma change for the week: <strong>{{.Global.Sum}}</strong>.</p>
 
 	<h2>Top {{.Delta | len}} total negative karma change for this week</h2>
 	<ol>
 	{{- range .Delta}}
-	<li><strong>{{.Sum}}</strong> with {{.Count}} posts, by <a href="/compendium/user/{{.Name}}">{{.Name}}</a></li>
+	<li><a href="/compendium/user/{{.Name}}">{{.Name}} with <strong>{{.Sum}}</strong> in {{.Count}} comments</a></li>
 	{{- end}}
 	</ol>
 
 	<h2>Top {{.Average | len}} lowest average karma per comment</h2>
 	<ol>
 	{{- range .Average}}
-	<li><strong>{{.Average}}</strong> with {{.Count}} posts, by <a href="/compendium/user/{{.Name}}">{{.Name}}</a></li>
+	<li><a href="/compendium/user/{{.Name}}">{{.Name}} with <strong>{{.Average}}</strong> in {{.Count}} comments</a></li>
 	{{- end}}
 	</ol>
 {{- end -}}
@@ -525,13 +525,13 @@ var MarkdownReport = text.Must(text.New("MarkdownReport").Parse(`
 
 Top {{.Delta | len}} total negative karma change for this week:
 {{range .Delta}}
-- **{{.Sum}}** with {{.Count}} posts,
+- **{{.Sum}}** with {{.Count}} comments,
 by [/u/{{.Name}}](https://www.reddit.com/user/{{.Name}})
 {{- end}}
 
 Top {{.Average | len}} lowest average karma per comment:
 {{range .Average}}
-- **{{.Average}}** with {{.Count}} posts,
+- **{{.Average}}** with {{.Count}} comments,
 by [/u/{{.Name}}](https://www.reddit.com/user/{{.Name}})
 {{- end}}
 {{- end}}
@@ -547,7 +547,7 @@ Score: **{{.Score}}**
 
 Link: [{{.Permalink}}](https://np.reddit.com{{.Permalink}})
 
-Post text:
+Comment text:
 
 {{range .BodyLines -}}
 > {{.}}
