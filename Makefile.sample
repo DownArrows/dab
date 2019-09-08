@@ -7,12 +7,11 @@
 #  - pandoc
 #  - rsync
 #  - systemd (on remote host)
-#  - xz
 #  Feel free to adapt to your needs.
 #
 HOST = # user@your.server
 TAG = $$(git describe --tags)
-ARCHIVE_URL = # URL where to get the up to date database
+URL = # URL of the bot's web interface
 TARBALL = dab-$(TAG)-$$(uname -s)-$$(uname -p).tar.xz
 STATIC_DIR = /srv/dab
 
@@ -25,11 +24,11 @@ dab: *.go
 
 dab: *.go
 
-dab.db: dab.db.xz
-	unxz -k $<
+dab.db: dab.db.bak
+	cp $< $@
 
-dab.db.xz:
-	wget $(ARCHIVE_URL)
+dab.db.bak:
+	wget --header='Accept-Encoding: gzip' $(URL)/backup -O- | gzip -dc > $@
 
 test: *.go
 	go test -race -vet=all -timeout 5s github.com/DownArrows/dab
