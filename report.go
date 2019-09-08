@@ -104,7 +104,7 @@ func (rf ReportFactory) Now() time.Time {
 // Report describes the commenting activity between two dates that may correspond to a week number.
 // It is suitable for use in a template.
 type Report struct {
-	rawComments       []Comment       // Comments as taken from the database
+	rawComments       []Comment
 	Week              uint8           // Week ISO number of the report
 	Year              int             // Year of the report
 	Start             time.Time       // Start date of the report including any "leeway"
@@ -116,7 +116,7 @@ type Report struct {
 	CutOff            int64           // Max score of the comments included in the report
 	Version           SemVer          // Version of the software with which the report was made
 
-	CommentBodyConverter CommentBodyConverter // Optionnal function to convert comments' body to anything
+	CommentBodyConverter CommentBodyConverter
 }
 
 // Head returns a data structure that describes a summary of the Report.

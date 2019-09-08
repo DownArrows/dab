@@ -7,10 +7,8 @@ import (
 
 // CompendiumFactory generates data structures for any page of the compendium.
 type CompendiumFactory struct {
-	// Number of most downvoted comments.
-	NbTop uint
-	// Timezone of the dates.
-	Timezone *time.Location
+	NbTop    uint           // Number of most downvoted comments
+	Timezone *time.Location // Timezone of the dates
 }
 
 // NewCompendiumFactory returns a new CompendiumFactory.
@@ -90,14 +88,14 @@ func (cf CompendiumFactory) User(conn StorageConn, user User) (CompendiumUser, e
 // Compendium describes the basic data of a page of the compendium.
 // Specific pages may use it directly or extend it.
 type Compendium struct {
-	All                  []StatsView
+	All                  []StatsView // Statistics about every comments
 	CommentBodyConverter CommentBodyConverter
-	NbTop                uint
-	Negative             []StatsView
+	NbTop                uint        // Number of most downvoted comments
+	Negative             []StatsView // Statistics about comments with a negative score
 	rawTopComments       []Comment
-	Timezone             *time.Location
-	Users                []User
-	Version              SemVer
+	Timezone             *time.Location // Timezone of the dates
+	Users                []User         // Users in the compendium
+	Version              SemVer         // Version of the application
 }
 
 // TopCommentsLen returns the number of top comments without generating them.
@@ -129,8 +127,8 @@ func (c Compendium) HiddenUsersLen() int {
 // CompendiumUser describes the compendium page for a single user.
 type CompendiumUser struct {
 	Compendium
-	Summary         StatsView
-	SummaryNegative StatsView
+	Summary         StatsView // Statistics summarizing the user's activity
+	SummaryNegative StatsView // Statistics summarizing the user's activity based only on comments with a negative score
 }
 
 // User returns the single User being described.

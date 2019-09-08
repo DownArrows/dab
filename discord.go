@@ -60,7 +60,7 @@ type DiscordMessage struct {
 	Author    DiscordMember
 	Content   string
 	ChannelID string
-	IsDM      bool
+	IsDM      bool // Is Direct Message
 	ID        string
 }
 

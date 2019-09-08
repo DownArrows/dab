@@ -11,13 +11,13 @@ import (
 
 // Comment is a Reddit comment.
 type Comment struct {
-	ID        string
-	Author    string
-	Score     int64
-	Permalink string
-	Sub       string
-	Created   time.Time
-	Body      string
+	ID        string    // Full Reddit identifier of the object
+	Author    string    // User name of the author of the comment
+	Score     int64     // Score of the comment
+	Permalink string    // Permanent path to the comment
+	Sub       string    // Name of the subreddit
+	Created   time.Time // Date of creation (doesn't account for edits)
+	Body      string    // Markdown content with HTML escaping
 }
 
 // InitializationQueries returns SQL queries to store Comments.
@@ -123,17 +123,17 @@ func (cv CommentView) BodyConvert() (interface{}, error) {
 type User struct {
 	Name      string
 	Created   time.Time
-	NotFound  bool
-	Suspended bool
+	NotFound  bool // True if the account can't be found (deleted or never existed)
+	Suspended bool // True if Reddit says this user has been suspended
 
-	Added     time.Time
-	BatchSize uint
-	Deleted   bool
-	Hidden    bool
-	Inactive  bool
-	LastScan  time.Time
-	New       bool
-	Position  string
+	Added     time.Time // Date when this user started being tracked by the application
+	BatchSize uint      // Last number of comments requested from Reddit when scanning this user
+	Deleted   bool      // True if considered deleted (aka unregistered) by the application
+	Hidden    bool      // True makes the application track the user without inclusion in easily reachable pages
+	Inactive  bool      // True if the application considers this user inactive; useful to optimize scanning speed
+	LastScan  time.Time // Date when this user was last scanned
+	New       bool      // True if this user hasn't been fully scanned yet
+	Position  string    // Last position ID returned by Reddit during a scan (used to request successive batches of comments)
 }
 
 // InitializationQueries retuns the SQL queries to create a table to save the User data structure.
@@ -250,18 +250,18 @@ type UserQuery struct {
 
 // StatsRead tells which optional fields should be read from an SQL statement when populating a Stats data structure.
 type StatsRead struct {
-	Start  uint
-	Name   bool
-	Latest bool
+	Start  uint // Column index at which to start reading the data structure
+	Name   bool // True if the Name field has to be read
+	Latest bool // True if the Latest field has to be read
 }
 
 // Stats describes the statistical data that is presented by the application.
 type Stats struct {
-	Count   uint64
-	Sum     int64
-	Average float64
-	Name    string
-	Latest  time.Time
+	Count   uint64    // Number of items
+	Sum     int64     // Sum of the items
+	Average float64   // Average of the items
+	Name    string    // Name of the group of items
+	Latest  time.Time // Latest update/modification to the items
 }
 
 // FromDB reads the statistics from the results of a relevant SQL query.
@@ -434,11 +434,11 @@ type StatsView struct {
 
 // SQLiteForeignKeyCheck describes a foreign key error in a single row.
 type SQLiteForeignKeyCheck struct {
-	ValidRowID   bool // RowID can be NULL, contrarily to the rest.
-	Table        string
-	RowID        int64
-	Parent       string
-	ForeignKeyID int
+	ValidRowID   bool   // RowID can be NULL, contrarily to the rest
+	Table        string // Name of the table where an error was found
+	RowID        int64  // ID of the erroneous row
+	Parent       string // Name of the table with the foreign key
+	ForeignKeyID int    // ID of the missing foreign key
 }
 
 // FromDB reads the error from the results of "PRAGMA foreign_key_check".
