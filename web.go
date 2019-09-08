@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +20,8 @@ var (
 	markdownExtensions = blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis
 	markdownOptions    = blackfriday.WithExtensions(blackfriday.Extensions(markdownExtensions))
 )
+
+var matchTags = regexp.MustCompile("<([^>]*)>")
 
 // HTTPCacheMaxAge is the maxmimum cache age one can set in response to an HTTP request.
 const HTTPCacheMaxAge = 31536000
@@ -397,7 +400,10 @@ func (wsrv *WebServer) errMsg(w http.ResponseWriter, r *http.Request, msg string
 }
 
 func (wsrv *WebServer) commentBodyConverter(src CommentView) (interface{}, error) {
-	html := blackfriday.Run([]byte(src.Body), markdownOptions)
+	// We replace < and > with look-alikes because blackfriday's HTML renderer is poorly configurable,
+	// and writing a replacement would be a timesink considering the original isn't very straightforward.
+	body := matchTags.ReplaceAllString(src.Body, "\u2329$1\u232a")
+	html := blackfriday.Run([]byte(body), markdownOptions)
 	return template.HTML(html), nil
 }
 
