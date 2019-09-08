@@ -619,6 +619,9 @@ func (bot *DiscordBot) getCommandsDescriptors() []DiscordCommand {
 		Command:    "invite",
 		Callback:   bot.invite,
 		Privileged: true,
+	}, {
+		Command:  "date",
+		Callback: bot.date,
 	}}
 }
 
@@ -846,6 +849,10 @@ func (bot *DiscordBot) invite(msg DiscordMessage) error {
 		return err
 	}
 	return bot.channelMessageSend(msg.ChannelID, fmt.Sprintf("https://discord.gg/%s", invite.Code))
+}
+
+func (bot *DiscordBot) date(msg DiscordMessage) error {
+	return bot.channelMessageSend(msg.ChannelID, time.Now().In(bot.timezone).Format(time.RFC850))
 }
 
 // TrimUsername trims reddit user names so that the application is liberal in what it accepts.

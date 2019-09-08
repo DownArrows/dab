@@ -50,6 +50,7 @@ If they accept Reddit user names, they accept them as `AGreatUsername`, `/u/AGre
  - `reregister` (privileged) re-register one or several user that were previously unregistered
  - `sep` or `separator` or `=` post a separation rule
  - `sip` or `sipthebep` quote from sipthebep
+ - `time` current time in the bot's configured time zone
  - `unhide` don't hide a user from reports
  - `unregister` (privileged) unregister one or several user
  - `version` post the bot's version
