@@ -51,14 +51,14 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 	<h2>Top {{.Delta | len}} total negative karma change for this week</h2>
 	<ol>
 	{{- range .Delta}}
-	<li><a href="/compendium/user/{{.Name}}">{{.Name}} with <strong>{{.Sum}}</strong> in {{.Count}} comments</a></li>
+	<li><a href="/compendium/user/{{.Name}}">{{.Name}}</a> with <strong>{{.Sum}}</strong> in {{.Count}} comments</li>
 	{{- end}}
 	</ol>
 
 	<h2>Top {{.Average | len}} lowest average karma per comment</h2>
 	<ol>
 	{{- range .Average}}
-	<li><a href="/compendium/user/{{.Name}}">{{.Name}} with <strong>{{.Average}}</strong> in {{.Count}} comments</a></li>
+	<li><a href="/compendium/user/{{.Name}}">{{.Name}}</a> with <strong>{{.Average}}</strong> in {{.Count}} comments</li>
 	{{- end}}
 	</ol>
 {{- end -}}
