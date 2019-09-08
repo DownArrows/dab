@@ -374,16 +374,7 @@ func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
 		wsrv.err(w, r, err, http.StatusInternalServerError)
 		return
 	}
-
-	info, err := os.Stat(wsrv.storage.BackupPath())
-	if err != nil {
-		wsrv.err(w, r, err, http.StatusInternalServerError)
-		return
-	}
-
 	w.Header().Set("Content-Type", "application/x-sqlite3")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size()))
-
 	http.ServeFile(w, r, wsrv.storage.BackupPath())
 }
 
