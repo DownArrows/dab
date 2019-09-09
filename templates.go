@@ -521,7 +521,7 @@ table.named tr {
 // MarkdownReport is the template for reports in markdow format.
 var MarkdownReport = text.Must(text.New("MarkdownReport").Parse(`
 {{- with .Head -}}
-{{.Global.Count}} comments under {{.CutOff}} from {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}.
+{{.Len}} comments under {{.CutOff}} from {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}.
 
 Top {{.Delta | len}} total negative karma change for this week:
 {{range .Delta}}
