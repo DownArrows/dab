@@ -4,54 +4,37 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
 func TestSQLiteConn(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "dab-test-sqlite-conn")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	path := filepath.Join(dir, "test.db")
 	ctx := context.Background()
 	connOpts := SQLiteConnOptions{
-		Path:        path,
+		Path:        ":memory:",
 		Timeout:     SQLiteDefaultTimeout,
 		OpenOptions: SQLiteDefaultOpenOptions,
 	}
 	expected := []string{"value1", "value2", "value3", "value4"}
 
+	var conn SQLiteConn
+
 	t.Run("create connection", func(t *testing.T) {
-		if conn, err := NewBaseSQLiteConn(ctx, NewTestLevelLogger(t), connOpts); err != nil {
+		// Set the global connection and leave it open since we're using an in-memory database.
+		var err error
+		if conn, err = NewBaseSQLiteConn(ctx, NewTestLevelLogger(t), connOpts); err != nil {
 			t.Fatal(err)
-		} else {
-			conn.Close()
 		}
 	})
 
 	t.Run("exec create table", func(t *testing.T) {
-		conn, err := NewBaseSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer conn.Close()
-
 		if err := conn.Exec("CREATE TABLE test(value TEXT NOT NULL)"); err != nil {
 			t.Fatal(err)
 		}
 	})
 
 	t.Run("prepared statement insert", func(t *testing.T) {
-		conn, err := NewBaseSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer conn.Close()
-
 		stmt, err := conn.Prepare("INSERT INTO test VALUES (?)")
 		if err != nil {
 			t.Fatal(err)
@@ -69,12 +52,6 @@ func TestSQLiteConn(t *testing.T) {
 	})
 
 	t.Run("select previously inserted values", func(t *testing.T) {
-		conn, err := NewBaseSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer conn.Close()
-
 		var actual []string
 		cb := func(stmt *SQLiteStmt) error {
 			if value, ok, err := stmt.ColumnText(0); err != nil {
@@ -96,12 +73,6 @@ func TestSQLiteConn(t *testing.T) {
 	})
 
 	t.Run("multi exec", func(t *testing.T) {
-		conn, err := NewBaseSQLiteConn(ctx, NewTestLevelLogger(t), connOpts)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer conn.Close()
-
 		queries := []SQLQuery{
 			{SQL: "CREATE TABLE test2(num INTEGER NOT NULL, txt TEXT NOT NULL)"},
 			{SQL: "INSERT INTO test2 VALUES(?, ?)", Args: []interface{}{12, "test"}},
@@ -111,24 +82,35 @@ func TestSQLiteConn(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+
+	t.Run("close the connection", func(t *testing.T) {
+		t.Helper()
+		if err := conn.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
 }
 
 func TestSQLiteDatabase(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-
 	appID := 0x1e51
-	dir, err := ioutil.TempDir("", "dab-test-sqlite-db")
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := ":memory:"
 
 	t.Run("open checks", func(t *testing.T) {
-		path := filepath.Join(dir, "checks.db")
+		t.Parallel()
+
+		file, err := ioutil.TempFile("", "dab_test_sqlite_conn")
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := file.Name()
+		file.Close()
+		defer os.Remove(path)
 
 		t.Run("open empty", func(t *testing.T) {
-			_, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
+			_, conn, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
 				Path:    path,
 				AppID:   appID,
 				Version: SemVer{0, 2, 0},
@@ -136,10 +118,11 @@ func TestSQLiteDatabase(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			conn.Close()
 		})
 
 		t.Run("open already existing", func(t *testing.T) {
-			_, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
+			_, conn, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
 				Path:    path,
 				AppID:   appID,
 				Version: SemVer{0, 2, 0},
@@ -147,10 +130,11 @@ func TestSQLiteDatabase(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			conn.Close()
 		})
 
 		t.Run("open already existing database with lower version", func(t *testing.T) {
-			_, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
+			_, conn, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
 				Path:    path,
 				AppID:   appID,
 				Version: SemVer{0, 3, 0},
@@ -158,31 +142,26 @@ func TestSQLiteDatabase(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			conn.Close()
 		})
 
 		t.Run("open already existing database with higher version", func(t *testing.T) {
-			_, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
+			_, conn, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
 				Path:    path,
 				AppID:   appID,
 				Version: SemVer{0, 1, 0},
 			})
 			if err == nil {
-				t.Error("opening a database whose file has a higher version should fail")
+				conn.Close()
+				t.Fatal("opening a database whose file has a higher version should fail")
 			}
 		})
 	})
 
 	t.Run("backups", func(t *testing.T) {
-		path := filepath.Join(dir, "test-backup.db")
-		backupPath := filepath.Join(dir, "test-backup.backup.db")
+		t.Parallel()
 
-		db, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
-			Path:    path,
-			AppID:   appID,
-			Version: SemVer{0, 3, 0},
-		})
-
-		conn, err := db.GetConn(ctx)
+		db, conn, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{Path: path})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -192,25 +171,24 @@ func TestSQLiteDatabase(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		opts := SQLiteBackupOptions{
+		file, err := ioutil.TempFile("", "dab_test_sqlite_backup")
+		if err != nil {
+			t.Fatal(err)
+		}
+		backupPath := file.Name()
+		file.Close()
+		defer os.Remove(backupPath)
+
+		err = db.Backup(ctx, conn, SQLiteBackupOptions{
 			DestName: "main",
 			DestPath: backupPath,
 			SrcName:  "main",
-		}
-		if err := db.Backup(ctx, conn, opts); err != nil {
-			t.Fatal(err)
-		}
-
-		backupDB, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{
-			Path:    backupPath,
-			AppID:   appID,
-			Version: SemVer{0, 3, 0},
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		backup, err := backupDB.GetConn(ctx)
+		_, backup, err := NewSQLiteDatabase(ctx, NewTestLevelLogger(t), SQLiteDatabaseOptions{Path: backupPath})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -219,11 +197,6 @@ func TestSQLiteDatabase(t *testing.T) {
 		if err := backup.Exec("INSERT INTO test VALUES (?)", 1); err != nil {
 			t.Fatal(err)
 		}
-	})
-
-	t.Run("delete temp directory", func(t *testing.T) {
-		t.Helper()
-		os.RemoveAll(dir)
 	})
 }
 

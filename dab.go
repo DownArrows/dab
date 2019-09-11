@@ -103,10 +103,12 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	}
 
 	dab.logger.Infof("using database %s", dab.conf.Database.Path)
-	var storage *Storage
-	if storage, err = NewStorage(ctx, dab.logger, dab.conf.Database); err != nil {
+	storage, conn, err := NewStorage(ctx, dab.logger, dab.conf.Database)
+	if err != nil {
 		return err
 	}
+	defer conn.Close() // It will be re-used.
+
 	dab.layers.Storage = storage
 
 	if dab.runtimeConf.InitDB {
@@ -115,14 +117,14 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 	dab.layers.Report = NewReportFactory(dab.conf.Report)
 	if dab.runtimeConf.Report {
-		return dab.report(ctx)
+		return dab.report(ctx, conn)
 	}
 
 	if dab.runtimeConf.UserAdd != "" {
 		if !dab.components.ConfState.Reddit.Enabled {
 			return dab.components.ConfState.Reddit.Error
 		}
-		return dab.userAdd(ctx)
+		return dab.userAdd(ctx, conn)
 	}
 
 	dab.layers.Compendium = NewCompendiumFactory(dab.conf.Compendium)
@@ -167,12 +169,8 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	if dab.components.ConfState.Discord.Enabled {
 		var err error
 
-		discordConn, err := dab.layers.Storage.GetConn(ctx)
-		if err != nil {
-			return err
-		}
-
-		dab.components.Discord, err = NewDiscordBot(dab.logger, discordConn, dab.components.RedditUsers.Add, dab.conf.Discord.DiscordBotConf)
+		// We're re-using the database's first connection here, don't share it with any other component.
+		dab.components.Discord, err = NewDiscordBot(dab.logger, conn, dab.components.RedditUsers.Add, dab.conf.Discord.DiscordBotConf)
 		if err != nil {
 			return err
 		}
@@ -253,13 +251,7 @@ func (dab *DownArrowsBot) makeRedditAPI(ctx context.Context) (*RedditAPI, error)
 	return ra, nil
 }
 
-func (dab *DownArrowsBot) report(ctx context.Context) error {
-	conn, err := dab.layers.Storage.GetConn(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
+func (dab *DownArrowsBot) report(ctx context.Context, conn StorageConn) error {
 	dab.logger.Info("printing report for last week")
 
 	year, week := dab.layers.Report.LastWeekCoordinates()
@@ -273,7 +265,7 @@ func (dab *DownArrowsBot) report(ctx context.Context) error {
 	return MarkdownReport.Execute(dab.stdOut, report)
 }
 
-func (dab *DownArrowsBot) userAdd(ctx context.Context) error {
+func (dab *DownArrowsBot) userAdd(ctx context.Context, conn StorageConn) error {
 	ra, err := dab.makeRedditAPI(ctx)
 	if err != nil {
 		return err
@@ -284,12 +276,6 @@ func (dab *DownArrowsBot) userAdd(ctx context.Context) error {
 	}
 
 	ru := NewRedditUsers(dab.logger, ra, dab.conf.Reddit.RedditUsersConf)
-
-	conn, err := dab.layers.Storage.GetConn(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
 
 	usernames := userAddSeparators.Split(dab.runtimeConf.UserAdd, -1)
 	for _, username := range usernames {

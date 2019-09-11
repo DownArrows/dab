@@ -71,27 +71,29 @@ type SQLiteDatabase struct {
 }
 
 // NewSQLiteDatabase creates a new SQLiteDatabase.
-func NewSQLiteDatabase(ctx context.Context, logger LevelLogger, opts SQLiteDatabaseOptions) (*SQLiteDatabase, error) {
-	// Supporting both options would mean leave a connection open in its own goroutine;
-	// there's no justification for the increased complexity, since there is no use case.
-	// Tests can as well use a file that's deleted at the end by custom code.
-	if opts.Path == ":memory:" {
-		return nil, errors.New("in-memory databases aren't supported")
-	} else if opts.Path == "" {
-		return nil, errors.New("temporary databases aren't supported")
-	}
-
+// It returns the connection it needed to run the checks; if you are using a temporary database, keep it open until shut down.
+// It treats already existing empty files as new databases.
+func NewSQLiteDatabase(ctx context.Context, logger LevelLogger, opts SQLiteDatabaseOptions) (*SQLiteDatabase, SQLiteConn, error) {
 	db := &SQLiteDatabase{
+		SQLiteDatabaseOptions: opts,
+
 		backups: sync.Mutex{},
 		logger:  logger,
 	}
 
-	db.SQLiteDatabaseOptions = opts
-
 	db.logger.Debugf("opening database %p at %q, version %s, application ID 0x%x, cleanup interval %s",
 		db, db.Path, db.Version, db.AppID, db.CleanupInterval)
 
-	return db, db.init(ctx)
+	conn, err := db.GetConn(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if err := db.init(conn); err != nil {
+		conn.Close()
+		return nil, nil, err
+	}
+	return db, conn, nil
 }
 
 // GetConn returns an SQLiteConn.
@@ -109,9 +111,9 @@ func (db *SQLiteDatabase) getConnDefaultOptions() SQLiteConnOptions {
 	}
 }
 
-func (db *SQLiteDatabase) init(ctx context.Context) error {
+func (db *SQLiteDatabase) init(conn SQLiteConn) error {
 	isNew := false
-	if stat, err := os.Stat(db.Path); os.IsNotExist(err) {
+	if stat, err := os.Stat(db.Path); os.IsNotExist(err) || stat.Size() == 0 {
 		isNew = true
 		db.logger.Infof("database %q doesn't exist, creating", db.Path)
 	} else if err != nil {
@@ -119,12 +121,6 @@ func (db *SQLiteDatabase) init(ctx context.Context) error {
 	} else if stat.IsDir() {
 		return fmt.Errorf("cannot open %q as a database, it is a directory", db.Path)
 	}
-
-	conn, err := db.GetConn(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
 
 	if !isNew {
 		err := conn.WithTx(func() error {

@@ -268,8 +268,6 @@ func (bot *DiscordBot) Run(ctx context.Context) error {
 	bot.ctx = ctx
 	bot.Unlock()
 
-	defer bot.conn.Close()
-
 	go func() {
 		if err := bot.client.Open(); err != nil {
 			if !IsCancellation(err) {

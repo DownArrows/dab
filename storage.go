@@ -19,8 +19,10 @@ type Storage struct {
 }
 
 // NewStorage returns a Storage instance after running initialization, checks, and migrations onto the target database file.
-func NewStorage(ctx context.Context, logger LevelLogger, conf StorageConf) (*Storage, error) {
-	db, err := NewSQLiteDatabase(ctx, logger, SQLiteDatabaseOptions{
+// It returns the connection it needed to run the checks; if you are using a temporary database, keep it open until shut down.
+func NewStorage(ctx context.Context, logger LevelLogger, conf StorageConf) (*Storage, StorageConn, error) {
+	conn := StorageConn{}
+	db, baseConn, err := NewSQLiteDatabase(ctx, logger, SQLiteDatabaseOptions{
 		AppID:           ApplicationFileID,
 		CleanupInterval: conf.CleanupInterval.Value,
 		Migrations:      StorageMigrations,
@@ -30,18 +32,13 @@ func NewStorage(ctx context.Context, logger LevelLogger, conf StorageConf) (*Sto
 		Version:         Version,
 	})
 	if err != nil {
-		return nil, err
+		return nil, conn, err
 	}
-
-	conn, err := db.GetConn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
+	conn.actual = baseConn
 
 	kv, err := NewKeyValueStore(conn, "key_value")
 	if err != nil {
-		return nil, err
+		return nil, conn, err
 	}
 
 	s := &Storage{
@@ -53,10 +50,10 @@ func NewStorage(ctx context.Context, logger LevelLogger, conf StorageConf) (*Sto
 	}
 
 	if err := s.initTables(conn); err != nil {
-		return nil, err
+		return nil, conn, err
 	}
 
-	return s, nil
+	return s, conn, nil
 }
 
 func (s *Storage) initTables(conn SQLiteConn) error {

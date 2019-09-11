@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -12,22 +9,10 @@ func TestKeyValue(t *testing.T) {
 	t.Parallel()
 
 	logger := NewTestLevelLogger(t)
-
 	ctx := context.Background()
+	path := ":memory:"
 
-	dir, err := ioutil.TempDir("", "kv-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	path := filepath.Join(dir, "test.db")
-
-	db, err := NewSQLiteDatabase(ctx, logger, SQLiteDatabaseOptions{Path: path})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	conn, err := db.GetConn(ctx)
+	_, conn, err := NewSQLiteDatabase(ctx, logger, SQLiteDatabaseOptions{Path: path})
 	if err != nil {
 		t.Fatal(err)
 	}

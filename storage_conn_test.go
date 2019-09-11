@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -12,21 +9,10 @@ import (
 func TestCRUDUsers(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "dab-test-crud-users")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	path := filepath.Join(dir, "test.db")
-
+	path := ":memory:"
 	ctx := context.Background()
 
-	s, err := NewStorage(ctx, NewTestLevelLogger(t), StorageConf{Path: path})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	conn, err := s.GetConn(ctx)
+	_, conn, err := NewStorage(ctx, NewTestLevelLogger(t), StorageConf{Path: path})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,21 +81,10 @@ func TestCRUDUsers(t *testing.T) {
 func TestCRUDComments(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "dab-test-crud-comments")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	path := filepath.Join(dir, "test.db")
-
+	path := ":memory:"
 	ctx := context.Background()
 
-	s, err := NewStorage(ctx, NewTestLevelLogger(t), StorageConf{Path: path})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	conn, err := s.GetConn(ctx)
+	_, conn, err := NewStorage(ctx, NewTestLevelLogger(t), StorageConf{Path: path})
 	if err != nil {
 		t.Fatal(err)
 	}
