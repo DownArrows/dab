@@ -389,27 +389,15 @@ func (sc StatsCollection) Filter(filter func(Stats) bool) StatsCollection {
 	return out
 }
 
-// OrderByAverage orders the collection by average.
-func (sc StatsCollection) OrderByAverage() StatsCollection {
+// OrderBy returns a StatCollection ordered according to the given function of comparison,
+// which must return true if the first argument is before the second, and false otherwise.
+func (sc StatsCollection) OrderBy(less func(Stats, Stats) bool) StatsCollection {
 	length := len(sc)
 	out := make(StatsCollection, length)
 	copy(out, sc)
 	Sort{
 		Len:  func() int { return length },
-		Less: func(i, j int) bool { return out[i].Average < out[j].Average },
-		Swap: func(i, j int) { out[i], out[j] = out[j], out[i] },
-	}.Do()
-	return out
-}
-
-// OrderBySum orders the collection by sums.
-func (sc StatsCollection) OrderBySum() StatsCollection {
-	length := len(sc)
-	out := make(StatsCollection, length)
-	copy(out, sc)
-	Sort{
-		Len:  func() int { return length },
-		Less: func(i, j int) bool { return out[i].Sum < out[j].Sum },
+		Less: func(i, j int) bool { return less(out[i], out[j]) },
 		Swap: func(i, j int) { out[i], out[j] = out[j], out[i] },
 	}.Do()
 	return out

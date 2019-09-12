@@ -123,7 +123,7 @@ type Report struct {
 func (r Report) Head() ReportHead {
 	return ReportHead{
 		Global:  r.Global.ToView(0, r.Timezone),
-		Average: r.Stats.OrderByAverage().Limit(r.MaxStatsSummaries).ToView(r.Timezone),
+		Average: r.Stats.OrderBy(func(a, b Stats) bool { return a.Average < b.Average }).Limit(r.MaxStatsSummaries).ToView(r.Timezone),
 		Delta:   r.Stats.Limit(r.MaxStatsSummaries).ToView(r.Timezone),
 		Start:   r.Start,
 		End:     r.End,

@@ -40,7 +40,7 @@ func (cf CompendiumFactory) Compendium(conn StorageConn) (Compendium, error) {
 			return err
 		}
 		c.All = all.ToView(c.Timezone)
-		c.Negative = negative.Filter(func(s Stats) bool { return s.Sum < 0 }).OrderBySum().ToView(c.Timezone)
+		c.Negative = negative.OrderBy(func(a, b Stats) bool { return a.Sum < b.Sum }).ToView(c.Timezone)
 
 		c.rawTopComments, err = conn.TopComments(c.NbTop)
 		return err
@@ -76,7 +76,8 @@ func (cf CompendiumFactory) User(conn StorageConn, user User) (CompendiumUser, e
 		cu.All = all.ToView(cu.Timezone)
 		cu.Summary = all.Stats().ToView(0, cu.Timezone)
 		negative := rawNegative.Filter(func(s Stats) bool { return s.Sum < 0 })
-		cu.Negative = negative.OrderBySum().ToView(cu.Timezone)
+
+		cu.Negative = negative.OrderBy(func(a, b Stats) bool { return a.Sum < b.Sum }).ToView(cu.Timezone)
 		cu.SummaryNegative = negative.Stats().ToView(0, cu.Timezone)
 
 		cu.rawTopComments, err = conn.TopCommentsUser(user.Name, cu.NbTop)
