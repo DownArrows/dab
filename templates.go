@@ -26,6 +26,48 @@ func (tmpl *HTMLTemplate) MustAddParse(name, body string) *HTMLTemplate {
 // HTMLTemplates regroups every HTML template so as to easily share common snippets.
 var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 	`<footer><a href="#title">back to top</a></footer>`,
+).MustAddParse("DeltaTable",
+	`<table>
+<thead>
+<tr>
+	<th>Rank</th>
+	<th>Name</th>
+	<th>Karma</th>
+	<th>Count</th>
+</tr>
+</thead>
+<tbody>
+{{- range .}}
+<tr>
+	<td>{{.Number}}</td>
+	<td><a href="/compendium/user/{{.Name}}">{{.Name}}</a></td>
+	<td>{{.Sum}}</td>
+	<td>{{.Count}}</td>
+</tr>
+{{- end}}
+</tbody>
+</table>`,
+).MustAddParse("AverageTable",
+	`<table>
+<thead>
+<tr>
+	<th>Rank</th>
+	<th>Name</th>
+	<th>Average</th>
+	<th>Count</th>
+</tr>
+</thead>
+<tbody>
+{{- range .}}
+<tr>
+	<td>{{.Number}}</td>
+	<td><a href="/compendium/user/{{.Name}}">{{.Name}}</a></td>
+	<td>{{.Average}}</td>
+	<td>{{.Count}}</td>
+</tr>
+{{- end}}
+</tbody>
+</table>`,
 ).MustAddParse("Report",
 	`<!DOCTYPE html>
 <html lang="en">
@@ -41,31 +83,37 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 
 <aside class="md-link"><a href="/reports/source/{{.Year}}/{{.Week}}">source</a></aside>
 
+<nav>
+	<ul>
+		<li><a href="/reports/{{.Year}}/{{.Week}}#summary">Summary</a></li>
+		<li><a href="/reports/{{.Year}}/{{.Week}}#delta">Top negative karma change</a></li>
+		<li><a href="/reports/{{.Year}}/{{.Week}}#average">Top average per comment</a></li>
+		<li><a href="/reports/{{.Year}}/{{.Week}}#comments">Comments</a></li>
+	</ul>
+</nav>
+
 <article>
-<h1>Summary</h1>
-{{- with .Head}}
+<h1 id="summary">Summary</h1>
+{{- with .Header}}
 	{{- $dateFormat := "02 Jan 06 15:04 MST"}}
-	<p>{{.Len}} comments under {{.CutOff}} from {{.Start.Format $dateFormat}} to {{.End.Format $dateFormat}}.</p>
+	<p><strong>{{.Len}}</strong> comments under {{.CutOff}} from {{.Start.Format $dateFormat}} to {{.End.Format $dateFormat}}.</p>
 	<p>Collective karma change for the week: <strong>{{.Global.Sum}}</strong>.</p>
+	<p><a href="/reports/stats/{{.Year}}/{{.Week}}">Complete statistics for the week.</a></p>
 
-	<h2>Top {{.Delta | len}} total negative karma change for this week</h2>
-	<ol>
-	{{- range .Delta}}
-	<li><a href="/compendium/user/{{.Name}}">{{.Name}}</a> with <strong>{{.Sum}}</strong> in {{.Count}} comments</li>
-	{{- end}}
-	</ol>
+	<article>
+	<h2 id="delta">Top {{.Delta | len}} total negative karma change for this week</h2>
+	{{template "DeltaTable" .Delta}}
+	</article>
 
-	<h2>Top {{.Average | len}} lowest average karma per comment</h2>
-	<ol>
-	{{- range .Average}}
-	<li><a href="/compendium/user/{{.Name}}">{{.Name}}</a> with <strong>{{.Average}}</strong> in {{.Count}} comments</li>
-	{{- end}}
-	</ol>
+	<article>
+	<h2 id="average">Top {{.Average | len}} lowest average karma per comment</h2>
+	{{template "AverageTable" .Average}}
+	</article>
 {{- end -}}
 </article>
 
 <main>
-<h1>Comments</h1>
+<h1 id="comments">Comments</h1>
 {{range .Comments -}}
 <article class="comment">
 	<h2 id="{{.Number}}"><a href="#{{.Number}}">#{{.Number}}</a></h2>
@@ -99,16 +147,58 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 
 </body>
 </html>`,
+).MustAddParse("ReportStats",
+	`<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8"/>
+	<meta name="viewport" content="initial-scale=1"/>
+	<title>Statistics of year {{.Year}} week {{.Week}}</title>
+	<link rel="stylesheet" href="/css/main?version={{.Version}}">
+	<link rel="stylesheet" href="/css/reports?version={{.Version}}">
+</head>
+<body>
+<div id="title"><a href="/reports/{{.Year}}/{{.Week}}">Statistics of year {{.Year}} week {{.Week}}</a></div>
+
+<nav>
+	<ul>
+		<li><a href="/reports/stats/{{.Year}}/{{.Week}}#summary">Summary</a></li>
+		<li><a href="/reports/stats/{{.Year}}/{{.Week}}#delta">Total negative karma change</a></li>
+		<li><a href="/reports/stats/{{.Year}}/{{.Week}}#average">Average per comment</a></li>
+	</ul>
+</nav>
+
+<article>
+<h1 id="summary">Summary</h1>
+{{- $dateFormat := "02 January 2006 15:04 MST"}}
+<p>Statistics from {{.Start.Format $dateFormat}} to {{.End.Format $dateFormat}}.</p>
+<p>Number of comments with a negative score: <strong>{{.Global.Count}}</strong>.</p>
+<p>Collective karma change: <strong>{{.Global.Sum}}</strong>.</p>
+<p>Collective average negative score per comment: <strong>{{.Global.Average}}</strong>.</p>
+</article>
+
+<article>
+<h1 id="delta">Total negative karma change for this week</h1>
+{{template "DeltaTable" .Delta}}
+{{template "BackToTop"}}
+</article>
+
+<article>
+<h1 id="average">Average karma per comment</h1>
+{{template "AverageTable" .Average}}
+{{template "BackToTop"}}
+</article>
+</html>`,
 ).MustAddParse("CompendiumStats",
-	`<table class="named">
+	`<table>
 <thead>
 <tr>
-	<th><strong>Rank</strong></th>
-	<th><strong>Sub</strong></th>
-	<th><strong>Karma</strong></th>
-	<th><strong>Count</strong></th>
-	<th><strong>Average</strong></th>
-	<th><strong>Last commented</strong></th>
+	<th>Rank</th>
+	<th>Name</th>
+	<th>Karma</th>
+	<th>Count</th>
+	<th>Average</th>
+	<th>Last commented</th>
 </tr>
 </thead>
 <tbody>
@@ -135,7 +225,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 <head>
 	<meta charset="utf-8"/>
 	<meta name="viewport" content="initial-scale=1"/>
-	<title>Compendium for {{.User.Name}}</title>
+	<title>{{.User.Name}}</title>
 	<link rel="stylesheet" href="/css/main?version={{.Version}}">
 	<link rel="stylesheet" href="/css/compendium?version={{.Version}}">
 </head>
@@ -354,7 +444,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 {{if (.All | len) gt 0 -}}
 <section>
 <h1 id="named">Karma per user</h1>
-<table class="named">
+<table>
 {{template "CompendiumStats" .All}}
 {{template "BackToTop"}}
 </section>
@@ -458,6 +548,40 @@ main {
 
 @media (min-width: 50em) {
 	body { font-size: 1em }
+}
+
+table {
+	border-spacing: calc(2*var(--spacing));
+}
+
+th {
+	font-weight: bold;
+}
+
+table tr {
+	display: table-row;
+}
+
+@media (max-width: 35em) {
+	.detail { display: none }
+}
+
+@media (max-width: 28em) {
+	thead { display: flex }
+	table { display: block }
+	tbody { display: table }
+}
+
+@media (max-width: 25em) {
+	table { font-size: 0.9em }
+}
+
+@media (max-width: 22.5em) {
+	table { font-size: 0.85em }
+}
+
+@media (max-width: 21em) {
+	table { font-size: 0.8em }
 }`
 
 // CSSReports is the CSS stylesheet to be served with the HTML reports.
@@ -480,48 +604,15 @@ aside.md-link a::after {
 }`
 
 // CSSCompendium is the CSS stylesheet to be served with the HTML compendium pages.
-const CSSCompendium = `table.named {
-	border-spacing: calc(2*var(--spacing));
-}
-
-table.named th {
-	font-weight: bold;
-}
-
-table.named tr {
-	display: table-row;
-}
-
-@media (max-width: 35em) {
-	.detail { display: none }
-}
-
-@media (max-width: 28em) {
-	table.named thead { display: flex }
-	table.named { display: block }
-	table.named tbody { display: table }
-}
-
-@media (max-width: 25em) {
-	table.named { font-size: 0.9em }
-}
-
-@media (max-width: 22.5em) {
-	table.named { font-size: 0.85em }
-}
-
-@media (max-width: 21em) {
-	table.named { font-size: 0.8em }
-}
-
-.suspended {
+const CSSCompendium = `.suspended {
 	color: crimson;
 }`
 
 // MarkdownReport is the template for reports in markdow format.
 var MarkdownReport = text.Must(text.New("MarkdownReport").Parse(`
-{{- with .Head -}}
-{{.Len}} comments under {{.CutOff}} from {{.Start.Format "02 Jan 06 15:04 MST"}} to {{.End.Format "02 Jan 06 15:04 MST"}}.
+{{- with .Header -}}
+{{- $dateFormat := "02 Jan 06 15:04 MST"}}
+**{{.Len}}** comments under {{.CutOff}} from {{.Start.Format $dateFormat}} to {{.End.Format $dateFormat}}.
 
 Top {{.Delta | len}} total negative karma change for this week:
 {{range .Delta}}

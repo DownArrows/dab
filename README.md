@@ -31,6 +31,7 @@ Table of contents:
 
 Reports can be seen at `/reports/<year>/<week number>`, where the week number is an [ISO week number](https://en.wikipedia.org/wiki/ISO_week_date).
 The special addresses `/reports/current` and `/reports/lastweek` are also provided to redirect to the reports of the current and previous week.
+The full statistics for a week can be seen at `/reports/stats/<year>/<week number>`.
 A compendium can be seen at `/compendium`, and per-user pages at `/compendium/<user name>`.
 At the root `/` can be seen a custom web page or file, if the administrator has configured it.
 

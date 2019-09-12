@@ -86,7 +86,7 @@ func (c *Comment) FromDB(stmt *SQLiteStmt) error {
 }
 
 // ToView converts the comment to a data structure suitable for use in a template.
-func (c Comment) ToView(n uint, timezone *time.Location, cbc CommentBodyConverter) CommentView {
+func (c Comment) ToView(n uint64, timezone *time.Location, cbc CommentBodyConverter) CommentView {
 	view := CommentView{
 		Number:        n,
 		BodyConverter: cbc,
@@ -103,7 +103,7 @@ type CommentBodyConverter func(CommentView) (interface{}, error)
 type CommentView struct {
 	Comment
 	BodyConverter CommentBodyConverter
-	Number        uint
+	Number        uint64
 }
 
 // BodyLines returns the lines in the comment of a Comment.
@@ -306,7 +306,7 @@ func (s *Stats) FromDB(stmt *SQLiteStmt, read StatsRead) error {
 }
 
 // ToView converts the Stats to a data structure suitable for use in a template.
-func (s Stats) ToView(n uint, timezone *time.Location) StatsView {
+func (s Stats) ToView(n uint64, timezone *time.Location) StatsView {
 	view := StatsView{Stats: s, Number: n}
 	view.Average = math.Round(view.Average)
 	if timezone != nil {
@@ -331,7 +331,7 @@ func (sc StatsCollection) ToMap() map[string]Stats {
 func (sc StatsCollection) ToView(timezone *time.Location) []StatsView {
 	views := make([]StatsView, 0, len(sc))
 	for n, stats := range sc {
-		views = append(views, stats.ToView(uint(n+1), timezone))
+		views = append(views, stats.ToView(uint64(n+1), timezone))
 	}
 	return views
 }
@@ -417,7 +417,7 @@ func (sc StatsCollection) Limit(limit uint) StatsCollection {
 // StatsView is a data structure describing Stats such as it is suitable for use in a template.
 type StatsView struct {
 	Stats
-	Number uint
+	Number uint64
 }
 
 // SQLiteForeignKeyCheck describes a foreign key error in a single row.

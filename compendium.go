@@ -108,7 +108,7 @@ func (c Compendium) TopCommentsLen() int {
 func (c Compendium) TopComments() []CommentView {
 	views := make([]CommentView, 0, len(c.rawTopComments))
 	for i, comment := range c.rawTopComments {
-		view := comment.ToView(uint(i+1), c.Timezone, c.CommentBodyConverter)
+		view := comment.ToView(uint64(i+1), c.Timezone, c.CommentBodyConverter)
 		views = append(views, view)
 	}
 	return views

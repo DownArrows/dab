@@ -141,6 +141,7 @@ func NewWebServer(logger LevelLogger, storage *Storage, reports ReportFactory, c
 	mux.HandleFunc("/reports/current", wsrv.ReportCurrent)
 	mux.HandleFunc("/reports/lastweek", wsrv.ReportLatest)
 	mux.HandleFunc("/reports/source/", wsrv.ReportSource)
+	mux.HandleFunc("/reports/stats/", wsrv.ReportStats)
 	mux.HandleFunc("/compendium", wsrv.CompendiumIndex)
 	mux.HandleFunc("/compendium/user/", wsrv.CompendiumUser)
 	mux.HandleFunc("/backup", wsrv.Backup)
@@ -261,6 +262,34 @@ func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	if err := MarkdownReport.Execute(w, report); err != nil {
+		panic(err)
+	}
+}
+
+// ReportStats serves an HTML document of the statistics for the year and week in the URL.
+func (wsrv *WebServer) ReportStats(w http.ResponseWriter, r *http.Request) {
+	week, year, err := weekAndYear(ignoreTrailing(subPath("/reports/stats/", r)))
+	if err != nil {
+		wsrv.err(w, r, err, http.StatusBadRequest)
+		return
+	}
+
+	var data ReportHeader
+	err = wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
+		var err error
+		data, err = wsrv.reports.StatsWeek(conn, week, year)
+		return err
+	})
+	if err != nil {
+		wsrv.err(w, r, err, http.StatusInternalServerError)
+		return
+	} else if data.Len == 0 {
+		wsrv.errMsg(w, r, fmt.Sprintf("No statistics for %d/%d.", year, week), http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	if err := HTMLTemplates.ExecuteTemplate(w, "ReportStats", data); err != nil {
 		panic(err)
 	}
 }
