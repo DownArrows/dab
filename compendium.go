@@ -57,6 +57,19 @@ func (cf CompendiumFactory) Index(conn StorageConn) (Compendium, error) {
 	return ci, nil
 }
 
+// Comments returns paginated comments of all non-hidden users.
+func (cf CompendiumFactory) Comments(conn StorageConn, page Pagination) (Compendium, error) {
+	c := Compendium{
+		NbTop:    page.Limit,
+		Offset:   page.Offset,
+		Timezone: cf.Timezone,
+		Version:  Version,
+	}
+	var err error
+	c.rawComments, err = conn.Comments(page)
+	return c, err
+}
+
 // User returns a data structure that describes the compendium page for a single user.
 func (cf CompendiumFactory) User(conn StorageConn, username string) (CompendiumUser, error) {
 	cu := CompendiumUser{
@@ -151,11 +164,6 @@ func (c Compendium) Comments() []CommentView {
 	return views
 }
 
-// Exists tells if the compendium is empty or not.
-func (c Compendium) Exists() bool {
-	return len(c.Users) > 0
-}
-
 // HiddenUsersLen returns the number of hidden users.
 func (c Compendium) HiddenUsersLen() int {
 	var nb int
@@ -177,6 +185,11 @@ type CompendiumUser struct {
 	Compendium
 	Summary         StatsView // Statistics summarizing the user's activity
 	SummaryNegative StatsView // Statistics summarizing the user's activity based only on comments with a negative score
+}
+
+// Exists tells if the user exists.
+func (cu CompendiumUser) Exists() bool {
+	return len(cu.Users) > 0
 }
 
 // User returns the single User being described.

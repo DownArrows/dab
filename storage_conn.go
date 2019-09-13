@@ -232,7 +232,7 @@ func (conn StorageConn) GetCommentsBelowBetween(score int64, since, until time.T
 		`, score, since.Unix(), until.Unix())
 }
 
-// Comments returns the most downvoted comments, up to a number set by limit, with an offset.
+// Comments returns the most downvoted comments, up to a number set by the limit, with an offset.
 func (conn StorageConn) Comments(page Pagination) ([]Comment, error) {
 	return conn.comments(`
 			SELECT comments.*

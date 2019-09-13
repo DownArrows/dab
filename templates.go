@@ -220,7 +220,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 </table>
 <p><em>NB: comments from after a sub has been quarantined aren't saved, but comments deleted by the user are kept.</em></p>`,
 ).MustAddParse("UserComments",
-	`{{range . -}}
+	`{{range .}}
 <article class="comment">
 	<h2 id="{{.Number}}"><a href="#{{.Number}}">#{{.Number}}</a></h2>
 	<table>
@@ -392,6 +392,34 @@ Next {{.CommentsLen}} comments &rarr;
 <p>No comment yet.</p>
 {{end -}}
 </html>`,
+).MustAddParse("Comments",
+	`{{range .}}
+<article class="comment">
+	<h2 id="{{.Number}}"><a href="#{{.Number}}">#{{.Number}}</a></h2>
+	<table>
+	<tr>
+		<td>Author</td>
+		<td><a href="/compendium/user/{{.Author}}">{{.Author}}</a></td>
+	</tr>
+	<tr>
+		<td>Date</td>
+		<td>{{.Created.Format "Monday 02 January 2006 15:04 MST"}}</td>
+	</tr>
+	<tr>
+		<td>Score</td>
+		<td>{{.Score}}</td>
+	</tr>
+	<tr>
+		<td>Link</td>
+		<td><a href="https://www.reddit.com{{.Permalink}}">{{.Permalink}}</a></td>
+	</tr>
+	</table>
+
+	<blockquote>
+{{.BodyConvert}}
+	</blockquote>
+</article>
+{{end}}`,
 ).MustAddParse("Compendium",
 	`<!DOCTYPE html>
 <html lang="en">
@@ -431,40 +459,15 @@ Next {{.CommentsLen}} comments &rarr;
 	</table>
 </article>
 
+{{if .CommentsLen -}}
 <section>
 <h1 id="top">Most downvoted</h1>
-{{if .CommentsLen -}}
 <p>Top {{.CommentsLen}} most downvoted comments.</p>
-{{end -}}
-{{range .Comments -}}
-<article class="comment">
-	<h2 id="{{.Number}}"><a href="#{{.Number}}">#{{.Number}}</a></h2>
-	<table>
-	<tr>
-		<td>Author</td>
-		<td><a href="/compendium/user/{{.Author}}">{{.Author}}</a></td>
-	</tr>
-	<tr>
-		<td>Date</td>
-		<td>{{.Created.Format "Monday 02 January 2006 15:04 MST"}}</td>
-	</tr>
-	<tr>
-		<td>Score</td>
-		<td>{{.Score}}</td>
-	</tr>
-	<tr>
-		<td>Link</td>
-		<td><a href="https://www.reddit.com{{.Permalink}}">{{.Permalink}}</a></td>
-	</tr>
-	</table>
-
-	<blockquote>
-{{.BodyConvert}}
-	</blockquote>
-</article>
-{{end -}}
+<p><a href="/compendium/comments">All comments.</a></p>
+{{template "Comments" .Comments}}
 {{template "BackToTop"}}
 </section>
+{{end -}}
 
 {{if .Negative -}}
 <section>
@@ -485,11 +488,40 @@ Next {{.CommentsLen}} comments &rarr;
 
 </main>
 {{- else}}
-<p>No comment with negative karma yet.</p>
+<p>No comment yet.</p>
 {{end -}}
 
 </body>
-</html>`)
+</html>`,
+).MustAddParse("CompendiumComments",
+	`<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8"/>
+	<meta name="viewport" content="initial-scale=1"/>
+	<title>All comments</title>
+	<link rel="stylesheet" href="/css/main?version={{.Version}}">
+</head>
+<body>
+<div id="title"><a href="/compendium">All comments</a></div>
+
+{{if .CommentsLen}}
+{{if eq (.CommentsLen) (.NbTop) -}}
+<nav>
+<a href="/compendium/comments?limit={{.CommentsLen}}&offset={{.NextOffset}}">
+Next {{.CommentsLen}} comments &rarr;
+</a>
+</nav>
+{{end -}}
+
+{{template "Comments" .Comments}}
+
+{{template "BackToTop"}}
+{{- else}}
+<p>No comment yet.</p>
+{{end -}}
+</html>`,
+)
 
 // CSSMain is the main CSS stylesheet, to be served along the result of the HTML templates.
 const CSSMain = `:root {
