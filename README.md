@@ -29,11 +29,16 @@ Table of contents:
 
 ### Web interface
 
-Reports can be seen at `/reports/<year>/<week number>`, where the week number is an [ISO week number](https://en.wikipedia.org/wiki/ISO_week_date).
-The special addresses `/reports/current` and `/reports/lastweek` are also provided to redirect to the reports of the current and previous week.
-The full statistics for a week can be seen at `/reports/stats/<year>/<week number>`.
-A compendium can be seen at `/compendium`, and per-user pages at `/compendium/<user name>`.
-At the root `/` can be seen a custom web page or file, if the administrator has configured it.
+ - `/` shows a custom web page, file, or directory listing, if the administrator has enabled this feature it
+ - `/reports/<year>/<week number>` shows the report for the specified week of the year,
+   where the week number is an [ISO week number](https://en.wikipedia.org/wiki/ISO_week_date)
+ - `/reports/current` redirects to the report of the current week
+ - `/reports/lastweek` redirects to the report of the previous week
+ - `/reports/stats/<year>/<week number>` shows all statistics for the specified week
+ - `/compendium` summarizes data about all users
+ - `/compendium/<user name>` shows data for a single user
+ - `/compendium/comments` shows all comments sorted by score in reverse order
+ - `/compendium/<user name>/comments` shows all comments of a single user sorted by score in reverse order
 
 ### Discord commands
 
@@ -244,7 +249,7 @@ and [template](http://golang.org/pkg/text/template/).
       consider them "inactive" and scan them less often; must be at least one day
     - `max_age` *duration* (24h): don't get more batches of a user's comments if the oldest comment found is older than that;
       must be at least one day
-    - `max_batches` *int* (5): maximum number of batches of comments to get from Reddit for a single user before moving to the next one
+    - `max_batches` *integer* (5): maximum number of batches of comments to get from Reddit for a single user before moving to the next one
     - `password` *string* (*none*): Reddit password for the bot's account; leave out to disable the Reddit component
 	 - `retry_connection` *dictionary*:
        - `times` *int* (10): maximum number of times to try to connect to Reddit; use -1 for infinite retries
@@ -259,18 +264,20 @@ and [template](http://golang.org/pkg/text/template/).
           a username must start with `/u/`, and a sub with `/r/`
        - `interval` *duration* (*none*): interval between each scan of the target
  - `report`
-    - `cutoff` *int* (-50): ignore comments whose score is higher than this
+    - `cutoff` *integer* (-50): ignore comments whose score is higher than this
     - `leeway` *duration* (0h) **Deprecated**: shift back the time window for comments' inclusion in the report
       to include those that were made late; cannot be negative. Deprecated due to lack of usefulness
-    - `nb_top` *int* (5): maximum number of users to include in the list of statistics for the report
+    - `nb_top` *integer* (5): maximum number of users to include in the list of statistics for the report
       (also used for the top in the compendium)
  - `web`
+    - `default_limit` *integer* (100): default number of items per page of paginated data
     - `dirty_reads` *bool* (true): allow reading inconsistent data from the database in exchange of better concurrency
     - `listen` *string* (*none*): `hostname:port` or `ip:port` or `:port` (all interfaces)
       specification for the webserver to listen to; leave out to disable
+    - `max_limit` *integer* (1000): maximum number of items per page of paginated data
     - `nb_db_conn` *integer* (10): number of database connections open for the web server
     - `root_dir` *string* (*none*): root directory that is served at the root URL, with automatic directory index generation,
-       and which serves `index.html` as the root of a directory if present.
+       and which serves `index.html` as the root of a directory if present
 
 ### Sample configuration
 
@@ -291,8 +298,8 @@ Note how the last value of a dictionary must not be followed by a comma:
 			"id":         "XaiUdR5UBKl_FY",
 			"secret":     "D8PvhefS9ZTZFOUxK-9Bu7iaRLt",
 			"user_agent": "{{.OS}}:agreatbot:v{{.Version}} (by /u/AGreatUsername)",
-			"max_age":                    "72h",
-			"unsuspension_interval":      "15m",
+			"max_age":               "72h",
+			"unsuspension_interval": "15m",
 		},
 
 		"discord": {
@@ -301,7 +308,7 @@ Note how the last value of a dictionary must not be followed by a comma:
 			"log":        "508869940013213344",
 			"highscores": "508263683211452578",
 			"privileged_role": "653243081214462080",
-			"welcome":    "Hello <@{{.Member.ID}}>!"
+			"welcome": "Hello <@{{.Member.ID}}>!"
 		},
 
 		"web": {
