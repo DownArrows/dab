@@ -1,11 +1,15 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
 	"time"
 )
+
+// ErrSentinel is an error used to signal that there's been an error but has been dealt with out of band.
+var ErrSentinel = errors.New("sentinel error, you SHOULD NOT be seeing that")
 
 // FileOlderThan tells if the file at path is older than maxAge.
 func FileOlderThan(path string, maxAge time.Duration) (bool, error) {

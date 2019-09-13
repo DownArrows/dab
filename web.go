@@ -367,27 +367,24 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 		wsrv.errMsg(w, r, msg, http.StatusBadRequest)
 		return
 	}
-	username := args[0]
 
-	conn, err := wsrv.conns.Acquire(r.Context())
+	username := args[0]
+	var stats CompendiumUser
+
+	err := wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
+		var err error
+		stats, err = wsrv.compendium.User(conn, username)
+		if err != nil {
+			wsrv.err(w, r, err, http.StatusInternalServerError)
+			return ErrSentinel
+		} else if !stats.Exists() {
+			wsrv.errMsg(w, r, fmt.Sprintf("User %q doesn't exist.", username), http.StatusNotFound)
+			return ErrSentinel
+		}
+		return nil
+	})
 	if err != nil {
 		wsrv.err(w, r, err, http.StatusServiceUnavailable)
-		return
-	}
-	defer wsrv.conns.Release(conn)
-
-	query := conn.GetUser(username)
-	if !query.Exists {
-		wsrv.errMsg(w, r, fmt.Sprintf("User %q doesn't exist.", username), http.StatusNotFound)
-		return
-	} else if query.Error != nil {
-		wsrv.err(w, r, query.Error, http.StatusInternalServerError)
-		return
-	}
-
-	stats, err := wsrv.compendium.User(conn, query.User)
-	if err != nil {
-		wsrv.err(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -409,6 +406,7 @@ func (wsrv *WebServer) CompendiumUserComments(w http.ResponseWriter, r *http.Req
 		wsrv.errMsg(w, r, msg, http.StatusBadRequest)
 		return
 	}
+
 	username := args[0]
 
 	urlQuery := r.URL.Query()
@@ -439,34 +437,31 @@ func (wsrv *WebServer) CompendiumUserComments(w http.ResponseWriter, r *http.Req
 
 	/* Get the data */
 
-	conn, err := wsrv.conns.Acquire(r.Context())
+	var comments CompendiumUser
+
+	err = wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
+		var err error
+		comments, err = wsrv.compendium.UserComments(conn, username, page)
+		if err != nil {
+			wsrv.err(w, r, err, http.StatusInternalServerError)
+			return ErrSentinel
+		} else if !comments.Exists() {
+			wsrv.errMsg(w, r, fmt.Sprintf("User %q doesn't exist.", username), http.StatusNotFound)
+			return ErrSentinel
+		}
+		return nil
+	})
 	if err != nil {
 		wsrv.err(w, r, err, http.StatusServiceUnavailable)
-		return
-	}
-	defer wsrv.conns.Release(conn)
-
-	query := conn.GetUser(username)
-	if !query.Exists {
-		wsrv.errMsg(w, r, fmt.Sprintf("User %q doesn't exist.", username), http.StatusNotFound)
-		return
-	} else if query.Error != nil {
-		wsrv.err(w, r, query.Error, http.StatusInternalServerError)
-		return
-	}
-
-	data, err := wsrv.compendium.UserComments(conn, query.User, page)
-	if err != nil {
-		wsrv.err(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
 	/* Format and send the page */
 
-	data.CommentBodyConverter = wsrv.commentBodyConverter
+	comments.CommentBodyConverter = wsrv.commentBodyConverter
 
 	w.Header().Set("Content-Type", "text/html")
-	if err := HTMLTemplates.ExecuteTemplate(w, "CompendiumUserComments", data); err != nil {
+	if err := HTMLTemplates.ExecuteTemplate(w, "CompendiumUserComments", comments); err != nil {
 		panic(err)
 	}
 }
@@ -486,7 +481,9 @@ func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
 
 func (wsrv *WebServer) err(w http.ResponseWriter, r *http.Request, err error, code int) {
 	var msg string
-	if IsCancellation(err) {
+	if err == ErrSentinel {
+		return
+	} else if IsCancellation(err) {
 		msg = "Server shutting down."
 		code = http.StatusServiceUnavailable
 	} else {

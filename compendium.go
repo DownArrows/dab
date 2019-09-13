@@ -58,18 +58,25 @@ func (cf CompendiumFactory) Index(conn StorageConn) (Compendium, error) {
 }
 
 // User returns a data structure that describes the compendium page for a single user.
-func (cf CompendiumFactory) User(conn StorageConn, user User) (CompendiumUser, error) {
+func (cf CompendiumFactory) User(conn StorageConn, username string) (CompendiumUser, error) {
 	cu := CompendiumUser{
 		Compendium: Compendium{
 			NbTop:    cf.NbTop,
 			Timezone: cf.Timezone,
-			Users:    []User{user},
 			Version:  Version,
 		},
 	}
 
 	err := conn.WithTx(func() error {
-		all, rawNegative, err := conn.CompendiumUserPerSub(user.Name)
+		query := conn.GetUser(username)
+		if query.Error != nil {
+			return query.Error
+		} else if !query.Exists {
+			return nil
+		}
+		cu.Users = []User{query.User}
+
+		all, rawNegative, err := conn.CompendiumUserPerSub(cu.User().Name)
 		if err != nil {
 			return err
 		}
@@ -80,25 +87,36 @@ func (cf CompendiumFactory) User(conn StorageConn, user User) (CompendiumUser, e
 		cu.Negative = negative.OrderBy(func(a, b Stats) bool { return a.Sum < b.Sum }).ToView(cu.Timezone)
 		cu.SummaryNegative = negative.Stats().ToView(0, cu.Timezone)
 
-		cu.rawComments, err = conn.UserComments(user.Name, Pagination{Limit: cu.NbTop})
+		cu.rawComments, err = conn.UserComments(cu.User().Name, Pagination{Limit: cu.NbTop})
 		return err
 	})
 	return cu, err
 }
 
 // UserComments returns a page of comments for a user.
-func (cf CompendiumFactory) UserComments(conn StorageConn, user User, page Pagination) (CompendiumUser, error) {
-	comments, err := conn.UserComments(user.Name, page)
+func (cf CompendiumFactory) UserComments(conn StorageConn, username string, page Pagination) (CompendiumUser, error) {
 	cu := CompendiumUser{
 		Compendium: Compendium{
-			NbTop:       page.Limit,
-			Offset:      page.Offset,
-			Timezone:    cf.Timezone,
-			Users:       []User{user},
-			Version:     Version,
-			rawComments: comments,
+			NbTop:    page.Limit,
+			Offset:   page.Offset,
+			Timezone: cf.Timezone,
+			Version:  Version,
 		},
 	}
+	err := conn.WithTx(func() error {
+		query := conn.GetUser(username)
+		if query.Error != nil {
+			return query.Error
+		} else if !query.Exists {
+			return nil
+		}
+
+		cu.Users = []User{query.User}
+
+		var err error
+		cu.rawComments, err = conn.UserComments(cu.User().Name, page)
+		return err
+	})
 	return cu, err
 }
 
@@ -131,6 +149,11 @@ func (c Compendium) Comments() []CommentView {
 		views = append(views, view)
 	}
 	return views
+}
+
+// Exists tells if the compendium is empty or not.
+func (c Compendium) Exists() bool {
+	return len(c.Users) > 0
 }
 
 // HiddenUsersLen returns the number of hidden users.
