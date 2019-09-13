@@ -190,7 +190,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 </article>
 </html>`,
 ).MustAddParse("CompendiumStats",
-	`<table>
+	`<table class="large">
 <thead>
 <tr>
 	<th>Rank</th>
@@ -631,9 +631,9 @@ table tr {
 }
 
 @media (max-width: 28em) {
-	thead { display: flex }
-	table { display: block }
-	tbody { display: table }
+	table.large { display: block }
+	table.large thead { display: flex }
+	table.large tbody { display: table }
 }
 
 @media (max-width: 25em) {
