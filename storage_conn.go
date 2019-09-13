@@ -232,9 +232,8 @@ func (conn StorageConn) GetCommentsBelowBetween(score int64, since, until time.T
 		`, score, since.Unix(), until.Unix())
 }
 
-// TopComments returns the most downvoted comments, up to a number set by limit.
-// To be used within a transaction.
-func (conn StorageConn) TopComments(limit uint) ([]Comment, error) {
+// Comments returns the most downvoted comments, up to a number set by limit, with an offset.
+func (conn StorageConn) Comments(page Pagination) ([]Comment, error) {
 	return conn.comments(`
 			SELECT comments.*
 			FROM users JOIN comments
@@ -242,14 +241,14 @@ func (conn StorageConn) TopComments(limit uint) ([]Comment, error) {
 			WHERE
 				comments.score < 0
 				AND users.hidden IS FALSE
-			ORDER BY score ASC LIMIT ?
-		`, int(limit))
+			ORDER BY score ASC LIMIT ? OFFSET ?
+		`, int(page.Limit), int(page.Offset))
 }
 
-// TopCommentsUser returns the most downvoted comments of a single User, up to a number set by limit.
-// To be used within a transaction.
-func (conn StorageConn) TopCommentsUser(username string, limit uint) ([]Comment, error) {
-	return conn.comments("SELECT * FROM comments WHERE author = ? AND score < 0 ORDER BY score ASC LIMIT ?", username, int(limit))
+// UserComments returns the most downvoted comments of a single User, up to a number set by limit, and skipping a positive number.
+func (conn StorageConn) UserComments(username string, page Pagination) ([]Comment, error) {
+	sql := "SELECT * FROM comments WHERE author = ? ORDER BY score ASC LIMIT ? OFFSET ?"
+	return conn.comments(sql, username, int(page.Limit), int(page.Offset))
 }
 
 func (conn StorageConn) comments(sql string, args ...interface{}) ([]Comment, error) {

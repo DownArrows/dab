@@ -219,6 +219,30 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 </tbody>
 </table>
 <p><em>NB: comments from after a sub has been quarantined aren't saved, but comments deleted by the user are kept.</em></p>`,
+).MustAddParse("UserComments",
+	`{{range . -}}
+<article class="comment">
+	<h2 id="{{.Number}}"><a href="#{{.Number}}">#{{.Number}}</a></h2>
+	<table>
+	<tr>
+		<td>Date</td>
+		<td>{{.Created.Format "Monday 02 January 2006 15:04 MST"}}</td>
+	</tr>
+	<tr>
+		<td>Score</td>
+		<td>{{.Score}}</td>
+	</tr>
+	<tr>
+		<td>Link</td>
+		<td><a href="https://www.reddit.com{{.Permalink}}">{{.Permalink}}</a></td>
+	</tr>
+	</table>
+
+	<blockquote>
+{{.BodyConvert}}
+	</blockquote>
+</article>
+{{end}}`,
 ).MustAddParse("CompendiumUser",
 	`<!DOCTYPE html>
 <html lang="en">
@@ -232,17 +256,17 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 <body>
 <div id="title"><a href="/compendium">Compendium for {{.User.Name}}</a></div>
 
-{{if (.Summary.Count) gt 0 -}}
+{{if .Summary.Count -}}
 <nav>
 	<ul>
 		<li><a href="/compendium/user/{{.User.Name}}#summary">Summary</a></li>
-		{{if (.TopCommentsLen) gt 0 -}}
+		{{if .CommentsLen -}}
 		<li><a href="/compendium/user/{{.User.Name}}#top">Most downvoted</a></li>
 		{{- end}}
-		{{if (.Negative | len) gt 0 -}}
+		{{if .Negative -}}
 		<li><a href="/compendium/user/{{.User.Name}}#named-negative">Negative per sub</a></li>
 		{{- end}}
-		{{if (.All | len) gt 0 -}}
+		{{if .All -}}
 		<li><a href="/compendium/user/{{.User.Name}}#named">Per sub</a></li>
 		{{- end}}
 	</ul>
@@ -269,7 +293,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 			<td>Account created<td>
 			<td>{{.User.Created.Format $dateFormat}}<td>
 		</tr>
-		{{if (.Summary.Count) gt 0 -}}
+		{{if .Summary.Count -}}
 		<tr>
 			<td>Last commented<td>
 			<td>{{.Summary.Latest.Format $dateFormat}}<td>
@@ -287,7 +311,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 			<td>{{.User.LastScan.Format $dateFormat}}<td>
 			{{end -}}
 		</tr>
-		{{- if (.Summary.Count) gt 0}}
+		{{- if .Summary.Count}}
 		<tr>
 			<td>Number of comments<td>
 			<td><strong>{{.Summary.Count}}</strong>, with <strong>{{.SummaryNegative.Count}}</strong> negative (<strong>{{.PercentageNegative}}%</strong>)<td>
@@ -307,40 +331,21 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 
 <main>
 
-{{if (.TopCommentsLen) gt 0 -}}
+{{if .CommentsLen -}}
 <section>
 <h1 id="top">Most downvoted</h1>
-{{if (.TopCommentsLen) gt 1 -}}
-<p>First {{.TopCommentsLen}} comments.</p>
+{{if .CommentsLen -}}
+<p>First {{.CommentsLen}} comments.</p>
+<p><a href="/compendium/comments/user/{{.User.Name}}">All comments.</a></p>
 {{end -}}
-{{range .TopComments -}}
-<article class="comment">
-	<h2 id="{{.Number}}"><a href="#{{.Number}}">#{{.Number}}</a></h2>
-	<table>
-	<tr>
-		<td>Date</td>
-		<td>{{.Created.Format "Monday 02 January 2006 15:04 MST"}}</td>
-	</tr>
-	<tr>
-		<td>Score</td>
-		<td>{{.Score}}</td>
-	</tr>
-	<tr>
-		<td>Link</td>
-		<td><a href="https://www.reddit.com{{.Permalink}}">{{.Permalink}}</a></td>
-	</tr>
-	</table>
 
-	<blockquote>
-{{.BodyConvert}}
-	</blockquote>
-</article>
-{{end -}}
+{{template "UserComments" .Comments}}
+
 {{template "BackToTop"}}
 </section>
 {{- end}}
 
-{{if (.Negative | len) gt 0 -}}
+{{if .Negative -}}
 <section>
 <h1 id="named-negative">Negative per sub</h1>
 {{template "CompendiumStats" .Negative}}
@@ -348,7 +353,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 </section>
 {{- end}}
 
-{{if (.All | len) gt 0 -}}
+{{if .All -}}
 <section>
 <h1 id="named">Per sub</h1>
 {{template "CompendiumStats" .All}}
@@ -358,6 +363,34 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 
 </main>
 </body>
+</html>`,
+).MustAddParse("CompendiumUserComments",
+	`<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8"/>
+	<meta name="viewport" content="initial-scale=1"/>
+	<title>Comments of {{.User.Name}}</title>
+	<link rel="stylesheet" href="/css/main?version={{.Version}}">
+</head>
+<body>
+<div id="title"><a href="/compendium/user/{{.User.Name}}">Comments of {{.User.Name}}</a></div>
+
+{{if .CommentsLen}}
+{{if eq (.CommentsLen) (.NbTop) -}}
+<nav>
+<a href="/compendium/comments/user/{{.User.Name}}?limit={{.CommentsLen}}&offset={{.NextOffset}}">
+Next {{.CommentsLen}} comments &rarr;
+</a>
+</nav>
+{{end -}}
+
+{{template "UserComments" .Comments}}
+
+{{template "BackToTop"}}
+{{- else}}
+<p>No comment yet.</p>
+{{end -}}
 </html>`,
 ).MustAddParse("Compendium",
 	`<!DOCTYPE html>
@@ -372,7 +405,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 <body>
 <div id="title"><a href="/">Compendium</a></div>
 
-{{- if (.Negative | len) gt 0}}
+{{- if.Negative}}
 <nav>
 	<ul>
 		<li><a href="/compendium#summary">Summary</a></li>
@@ -400,10 +433,10 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 
 <section>
 <h1 id="top">Most downvoted</h1>
-{{if (.TopCommentsLen) gt 1 -}}
-<p>Top {{.TopCommentsLen}} most downvoted comments.</p>
+{{if .CommentsLen -}}
+<p>Top {{.CommentsLen}} most downvoted comments.</p>
 {{end -}}
-{{range .TopComments -}}
+{{range .Comments -}}
 <article class="comment">
 	<h2 id="{{.Number}}"><a href="#{{.Number}}">#{{.Number}}</a></h2>
 	<table>
@@ -433,7 +466,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 {{template "BackToTop"}}
 </section>
 
-{{if (.Negative | len) gt 0 -}}
+{{if .Negative -}}
 <section>
 <h1 id="named-negative">Negative karma per user</h1>
 {{template "CompendiumStats" .Negative}}
@@ -441,7 +474,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 </section>
 {{- end}}
 
-{{if (.All | len) gt 0 -}}
+{{if .All -}}
 <section>
 <h1 id="named">Karma per user</h1>
 <table>

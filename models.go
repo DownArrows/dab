@@ -420,6 +420,12 @@ type StatsView struct {
 	Number uint64
 }
 
+// Pagination is a helper data structure to fetch paginated data.
+type Pagination struct {
+	Limit  uint // Maximum number of items.
+	Offset uint // Offset in the collection of items.
+}
+
 // SQLiteForeignKeyCheck describes a foreign key error in a single row.
 type SQLiteForeignKeyCheck struct {
 	ValidRowID   bool   // RowID can be NULL, contrarily to the rest

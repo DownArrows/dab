@@ -19,9 +19,9 @@ func NewCompendiumFactory(conf CompendiumConf) CompendiumFactory {
 	}
 }
 
-// Compendium returns the data structure that describes the compendium's index.
-func (cf CompendiumFactory) Compendium(conn StorageConn) (Compendium, error) {
-	c := Compendium{
+// Index returns the data structure that describes the compendium's index.
+func (cf CompendiumFactory) Index(conn StorageConn) (Compendium, error) {
+	ci := Compendium{
 		NbTop:    cf.NbTop,
 		Timezone: cf.Timezone,
 		Version:  Version,
@@ -30,7 +30,7 @@ func (cf CompendiumFactory) Compendium(conn StorageConn) (Compendium, error) {
 	err := conn.WithTx(func() error {
 		var err error
 
-		c.Users, err = conn.ListRegisteredUsers()
+		ci.Users, err = conn.ListRegisteredUsers()
 		if err != nil {
 			return err
 		}
@@ -39,25 +39,25 @@ func (cf CompendiumFactory) Compendium(conn StorageConn) (Compendium, error) {
 		if err != nil {
 			return err
 		}
-		c.All = all.ToView(c.Timezone)
-		c.Negative = negative.OrderBy(func(a, b Stats) bool { return a.Sum < b.Sum }).ToView(c.Timezone)
+		ci.All = all.ToView(ci.Timezone)
+		ci.Negative = negative.OrderBy(func(a, b Stats) bool { return a.Sum < b.Sum }).ToView(ci.Timezone)
 
-		c.rawTopComments, err = conn.TopComments(c.NbTop)
+		ci.rawComments, err = conn.Comments(Pagination{Limit: ci.NbTop})
 		return err
 	})
 	if err != nil {
-		return c, err
+		return ci, err
 	}
 
-	nbUsers := len(c.Users)
+	nbUsers := len(ci.Users)
 	for i := 0; i < nbUsers; i++ {
-		c.Users[i] = c.Users[i].InTimezone(cf.Timezone)
+		ci.Users[i] = ci.Users[i].InTimezone(cf.Timezone)
 	}
 
-	return c, nil
+	return ci, nil
 }
 
-// User returs a data structure that describes the compendium page for a single user.
+// User returns a data structure that describes the compendium page for a single user.
 func (cf CompendiumFactory) User(conn StorageConn, user User) (CompendiumUser, error) {
 	cu := CompendiumUser{
 		Compendium: Compendium{
@@ -80,35 +80,54 @@ func (cf CompendiumFactory) User(conn StorageConn, user User) (CompendiumUser, e
 		cu.Negative = negative.OrderBy(func(a, b Stats) bool { return a.Sum < b.Sum }).ToView(cu.Timezone)
 		cu.SummaryNegative = negative.Stats().ToView(0, cu.Timezone)
 
-		cu.rawTopComments, err = conn.TopCommentsUser(user.Name, cu.NbTop)
+		cu.rawComments, err = conn.UserComments(user.Name, Pagination{Limit: cu.NbTop})
 		return err
 	})
+	return cu, err
+}
+
+// UserComments returns a page of comments for a user.
+func (cf CompendiumFactory) UserComments(conn StorageConn, user User, page Pagination) (CompendiumUser, error) {
+	comments, err := conn.UserComments(user.Name, page)
+	cu := CompendiumUser{
+		Compendium: Compendium{
+			NbTop:       page.Limit,
+			Offset:      page.Offset,
+			Timezone:    cf.Timezone,
+			Users:       []User{user},
+			Version:     Version,
+			rawComments: comments,
+		},
+	}
 	return cu, err
 }
 
 // Compendium describes the basic data of a page of the compendium.
 // Specific pages may use it directly or extend it.
 type Compendium struct {
-	All                  []StatsView // Statistics about every comments
+	All         []StatsView    // Statistics about every comments
+	NbTop       uint           // Number of most downvoted comments
+	Negative    []StatsView    // Statistics about comments with a negative score
+	Offset      uint           // Offset in the rank of the comments
+	Timezone    *time.Location // Timezone of the dates
+	Users       []User         // Users in the compendium
+	Version     SemVer         // Version of the application
+	rawComments []Comment
+
 	CommentBodyConverter CommentBodyConverter
-	NbTop                uint        // Number of most downvoted comments
-	Negative             []StatsView // Statistics about comments with a negative score
-	rawTopComments       []Comment
-	Timezone             *time.Location // Timezone of the dates
-	Users                []User         // Users in the compendium
-	Version              SemVer         // Version of the application
 }
 
-// TopCommentsLen returns the number of top comments without generating them.
-func (c Compendium) TopCommentsLen() int {
-	return len(c.rawTopComments)
+// CommentsLen returns the number of top comments without generating them.
+func (c Compendium) CommentsLen() int {
+	return len(c.rawComments)
 }
 
-// TopComments generates the views for the top comments.
-func (c Compendium) TopComments() []CommentView {
-	views := make([]CommentView, 0, len(c.rawTopComments))
-	for i, comment := range c.rawTopComments {
-		view := comment.ToView(uint64(i+1), c.Timezone, c.CommentBodyConverter)
+// Comments generates the views for the top comments.
+func (c Compendium) Comments() []CommentView {
+	offset := uint64(c.Offset)
+	views := make([]CommentView, 0, len(c.rawComments))
+	for i, comment := range c.rawComments {
+		view := comment.ToView(uint64(i+1)+offset, c.Timezone, c.CommentBodyConverter)
 		views = append(views, view)
 	}
 	return views
@@ -123,6 +142,11 @@ func (c Compendium) HiddenUsersLen() int {
 		}
 	}
 	return nb
+}
+
+// NextOffset returns the offset for the next page.
+func (c Compendium) NextOffset() uint {
+	return c.NbTop + c.Offset
 }
 
 // CompendiumUser describes the compendium page for a single user.

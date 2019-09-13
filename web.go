@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -144,6 +145,7 @@ func NewWebServer(logger LevelLogger, storage *Storage, reports ReportFactory, c
 	mux.HandleFunc("/reports/stats/", wsrv.ReportStats)
 	mux.HandleFunc("/compendium", wsrv.CompendiumIndex)
 	mux.HandleFunc("/compendium/user/", wsrv.CompendiumUser)
+	mux.HandleFunc("/compendium/comments/user/", wsrv.CompendiumUserComments)
 	mux.HandleFunc("/backup", wsrv.Backup)
 	if conf.RootDir != "" {
 		wsrv.logger.Infof("web server serving the directory %q", wsrv.RootDir)
@@ -341,7 +343,7 @@ func (wsrv *WebServer) CompendiumIndex(w http.ResponseWriter, r *http.Request) {
 	var compendium Compendium
 	err := wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
 		var err error
-		compendium, err = wsrv.compendium.Compendium(conn)
+		compendium, err = wsrv.compendium.Index(conn)
 		return err
 	})
 	if err != nil {
@@ -393,6 +395,78 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html")
 	if err := HTMLTemplates.ExecuteTemplate(w, "CompendiumUser", stats); err != nil {
+		panic(err)
+	}
+}
+
+// CompendiumUserComments serves the comments of a user.
+func (wsrv *WebServer) CompendiumUserComments(w http.ResponseWriter, r *http.Request) {
+	/* Parse the URL */
+
+	args := ignoreTrailing(subPath("/compendium/comments/user/", r))
+	if len(args) != 1 {
+		msg := "invalid URL, use \"/compendium/comments/user/username\" to view the comments of \"username\""
+		wsrv.errMsg(w, r, msg, http.StatusBadRequest)
+		return
+	}
+	username := args[0]
+
+	urlQuery := r.URL.Query()
+
+	intLimit, err := urlQueryIntParameter(urlQuery, "limit")
+	if err != nil {
+		wsrv.err(w, r, err, http.StatusBadRequest)
+		return
+	} else if intLimit < 0 {
+		wsrv.errMsg(w, r, "Negative limits are not allowed.", http.StatusBadRequest)
+		return
+	}
+	limit := uint(intLimit)
+	if limit > wsrv.MaxLimit {
+		wsrv.errMsg(w, r, fmt.Sprintf("Maximum number of comments per page is %d.", wsrv.MaxLimit), http.StatusBadRequest)
+		return
+	} else if limit == 0 {
+		limit = wsrv.DefaultLimit
+	}
+
+	offset, err := urlQueryIntParameter(urlQuery, "offset")
+	if err != nil {
+		wsrv.err(w, r, err, http.StatusBadRequest)
+		return
+	}
+
+	page := Pagination{Limit: limit, Offset: uint(offset)}
+
+	/* Get the data */
+
+	conn, err := wsrv.conns.Acquire(r.Context())
+	if err != nil {
+		wsrv.err(w, r, err, http.StatusServiceUnavailable)
+		return
+	}
+	defer wsrv.conns.Release(conn)
+
+	query := conn.GetUser(username)
+	if !query.Exists {
+		wsrv.errMsg(w, r, fmt.Sprintf("User %q doesn't exist.", username), http.StatusNotFound)
+		return
+	} else if query.Error != nil {
+		wsrv.err(w, r, query.Error, http.StatusInternalServerError)
+		return
+	}
+
+	data, err := wsrv.compendium.UserComments(conn, query.User, page)
+	if err != nil {
+		wsrv.err(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	/* Format and send the page */
+
+	data.CommentBodyConverter = wsrv.commentBodyConverter
+
+	w.Header().Set("Content-Type", "text/html")
+	if err := HTMLTemplates.ExecuteTemplate(w, "CompendiumUserComments", data); err != nil {
 		panic(err)
 	}
 }
@@ -494,4 +568,14 @@ func weekAndYear(path []string) (uint8, int, error) {
 	}
 
 	return uint8(week), year, nil
+}
+
+func urlQueryIntParameter(query url.Values, name string) (int, error) {
+	if raw, ok := query[name]; ok {
+		if len(raw) > 1 {
+			return 0, fmt.Errorf("only one %q parameter is accepted", name)
+		}
+		return strconv.Atoi(raw[0])
+	}
+	return 0, nil
 }

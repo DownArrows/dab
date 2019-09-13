@@ -56,7 +56,9 @@ const Defaults string = `{
 	},
 
 	"web": {
+		"default_limit": 100,
 		"dirty_reads": true,
+		"max_limit": 1000,
 		"nb_db_conn": 10
 	}
 }`
@@ -149,10 +151,12 @@ type DiscordBotChannelsID struct {
 
 // WebConf describes the configuration for the application's web server.
 type WebConf struct {
-	DirtyReads bool   `json:"dirty_reads"`
-	Listen     string `json:"listen"`
-	NbDBConn   uint   `json:"nb_db_conn"`
-	RootDir    string `json:"root_dir"`
+	DefaultLimit uint   `json:"default_limit"`
+	DirtyReads   bool   `json:"dirty_reads"`
+	Listen       string `json:"listen"`
+	MaxLimit     uint   `json:"max_limit"`
+	NbDBConn     uint   `json:"nb_db_conn"`
+	RootDir      string `json:"root_dir"`
 }
 
 // Configuration holds the configuration for the whole application.
