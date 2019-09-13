@@ -29,7 +29,7 @@ Table of contents:
 
 ### Web interface
 
- - `/` shows a custom web page, file, or directory listing, if the administrator has enabled this feature it
+ - `/` shows a custom web page, file, or directory listing, if the administrator has enabled this feature
  - `/reports/<year>/<week number>` shows the report for the specified week of the year,
    where the week number is an [ISO week number](https://en.wikipedia.org/wiki/ISO_week_date)
  - `/reports/current` redirects to the report of the current week
