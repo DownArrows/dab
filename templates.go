@@ -549,7 +549,8 @@ a:visited {
 body {
 	color: var(--fg);
 	max-width: 62.5em;
-	margin: 1em auto;
+	margin: auto;
+	padding: var(--spacing);
 	font-size: 0.75em;
 }
 
