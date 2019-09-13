@@ -535,8 +535,6 @@ const CSSMain = `:root {
 a {
 	color: var(--sec-color);
 	text-decoration: none;
-	overflow-wrap: break-word;
-	word-break: break-all;
 }
 
 a:hover {
@@ -555,9 +553,11 @@ body {
 	font-size: 0.75em;
 }
 
-#title {
-	text-align: center;
+#title, .title {
+	color: var(--fg);
 	font-size: 2em;
+	font-weight: normal;
+	text-align: center;
 }
 
 h1, h2 {
@@ -584,9 +584,8 @@ h2 {
 	text-decoration: underline;
 }
 
-.comment > blockquote {
-	overflow-wrap: break-word;
-}
+.comment > blockquote, .comment a { overflow-wrap: break-word }
+.comment a { word-break: break-all }
 
 .comment > blockquote blockquote {
 	background: var(--bg);

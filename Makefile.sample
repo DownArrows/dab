@@ -34,19 +34,15 @@ test: *.go
 	go test -race -vet=all -timeout 5s github.com/DownArrows/dab
 
 README.html: README.md
-	pandoc $< --self-contained -t html > $@
+	pandoc $< -p --self-contained -t html -M lang=en -M title="Down Arrows Bot" > $@
 
 # Comment out the previous definition and uncomment the following to generate a file
 # that can be put in the application's root directory and use its style sheet.
 # Caution, this can easily break if the HTML templates, the CSS style sheets,
 # or pandoc's output are changed.
 #README.html: README.md
-#	pandoc $< --self-contained -t html | \
-#	sed -e 's|<h1[^>]*>|<div id="title">|' \
-#		-e 's|</h1>|</div>|' \
-#		-e 's|h2\([^>]*\)>|h1\1>|' \
-#		-e 's|h3\([^>]*\)>|h2\1>|' \
-#		-e '/<\/title>/ a \  <link rel="stylesheet" href="/css/main"/>' \
+#	pandoc $< -p --self-contained -t html -M lang=en -M title="Down Arrows Bot" | \
+#	sed '/<\/title>/ a \  <link rel="stylesheet" href="/css/main"/>' \
 #	> $@
 
 tarball: dab LICENSE README.md

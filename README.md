@@ -1,5 +1,3 @@
-# Down Arrows Bot
-
 This bot scans some reddit users, interacts with a discord server of your choice, and build reports about their most downvoted comments.
 It is supposed to run continuously, typically on a server, and was designed to use as few resources as possible.
 
@@ -25,9 +23,9 @@ Table of contents:
     - [Database schema](#database-schema)
     - [TODO](#todo)
 
-## End user manual
+# End user manual
 
-### Web interface
+## Web interface
 
  - `/` shows a custom web page, file, or directory listing, if the administrator has enabled this feature
  - `/reports/<year>/<week number>` shows the report for the specified week of the year,
@@ -40,7 +38,7 @@ Table of contents:
  - `/compendium/comments` shows all comments sorted by score in reverse order
  - `/compendium/<user name>/comments` shows all comments of a single user sorted by score in reverse order
 
-### Discord commands
+## Discord commands
 
 Commands must start with the configured prefix (defaults to `!`), and if they take arguments, must be separated from them by a single white space.
 Some are reserved to privileged users (the server's owner and a specific role).
@@ -65,13 +63,13 @@ If you post a link in the main channel that contains a link to a comment on redd
 it will be reposted on the log channel if the administrator of the bot has enabled this feature.
 To prevent that, add the command `nolog` anywhere in your comment.
 
-### Database
+## Database
 
 The database contains no private data and thus a backup can be publicly shared.
 If you have such a backup and want to browse the database, you can use something like the [DB Browser for SQLite](https://sqlitebrowser.org/).
 See [the administrator section](#database-identification) and [the developer section](#database-schema) for detailed documentation about it.
 
-## Administrator manual
+# Administrator manual
 
 DAB has only been compiled and used on GNU/Linux so far.
 It should theoretically work on other platforms.
@@ -82,7 +80,7 @@ See the section on the available configuration options to see what is necessary 
 
 Versioning follows [semver](https://semver.org/) and applies to everything documented in the end user and administrator manuals.
 
-### Compiling
+## Compiling
 
 You need at least Go 1.11, which you can download at <https://golang.org/dl/>, as well as git, the gcc compiler, and the headers of a C library.
 On Debian-based distributions you can get all those dependencies with `apt install golang gcc libc-dev git`.
@@ -90,7 +88,7 @@ The version of Go may not be high enough, in which case download it from the off
 See <https://golang.org/cmd/go/#hdr-Environment_variables> if you have specific needs.
 Once installed, go into the source folder, run `go get -d` to download the dependencies, and then `go build` (that may take a few minutes the first time).
 
-### Reddit and Discord credentials
+## Reddit and Discord credentials
 
 For the Discord component, you first need an account,
 then go on https://discordapp.com/developers/, create an application, add a bot to it, and get its client ID and token.
@@ -111,7 +109,7 @@ On the redesign, also go in your account's settings, and in the "Privacy & Secur
 At the time of writing, this will redirect you to the old design.
 Once you got a client ID and a secret, put the account's user name, its password, the client ID and the secret inside the configuration file.
 
-### Serving custom files
+## Serving custom files
 
 The web server can serve any file under a directory configured by `web.root_dir`.
 The files can have any name that doesn't clash with the application's URLs.
@@ -122,7 +120,7 @@ If you want to use the application's style sheets, you can link to them without 
 See the sample makefile for an example of the generation of a file that can be put in the application's
 root directory and take advantage of the application's style sheets.
 
-### Running
+## Running
 
 To run the bot simply call the binary. It will expect a file named `dab.conf.json` in the current directory.
 To use another path for the configuration file use `dab -config /your/custom/path/dab.conf.json` (note that the file can have any name).
@@ -148,9 +146,9 @@ If you feel the need to be sure it is actually doing something, run it with `-lo
 The bot shuts down on the following UNIX signals: SIGINT, SIGTERM, and SIGKILL.
 On Windows it will not respond to Ctrl+C.
 
-### Web
+## Web
 
-### Maintenance
+## Maintenance
 
 If the bot has been offline for a while, it will pick everything back up where it left,
 save for messages on Discord and comments of Reddit users that got banned or deleted in the meantime.
@@ -173,7 +171,7 @@ or if you just want to repair the database, run it with the `-initdb` option.
 Those files are also present when the bot is running, which is perfectly normal.
 For more information about them see <https://sqlite.org/tempfiles.html>.
 
-### Command line interface
+## Command line interface
 
 Most of the configuration happens in the configuration file.
 The command line interface only affects the overall behavior of the program:
@@ -185,7 +183,7 @@ The command line interface only affects the overall behavior of the program:
  - `-report` Print the report for last week on the standard output and exit.
  - `-useradd` (deprecated) Add one or multiple user names separated by a white space or a comma to be tracked and exit.
 
-### Configuration
+## Configuration
 
 The configuration file is a JSON file whose top-level data container is a dictionary.
 The list below shows every option, where a sub-list corresponds to a dictionary,
@@ -279,7 +277,7 @@ and [template](http://golang.org/pkg/text/template/).
     - `root_dir` *string* (*none*): root directory that is served at the root URL, with automatic directory index generation,
        and which serves `index.html` as the root of a directory if present
 
-### Sample configuration
+## Sample configuration
 
 Note how the last value of a dictionary must not be followed by a comma:
 
@@ -317,7 +315,7 @@ Note how the last value of a dictionary must not be followed by a comma:
 
 	}
 
-### Database identification
+## Database identification
 
 The database is an SQLite file which contains in its header a specific application
 format and the version of DAB that last wrote into it.
@@ -357,7 +355,7 @@ correct headers, you can set things straight with the following queries:
 	-- Sets version to 1.6.0, edit for the version you target;
 	PRAGMA application_id = 1 * 65536 + 6 * 256 + 0
 
-## Developer manual
+# Developer manual
 
 Go was designed to be easy to learn, especially if you already have experience with an imperative language.
 You should be able to easily find on the web many resources for your knowledge level.
@@ -366,7 +364,7 @@ If you are a beginner and really don't know where to start you may try <https://
 
 This readme is written in markdown and is compatible with github-flavored markdown and pandoc-flavored markdown.
 
-### Conventions
+## Conventions
 
  - always use go fmt (you may be able to configure or install a plugin for your editor or IDE to do that automatically)
  - type struct fields and methods names in camel case,
@@ -386,7 +384,7 @@ This readme is written in markdown and is compatible with github-flavored markdo
     4. the central type, followed by the function to create it, then the methods
  - increment the version according to semver by changing the variable `Version` in `dab.go`
 
-### Architecture
+## Architecture
 
 *(NB: The architecture is mostly inspired by Erlang/OTP and the Trio asynchronous framework for python.)*
 
@@ -411,7 +409,7 @@ and wait for it to return normally or with an error (this was inspired by Trio's
 By extension, we call a task any function that can be turned into a proper task with a trivial wrapping function.
 They communicate together through channels that are passed either via a closure or via the data structure they are attached to.
 
-### Database schema
+## Database schema
 
  - `user_archive`: table of all registered reddit users, deleted or not
     - `name`: name of the user
@@ -441,7 +439,7 @@ They communicate together through channels that are passed either via a closure 
     - `value`: any string value
     - `created`: UNIX timestamp of when the key/value pair was added
 
-### TODO
+## TODO
 
  1. post reports on a subreddit and keep them up to date for a little while
  1. database corrections from DTB's
