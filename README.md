@@ -296,8 +296,7 @@ Note how the last value of a dictionary must not be followed by a comma:
 			"id":         "XaiUdR5UBKl_FY",
 			"secret":     "D8PvhefS9ZTZFOUxK-9Bu7iaRLt",
 			"user_agent": "{{.OS}}:agreatbot:v{{.Version}} (by /u/AGreatUsername)",
-			"max_age":               "72h",
-			"unsuspension_interval": "15m",
+			"unsuspension_interval": "15m"
 		},
 
 		"discord": {
