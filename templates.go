@@ -101,7 +101,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 	<p><a href="/reports/stats/{{.Year}}/{{.Week}}">Complete statistics for the week.</a></p>
 
 	<article>
-	<h2 id="delta">Top {{.Delta | len}} total negative karma change for this week</h2>
+	<h2 id="delta">Top {{.Delta | len}} total negative karma change</h2>
 	{{template "DeltaTable" .Delta}}
 	</article>
 
@@ -178,7 +178,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 </article>
 
 <article>
-<h1 id="delta">Total negative karma change for this week</h1>
+<h1 id="delta">Total negative karma change</h1>
 {{template "DeltaTable" .Delta}}
 {{template "BackToTop"}}
 </article>
@@ -679,7 +679,7 @@ var MarkdownReport = text.Must(text.New("MarkdownReport").Parse(`
 {{- $dateFormat := "02 Jan 06 15:04 MST"}}
 **{{.Len}}** comments under {{.CutOff}} from {{.Start.Format $dateFormat}} to {{.End.Format $dateFormat}}.
 
-Top {{.Delta | len}} total negative karma change for this week:
+Top {{.Delta | len}} total negative karma change:
 {{range .Delta}}
 - **{{.Sum}}** with {{.Count}} comments,
 by [/u/{{.Name}}](https://www.reddit.com/user/{{.Name}})
