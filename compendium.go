@@ -180,6 +180,7 @@ func (c Compendium) NextOffset() uint {
 	return c.NbTop + c.Offset
 }
 
+// UsualScanDuration returns the shortest amount of time the bot can do the most frequent type of scan (active users only).
 func (c Compendium) UsualScanDuration() time.Duration {
 	var count int
 	for _, user := range c.Users {

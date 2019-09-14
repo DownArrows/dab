@@ -528,8 +528,10 @@ Next {{.CommentsLen}} comments &rarr;
 const CSSMain = `:root {
 	--main-color: #6a6;
 	--sec-color: #5af;
-	--bg: #eee;
+	--visited: #9bd;
 	--fg: #555;
+	--bg: white;
+	--sec-bg: #eee;
 	--spacing: 0.2em;
 }
 
@@ -543,11 +545,12 @@ a:hover {
 }
 
 a:visited {
-	color: #9bd;
+	color: var(--visited);
 	text-decoration: none;
 }
 
 body {
+	background: var(--bg);
 	color: var(--fg);
 	max-width: 62.5em;
 	margin: auto;
