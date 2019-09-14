@@ -180,6 +180,16 @@ func (c Compendium) NextOffset() uint {
 	return c.NbTop + c.Offset
 }
 
+func (c Compendium) UsualScanDuration() time.Duration {
+	var count int
+	for _, user := range c.Users {
+		if !user.Inactive {
+			count++
+		}
+	}
+	return time.Duration(count) * RedditAPIRequestWait
+}
+
 // CompendiumUser describes the compendium page for a single user.
 type CompendiumUser struct {
 	Compendium

@@ -433,7 +433,7 @@ Next {{.CommentsLen}} comments &rarr;
 <body>
 <div id="title"><a href="/">Compendium</a></div>
 
-{{- if.Negative}}
+{{- if .Negative}}
 <nav>
 	<ul>
 		<li><a href="/compendium#summary">Summary</a></li>
@@ -450,6 +450,7 @@ Next {{.CommentsLen}} comments &rarr;
 	<table>
 		<tr><td>Registered</td><td>{{.Users | len}}</td></tr>
 		<tr><td>Hidden</td><td>{{.HiddenUsersLen}}</td></tr>
+		<tr><td>Usual scan</td><td>&asymp; {{.UsualScanDuration}}</td></tr>
 		{{- with $user := (index .Users 0)}}
 		<tr>
 			<td>Last scanned</td>
