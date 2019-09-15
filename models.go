@@ -33,11 +33,11 @@ func (c Comment) InitializationQueries() []SQLQuery {
 			body TEXT NOT NULL,
 			FOREIGN KEY (author) REFERENCES user_archive(name)
 		) WITHOUT ROWID`},
-		{SQL: "CREATE INDEX IF NOT EXISTS comments_stats_idx ON comments (created)"},
+		{SQL: "CREATE INDEX IF NOT EXISTS comments_idx ON comments (author, score ASC, sub, created DESC)"},
 		{SQL: `CREATE TRIGGER IF NOT EXISTS purge_user BEFORE DELETE ON user_archive
-		BEGIN
-			DELETE FROM comments WHERE author = OLD.name COLLATE NOCASE;
-		END`},
+			BEGIN
+				DELETE FROM comments WHERE author = OLD.name COLLATE NOCASE;
+			END`},
 	}
 }
 
@@ -153,8 +153,9 @@ func (u User) InitializationQueries() []SQLQuery {
 			new BOOLEAN DEFAULT TRUE NOT NULL,
 			position TEXT DEFAULT "" NOT NULL
 		) WITHOUT ROWID`},
-		{SQL: `CREATE INDEX IF NOT EXISTS user_archive_idx
-				ON user_archive (deleted, last_scan, inactive, suspended, not_found, hidden)`},
+		// Yes, this index has a lot of columns, but it's the only way to get a covering index in queries for that table.
+		{SQL: `CREATE INDEX IF NOT EXISTS user_archive_idx ON user_archive
+			(name, created ASC, not_found, suspended, added ASC, batch_size, deleted, hidden, inactive, last_scan DESC, new, position)`},
 		{SQL: `CREATE VIEW IF NOT EXISTS
 			users(name, created, not_found, suspended, added, batch_size, deleted, hidden, inactive, last_scan, new, position)
 		AS SELECT * FROM user_archive WHERE deleted IS FALSE`},

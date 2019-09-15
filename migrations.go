@@ -63,5 +63,14 @@ var StorageMigrations = []SQLiteMigration{
 				{SQL: "PRAGMA foreign_keys = ON"},
 			})
 		},
+	}, {
+		From: SemVer{1, 20, 1},
+		To:   SemVer{1, 20, 2},
+		Exec: func(conn SQLiteConn) error {
+			return conn.MultiExecWithTx([]SQLQuery{
+				{SQL: "DROP INDEX user_archive_idx"},
+				{SQL: "DROP INDEX comments_stats_idx"},
+			})
+		},
 	},
 }
