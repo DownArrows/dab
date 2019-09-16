@@ -89,8 +89,10 @@ func TestCommandFind(t *testing.T) {
 	}
 
 	t.Run("basic matching", func(t *testing.T) {
-		cmd, _ := bot.matchCommand(DiscordMessage{Content: "!simple"})
-		if cmd.Command != "simple" {
+		cmd, _, err := bot.matchCommand(DiscordMessage{Content: "!simple"})
+		if err != nil {
+			t.Fatal(err)
+		} else if cmd.Command != "simple" {
 			t.Errorf("incorrect command match %v for '!simple'", cmd)
 		}
 	})
@@ -100,22 +102,28 @@ func TestCommandFind(t *testing.T) {
 			Content: "!admin",
 			Author:  DiscordMember{ID: adminID},
 		}
-		cmd, _ := bot.matchCommand(msg)
-		if cmd.Command != "admin" {
+		cmd, _, err := bot.matchCommand(msg)
+		if err != nil {
+			t.Fatal(err)
+		} else if cmd.Command != "admin" {
 			t.Errorf("incorrect command match %v for '!admin'", cmd)
 		}
 	})
 
 	t.Run("admin privilege rejection", func(t *testing.T) {
-		cmd, _ := bot.matchCommand(DiscordMessage{Content: "!admin"})
-		if cmd.Command == "admin" {
+		cmd, _, err := bot.matchCommand(DiscordMessage{Content: "!admin"})
+		if err != nil {
+			t.Fatal(err)
+		} else if cmd.Command == "admin" {
 			t.Errorf("incorrect command match %v for '!admin', should be rejected", cmd)
 		}
 	})
 
 	t.Run("return message with arguments", func(t *testing.T) {
-		cmd, msg := bot.matchCommand(DiscordMessage{Content: "!args a b"})
-		if cmd.Command != "args" {
+		cmd, msg, err := bot.matchCommand(DiscordMessage{Content: "!args a b"})
+		if err != nil {
+			t.Fatal(err)
+		} else if cmd.Command != "args" {
 			t.Errorf("incorrect command match %v for '!args'", cmd)
 		}
 		if !(len(msg.Args) == 2 && msg.Args[0] == "a" && msg.Args[1] == "b") {

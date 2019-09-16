@@ -117,7 +117,6 @@ type WebServer struct {
 	WebConf
 	compendium CompendiumFactory
 	conns      StorageConnPool
-	done       chan error
 	logger     LevelLogger
 	reports    ReportFactory
 	server     *http.Server
@@ -129,7 +128,6 @@ func NewWebServer(logger LevelLogger, storage *Storage, reports ReportFactory, c
 	wsrv := &WebServer{
 		WebConf:    conf,
 		compendium: compendium,
-		done:       make(chan error),
 		logger:     logger,
 		reports:    reports,
 		storage:    storage,
@@ -171,19 +169,23 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	go func() { wsrv.done <- wsrv.server.Serve(listener) }()
 
-	wsrv.logger.Infof("web server listening on %s", wsrv.server.Addr)
-
-	select {
-	case <-ctx.Done():
-		return wsrv.server.Shutdown(context.Background())
-	case err := <-wsrv.done:
+	tasks := NewTaskGroup(ctx)
+	tasks.SpawnCtx(func(_ context.Context) error {
+		err := wsrv.server.Serve(listener)
 		if err == http.ErrServerClosed {
 			return nil
 		}
 		return err
-	}
+	})
+	tasks.SpawnCtx(func(ctx context.Context) error {
+		<-ctx.Done()
+		return wsrv.server.Shutdown(context.Background())
+	})
+
+	wsrv.logger.Infof("web server listening on http://%s", wsrv.server.Addr)
+
+	return tasks.Wait().ToError()
 }
 
 func (wsrv *WebServer) initDBPool(ctx context.Context) (StorageConnPool, error) {

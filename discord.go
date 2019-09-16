@@ -189,7 +189,7 @@ type DiscordBot struct {
 	addUser AddRedditUser
 	client  *discordgo.Session
 	conn    StorageConn // a single one is enough, it's not heavily used
-	ctx     context.Context
+	tasks   *TaskGroup
 	logger  LevelLogger
 
 	// state information
@@ -208,7 +208,6 @@ type DiscordBot struct {
 
 	// miscellaneous
 	commands []DiscordCommand
-	done     chan error
 }
 
 // NewDiscordBot returns a new DiscordBot.
@@ -242,58 +241,37 @@ func NewDiscordBot(logger LevelLogger, conn StorageConn, addUser AddRedditUser, 
 		privilegedRole: conf.PrivilegedRole,
 		timezone:       conf.Timezone.Value,
 		welcome:        welcome,
-
-		done: make(chan error),
 	}
 
 	bot.commands = bot.getCommandsDescriptors()
 
 	if conf.Welcome != "" && conf.General != "" {
-		session.AddHandler(func(s *discordgo.Session, event *discordgo.GuildMemberAdd) {
-			bot.welcomeNewMember(event.Member)
+		session.AddHandler(func(_ *discordgo.Session, event *discordgo.GuildMemberAdd) {
+			bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.welcomeNewMember(event.Member) })
 		})
 	}
 
-	session.AddHandler(func(s *discordgo.Session, msg *discordgo.MessageCreate) { bot.onMessage(msg) })
-	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) { bot.onReady(r) })
+	session.AddHandler(func(_ *discordgo.Session, msg *discordgo.MessageCreate) {
+		bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.onMessage(msg) })
+	})
+	session.AddHandler(func(_ *discordgo.Session, r *discordgo.Ready) {
+		bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.onReady(r) })
+	})
 
 	return bot, nil
 }
 
 // Run runs and blocks until the bot stops.
 func (bot *DiscordBot) Run(ctx context.Context) error {
-	var err error
-
 	bot.Lock()
-	bot.ctx = ctx
+	bot.tasks = NewTaskGroup(ctx)
 	bot.Unlock()
-
-	go func() {
-		if err := bot.client.Open(); err != nil {
-			if !IsCancellation(err) {
-				err = fmt.Errorf("discord bot: %v", err)
-			}
-			bot.done <- err
-		}
-	}()
-
-	defer bot.client.Close()
-
-	select {
-	case err = <-bot.done:
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (bot *DiscordBot) fatal(err error) {
-	bot.logger.Errorf("fatal: %v", err)
-	bot.done <- err
-}
-
-func (bot *DiscordBot) fatalf(msg string, args ...interface{}) {
-	bot.fatal(fmt.Errorf(msg, args...))
+	bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.client.Open() })
+	bot.tasks.SpawnCtx(func(ctx context.Context) error {
+		<-ctx.Done()
+		return bot.client.Close()
+	})
+	return bot.tasks.Wait().ToError()
 }
 
 func (bot *DiscordBot) isDMChannel(channelID string) (bool, error) {
@@ -321,12 +299,10 @@ func (bot *DiscordBot) channelErrorSend(channelID, userID, content string) error
 	if err != nil {
 		return err
 	}
-	go func() {
+	bot.tasks.SpawnCtx(func(_ context.Context) error {
 		time.Sleep(discordMessageDeletionWait)
-		if err := bot.client.ChannelMessageDelete(channelID, msg.ID); err != nil {
-			bot.logger.Errorf("error when deleting discord error message %q: %v", content, err)
-		}
-	}()
+		return bot.client.ChannelMessageDelete(channelID, msg.ID)
+	})
 	return nil
 }
 
@@ -338,19 +314,17 @@ func (bot *DiscordBot) myColor(channelID string) int {
 }
 
 // this is executed on each (re)-connection to Discord
-func (bot *DiscordBot) onReady(r *discordgo.Ready) {
+func (bot *DiscordBot) onReady(r *discordgo.Ready) error {
 	bot.logger.Debug("(re-)connected to discord, checking settings")
 
 	// set status
 	if err := bot.client.UpdateStatus(0, "Downvote Counter"); err != nil {
-		bot.fatalf("couldn't set status on discord: %v", err)
-		return
+		return fmt.Errorf("couldn't set status on discord: %v", err)
 	}
 
 	// guild-related information and checks
 	if nb := len(r.Guilds); nb != 1 {
-		bot.fatalf("the bot needs to be in one and only one discord server (found in %d server(s))", nb)
-		return
+		return fmt.Errorf("the bot needs to be in one and only one discord server (found in %d server(s))", nb)
 	}
 
 	// The data structure representing guilds only has their ID set at this point.
@@ -358,8 +332,7 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) {
 
 	guild, err := bot.client.Guild(bot.guildID)
 	if err != nil {
-		bot.fatalf("error when getting information about guild %q: %v", bot.guildID, err)
-		return
+		return fmt.Errorf("error when getting information about guild %q: %v", bot.guildID, err)
 	}
 
 	bot.adminID = guild.OwnerID
@@ -367,8 +340,7 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) {
 	if bot.privilegedRole == "" {
 		bot.logger.Info("no privileged discord role has been set, only the server's owner can use privileged commands")
 	} else if !rolesHaveRoleID(guild.Roles, bot.privilegedRole) {
-		bot.fatalf("the discord server doesn't have a role with ID %s", bot.privilegedRole)
-		return
+		return fmt.Errorf("the discord server doesn't have a role with ID %s", bot.privilegedRole)
 	}
 
 	// check the channels
@@ -382,17 +354,18 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) {
 		}
 
 		if _, err := bot.client.Channel(channelID); err != nil {
-			bot.fatalf("discord channel %s: %v", name, err)
-			return
+			return fmt.Errorf("discord channel %s: %v", name, err)
 		}
 	}
 
 	// other
 
 	bot.ID = r.User.ID
+
+	return nil
 }
 
-func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
+func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) error {
 	var msg strings.Builder
 	data := DiscordWelcomeData{
 		BotID:      bot.ID,
@@ -405,36 +378,27 @@ func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) {
 	}
 	bot.logger.Debugf("welcoming discord user %s", data.Member.FQN())
 	if err := bot.welcome.Execute(&msg, data); err != nil {
-		bot.fatal(err)
-	} else if err := bot.channelMessageSend(bot.channelsID.General, msg.String()); err != nil {
-		bot.logger.Error(err)
+		return err
 	}
+	return bot.channelMessageSend(bot.channelsID.General, msg.String())
 }
 
-func (bot *DiscordBot) onMessage(dgMsg *discordgo.MessageCreate) {
-	var err error
-
+func (bot *DiscordBot) onMessage(dgMsg *discordgo.MessageCreate) error {
 	if dgMsg.Author.ID == bot.ID {
-		return
+		return nil
 	}
 
 	isDm, err := bot.isDMChannel(dgMsg.ChannelID)
 	if err != nil {
-		bot.logger.Error(err)
+		return err
 	}
-
 	msg := NewDiscordMessage(dgMsg)
 	msg.IsDM = isDm
 
 	if bot.isLoggableRedditLink(msg) {
-		err = bot.processRedditLink(msg)
-	} else {
-		err = bot.command(msg)
+		return bot.processRedditLink(msg)
 	}
-
-	if err != nil {
-		bot.logger.Error(err)
-	}
+	return bot.command(msg)
 }
 
 // SignalSuspensions signals on discord the suspended or deleted User sent on the given channel.
@@ -446,9 +410,9 @@ func (bot *DiscordBot) SignalSuspensions(suspensions <-chan User) {
 			state = "deleted"
 		}
 		msg := fmt.Sprintf("RIP /u/%s %s (%s)", user.Name, EmojiPrayingHands, state)
-		if err := bot.channelMessageSend(bot.channelsID.Graveyard, msg); err != nil {
-			bot.logger.Errorf("error when signaling a suspension or deletion: %v", err)
-		}
+		bot.tasks.SpawnCtx(func(_ context.Context) error {
+			return bot.channelMessageSend(bot.channelsID.Graveyard, msg)
+		})
 	}
 }
 
@@ -457,9 +421,9 @@ func (bot *DiscordBot) SignalSuspensions(suspensions <-chan User) {
 func (bot *DiscordBot) SignalUnsuspensions(ch <-chan User) {
 	for user := range ch {
 		msg := fmt.Sprintf("%s /u/%s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
-		if err := bot.channelMessageSend(bot.channelsID.Graveyard, msg); err != nil {
-			bot.logger.Errorf("error when signaling an unsuspensions: %v", err)
-		}
+		bot.tasks.SpawnCtx(func(_ context.Context) error {
+			return bot.channelMessageSend(bot.channelsID.Graveyard, msg)
+		})
 	}
 }
 
@@ -470,13 +434,13 @@ func (bot *DiscordBot) SignalHighScores(ch <-chan Comment) {
 		link := "https://www.reddit.com" + comment.Permalink
 		tmpl := "a comment by /u/%s has reached %d: %s"
 		msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
-		if err := bot.channelMessageSend(bot.channelsID.HighScores, msg); err != nil {
-			bot.logger.Errorf("error when signaling high-score: %v", err)
-		}
+		bot.tasks.SpawnCtx(func(_ context.Context) error {
+			return bot.channelMessageSend(bot.channelsID.HighScores, msg)
+		})
 	}
 }
 
-func (bot *DiscordBot) matchCommand(msg DiscordMessage) (DiscordCommand, DiscordMessage) {
+func (bot *DiscordBot) matchCommand(msg DiscordMessage) (DiscordCommand, DiscordMessage, error) {
 	for _, cmd := range bot.commands {
 
 		if matches, contentRest := cmd.Match(bot.prefix, msg.Content); matches {
@@ -489,12 +453,11 @@ func (bot *DiscordBot) matchCommand(msg DiscordMessage) (DiscordCommand, Discord
 
 				member, err := bot.client.GuildMember(bot.guildID, msg.Author.ID)
 				if err != nil {
-					bot.logger.Error(err)
-					continue
+					return cmd, msg, err
 				}
 				if !SliceHasString(member.Roles, bot.privilegedRole) {
 					if err := bot.channelErrorSend(msg.ChannelID, msg.Author.ID, "You are not allowed to use this command."); err != nil {
-						bot.logger.Error(err)
+						return cmd, msg, err
 					}
 					continue
 				}
@@ -502,33 +465,39 @@ func (bot *DiscordBot) matchCommand(msg DiscordMessage) (DiscordCommand, Discord
 
 			msg.Content = contentRest
 			msg.Args = strings.Split(msg.Content, " ")
-			return cmd, msg
+			return cmd, msg, nil
 		}
 
 	}
 
-	return DiscordCommand{}, msg
+	return DiscordCommand{}, msg, nil
 }
 
 func (bot *DiscordBot) command(msg DiscordMessage) error {
-	cmd, msg := bot.matchCommand(msg)
-	if cmd.Command == "" {
+	cmd, msg, err := bot.matchCommand(msg)
+	if err != nil {
+		return err
+	} else if cmd.Command == "" {
 		return nil
 	}
 	bot.logger.Debugf("matched command %q, args %v, from user %s", cmd.Command, msg.Args, msg.Author.FQN())
 
 	if err := bot.client.ChannelTyping(msg.ChannelID); err != nil {
+		bot.logger.Errorf("discord bot error when setting typing status: %v", err)
+	}
+
+	if err := cmd.Callback(msg); err != nil {
 		return err
 	}
 
-	err := cmd.Callback(msg)
-
-	if err == nil && !msg.IsDM {
-		time.Sleep(discordMessageDeletionWait)
-		err = bot.client.ChannelMessageDelete(msg.ChannelID, msg.ID)
+	if !msg.IsDM {
+		bot.tasks.SpawnCtx(func(_ context.Context) error {
+			time.Sleep(discordMessageDeletionWait)
+			return bot.client.ChannelMessageDelete(msg.ChannelID, msg.ID)
+		})
 	}
 
-	return err
+	return nil
 }
 
 func (bot *DiscordBot) isLoggableRedditLink(msg DiscordMessage) bool {
@@ -539,7 +508,7 @@ func (bot *DiscordBot) isLoggableRedditLink(msg DiscordMessage) bool {
 
 func (bot *DiscordBot) processRedditLink(msg DiscordMessage) error {
 	if err := bot.addRandomReactionTo(msg); err != nil {
-		return err
+		bot.logger.Errorf("discord bot failed to add a reaction to a link towards reddit: %v", err)
 	}
 	if bot.channelsID.Log == "" {
 		return nil
@@ -656,7 +625,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 		hidden := strings.HasPrefix(name, bot.hidePrefix)
 		name = TrimUsername(strings.TrimPrefix(name, bot.hidePrefix))
 		bot.conn.Lock()
-		reply := bot.addUser(bot.ctx, bot.conn, name, hidden, false)
+		reply := bot.addUser(bot.tasks.Context, bot.conn, name, hidden, false)
 		bot.conn.Unlock()
 
 		var embedName string
