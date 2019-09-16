@@ -29,12 +29,15 @@ type Task func(context.Context) error
 // TaskGroup launches and shuts down a group of goroutine which take a context and return an error.
 // Use TaskGroup.Spawn to launch functions asynchronously,
 // and once you're done use TaskGroup.Wait to wait on them.
+//
 // To cancel a TaskGroup, use TaskGroup.Cancel, or cancel the context you passed
 // when creating the TaskGroup.
 // TaskGroup.Wait returns a type of error that contains multiple errors and which
 // can be converted to a normal error that can be usefully compared to nil.
+//
+// To create a sub-group, simply create a new TaskGroup with the parent group's context,
+// and have the parent group wait on the sub-group with SpawnCtx, so that errors can propagate.
 type TaskGroup struct {
-	parent  *TaskGroup
 	Cancel  context.CancelFunc
 	Context context.Context
 	Errors  *ErrorGroup
@@ -60,9 +63,6 @@ func (tg *TaskGroup) SpawnCtx(cb Task) {
 	go func() {
 		if err := cb(tg.Context); err != nil && !IsCancellation(err) {
 			tg.Errors.Add(err)
-			if tg.parent != nil {
-				tg.parent.Errors.Add(err)
-			}
 			tg.Cancel()
 		}
 		tg.wait.Done()
@@ -76,13 +76,6 @@ func (tg *TaskGroup) Spawn(cb func()) {
 		cb()
 		tg.wait.Done()
 	}()
-}
-
-// SubGroup returns a TaskGroup that is linked to the current TaskGroup through their contexts.
-func (tg *TaskGroup) SubGroup() *TaskGroup {
-	subTg := NewTaskGroup(tg.Context)
-	subTg.parent = tg
-	return subTg
 }
 
 // Wait blocks until all tasks in the group have returned.
@@ -106,11 +99,15 @@ func NewErrorGroup() *ErrorGroup {
 	}
 }
 
-// Add adds an error to the ErrorGroup.
+// Add adds an error to the group, and merges with it if it also is an ErrorGroup.
 func (eg *ErrorGroup) Add(err error) {
 	eg.mutex.Lock()
 	defer eg.mutex.Unlock()
-	eg.errors = append(eg.errors, err)
+	if errGrp, ok := err.(*ErrorGroup); ok {
+		eg.errors = append(eg.errors, errGrp.Errors()...)
+	} else {
+		eg.errors = append(eg.errors, err)
+	}
 }
 
 // Errors returns a slice of the errors it has registered so far.
