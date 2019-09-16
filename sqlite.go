@@ -44,6 +44,7 @@ type SQLiteBackupOptions struct {
 type SQLiteDatabaseOptions struct {
 	AppID           int
 	CleanupInterval time.Duration
+	InitHook        func(SQLiteConn) error
 	Migrations      []SQLiteMigration
 	Path            string
 	Retry           RetryConf
@@ -103,11 +104,12 @@ func (db *SQLiteDatabase) GetConn(ctx context.Context) (SQLiteConn, error) {
 
 func (db *SQLiteDatabase) getConnDefaultOptions() SQLiteConnOptions {
 	return SQLiteConnOptions{
-		Retry:       db.Retry,
-		ForeignKeys: true,
-		Path:        db.Path,
-		OpenOptions: SQLiteDefaultOpenOptions,
-		Timeout:     db.Timeout,
+		AnalyzeOnClose: true,
+		ForeignKeys:    true,
+		OpenOptions:    SQLiteDefaultOpenOptions,
+		Path:           db.Path,
+		Retry:          db.Retry,
+		Timeout:        db.Timeout,
 	}
 }
 
@@ -160,6 +162,8 @@ func (db *SQLiteDatabase) init(conn SQLiteConn) error {
 		} else if err := db.setAppID(conn); err != nil {
 			return err
 		} else if err := conn.Exec("PRAGMA auto_vacuum = 'incremental'"); err != nil {
+			return err
+		} else if err := conn.Analyze(); err != nil {
 			return err
 		}
 		return nil
@@ -283,12 +287,8 @@ func (db *SQLiteDatabase) PeriodicCleanup(ctx context.Context) error {
 	defer conn.Close()
 
 	for SleepCtx(ctx, db.CleanupInterval) {
-		db.logger.Debugf("performing database %p at %q vacuum", db, db.Path)
+		db.logger.Debugf("performing incremental vacuum of database %p at %q", db, db.Path)
 		if err := conn.Exec("PRAGMA incremental_vacuum"); err != nil {
-			return err
-		}
-		db.logger.Debugf("performing database %p at %q optimization", db, db.Path)
-		if err := conn.Exec("PRAGMA optimize"); err != nil {
 			return err
 		}
 	}
@@ -338,4 +338,90 @@ func (db *SQLiteDatabase) Backup(ctx context.Context, srcConn SQLiteConn, opts S
 
 	db.logger.Debugf("backup to %q done", opts.DestPath)
 	return nil
+}
+
+// SQLiteConnPool is a simple pool with a limited size.
+// Do not release more conns than the set size, there's no check,
+// and it will not behave properly relatively to cancellation.
+type SQLiteConnPool struct {
+	ch   chan SQLiteConn
+	ctx  context.Context
+	size uint
+}
+
+// NewSQLiteConnPool creates a new SQLiteConnPool with a global context.
+func NewSQLiteConnPool(ctx context.Context, size uint, get func(context.Context) (SQLiteConn, error)) (SQLiteConnPool, error) {
+	pool := SQLiteConnPool{
+		ch:   make(chan SQLiteConn, size),
+		ctx:  ctx,
+		size: size,
+	}
+	for i := uint(0); i < pool.size; i++ {
+		conn, err := get(ctx)
+		if err != nil {
+			pool.Close()
+			return pool, err
+		}
+		pool.Release(conn)
+	}
+	return pool, nil
+}
+
+// Analyze runs evenly spaced Analyze on each connection of the pool so that each is analyzed once per the set interval.
+func (pool SQLiteConnPool) Analyze(ctx context.Context, interval time.Duration) error {
+	for SleepCtx(ctx, interval/time.Duration(pool.size)) {
+		pool.WithConn(ctx, func(conn SQLiteConn) error {
+			if time.Now().Sub(conn.LastAnalyze()) < interval {
+				return nil
+			}
+			return conn.Analyze()
+		})
+	}
+	return ctx.Err()
+}
+
+// Acquire gets a connection or waits until it is cancelled or receives a connection.
+func (pool SQLiteConnPool) Acquire(ctx context.Context) (SQLiteConn, error) {
+	var conn SQLiteConn
+	var err error
+	select {
+	case <-pool.ctx.Done():
+		err = pool.ctx.Err()
+	case <-ctx.Done():
+		err = ctx.Err()
+	case conn = <-pool.ch:
+	}
+	return conn, err
+}
+
+// Release puts a connection back into the pool.
+func (pool SQLiteConnPool) Release(conn SQLiteConn) {
+	pool.ch <- conn
+}
+
+// WithConn automatically acquires and releases a connection.
+func (pool SQLiteConnPool) WithConn(ctx context.Context, cb func(SQLiteConn) error) error {
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer pool.Release(conn)
+	return cb(conn)
+}
+
+// Close closes all connections; Release panics after this.
+func (pool SQLiteConnPool) Close() error {
+	errs := NewErrorGroup()
+	nb := uint(0)
+	close(pool.ch)
+	for conn := range pool.ch {
+		if err := conn.Close(); err != nil {
+			errs.Add(err)
+		}
+		nb++
+	}
+	if nb != pool.size {
+		errs.Add(fmt.Errorf("connection pool closed %d on the expected %d", nb, pool.size))
+	}
+	return errs.ToError()
 }

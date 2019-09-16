@@ -404,6 +404,16 @@ func (conn StorageConn) Unlock() {
 	conn.actual.Unlock()
 }
 
+// Analyze implements SQLiteConn.
+func (conn StorageConn) Analyze() error {
+	return conn.actual.Analyze()
+}
+
+// LastAnalyze implements SQLiteConn.
+func (conn StorageConn) LastAnalyze() time.Time {
+	return conn.actual.LastAnalyze()
+}
+
 // Base implements SQLiteConn.
 func (conn StorageConn) Base() *sqlite.Conn {
 	return conn.actual.Base()

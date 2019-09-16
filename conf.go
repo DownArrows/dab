@@ -56,6 +56,7 @@ const Defaults string = `{
 	},
 
 	"web": {
+		"db_optimize": "2h",
 		"default_limit": 100,
 		"dirty_reads": true,
 		"max_limit": 1000,
@@ -152,12 +153,13 @@ type DiscordBotChannelsID struct {
 
 // WebConf describes the configuration for the application's web server.
 type WebConf struct {
-	DefaultLimit uint   `json:"default_limit"`
-	DirtyReads   bool   `json:"dirty_reads"`
-	Listen       string `json:"listen"`
-	MaxLimit     uint   `json:"max_limit"`
-	NbDBConn     uint   `json:"nb_db_conn"`
-	RootDir      string `json:"root_dir"`
+	DBOptimize   Duration `json:"db_optimize"`
+	DefaultLimit uint     `json:"default_limit"`
+	DirtyReads   bool     `json:"dirty_reads"`
+	Listen       string   `json:"listen"`
+	MaxLimit     uint     `json:"max_limit"`
+	NbDBConn     uint     `json:"nb_db_conn"`
+	RootDir      string   `json:"root_dir"`
 }
 
 // Configuration holds the configuration for the whole application.
@@ -255,6 +257,8 @@ func (conf Configuration) HasSaneValues() error {
 		return errors.New("reports' leeway can't be negative")
 	} else if conf.Report.CutOff > 0 {
 		return errors.New("reports' cut-off can't be higher than 0")
+	} else if conf.Web.DBOptimize.Value < 5*time.Minute {
+		return errors.New("the duration of the optimization of the web server's connections to the database can't be less than 5 minutes")
 	} else if conf.Web.NbDBConn == 0 {
 		return errors.New("the number of database connections from the web server can't be 0")
 	}

@@ -182,6 +182,9 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 		<-ctx.Done()
 		return wsrv.server.Shutdown(context.Background())
 	})
+	if interval := wsrv.DBOptimize.Value; interval != 0 {
+		tasks.SpawnCtx(func(ctx context.Context) error { return wsrv.conns.Analyze(ctx, interval) })
+	}
 
 	wsrv.logger.Infof("web server listening on http://%s", wsrv.server.Addr)
 
@@ -189,22 +192,22 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 }
 
 func (wsrv *WebServer) initDBPool(ctx context.Context) (StorageConnPool, error) {
-	pool, err := wsrv.storage.MakePool(ctx, wsrv.NbDBConn)
-	if err != nil {
-		return pool, err
-	}
-
-	if wsrv.DirtyReads {
-		err = pool.ForEach(ctx, func(conn StorageConn) error {
-			return conn.ReadUncommitted(true)
-		})
-		if err != nil {
-			return pool, err
-		}
+	pool, err := NewStorageConnPool(ctx, wsrv.NbDBConn, wsrv.getConn)
+	if wsrv.DirtyReads && err == nil {
 		wsrv.logger.Info("web server has enabled dirty reads of the database")
 	}
-
 	return pool, nil
+}
+
+func (wsrv *WebServer) getConn(ctx context.Context) (StorageConn, error) {
+	conn, err := wsrv.storage.GetConn(ctx)
+	if err != nil {
+		return conn, err
+	}
+	if wsrv.DirtyReads {
+		return conn, conn.ReadUncommitted(true)
+	}
+	return conn, nil
 }
 
 func (wsrv *WebServer) getListener() (net.Listener, error) {

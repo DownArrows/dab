@@ -12,6 +12,8 @@ import (
 // An interface allows for extensions of a base type.
 type SQLiteConn interface {
 	sync.Locker
+	// Analyze writes statistical data for improving future query plans based on the data accumulated during the connection's lifetime.
+	Analyze() error
 	// Base returns the actual data structure implementing the driver.
 	Base() *sqlite.Conn
 	// Path is the path of the database this connection is opened on.
@@ -20,6 +22,8 @@ type SQLiteConn interface {
 	Close() error
 	// Changes returns the number of rows that have been changed by the last queries.
 	Changes() int
+	// LastAnalyze returns the date at which Analyze was last run.
+	LastAnalyze() time.Time
 	// ReadUncommitted sets whether the connection is allowed to read uncommitted data from the database.
 	ReadUncommitted(bool) error
 	// Backup backs the database up using the given connection to the backup file.
@@ -43,11 +47,12 @@ type SQLiteConn interface {
 
 // SQLiteConnOptions describes the connection options for an SQLiteConn.
 type SQLiteConnOptions struct {
-	ForeignKeys bool
-	Retry       RetryConf
-	OpenOptions int
-	Path        string
-	Timeout     time.Duration
+	AnalyzeOnClose bool
+	ForeignKeys    bool
+	OpenOptions    int
+	Path           string
+	Retry          RetryConf
+	Timeout        time.Duration
 }
 
 // BaseSQLiteConn is a single connection to an SQLite database.
@@ -57,12 +62,13 @@ type SQLiteConnOptions struct {
 type BaseSQLiteConn struct {
 	sync.Mutex
 	SQLiteConnOptions
-	path   string
-	closed bool
-	conn   *sqlite.Conn
-	ctx    context.Context
-	logger LevelLogger
-	mutex  *sync.Mutex
+	path        string
+	closed      bool
+	conn        *sqlite.Conn
+	ctx         context.Context
+	lastAnalyze time.Time
+	logger      LevelLogger
+	mutex       *sync.Mutex
 }
 
 // NewBaseSQLiteConn creates a connection to a SQLite database.
@@ -72,10 +78,10 @@ func NewBaseSQLiteConn(ctx context.Context, logger LevelLogger, conf SQLiteConnO
 	sc := &BaseSQLiteConn{
 		SQLiteConnOptions: conf,
 
-		path:   conf.Path,
 		ctx:    ctx,
 		logger: logger,
 		mutex:  &sync.Mutex{},
+		path:   conf.Path,
 	}
 
 	err := sc.retry(func() error {
@@ -119,8 +125,16 @@ func (sc *BaseSQLiteConn) Close() error {
 	}
 	sc.closed = true
 	sc.logger.Debugf("closing SQLite connection %p to %q", sc, sc.path)
+	if sc.AnalyzeOnClose {
+		sc.logger.Debugf("analyzing statistics of SQLite connection %p to %q", sc, sc.path)
+		if err := sc.Exec("ANALYZE"); err != nil && !IsCancellation(err) {
+			sc.logger.Errorf("error when analyzing statistics of SQLite connnection %p to %q before closing: %v", sc, sc.path, err)
+		}
+	}
 	err := sc.conn.Close()
-	sc.logger.Debugf("closed SQLite connection %p to %q with error %v", sc, sc.path, err)
+	if err != nil {
+		sc.logger.Debugf("closed SQLite connection %p to %q with error %v", sc, sc.path, err)
+	}
 	return err
 }
 
@@ -132,6 +146,22 @@ func (sc *BaseSQLiteConn) Changes() int {
 // ReadUncommitted implements SQLiteConn.
 func (sc *BaseSQLiteConn) ReadUncommitted(set bool) error {
 	return sc.Exec(fmt.Sprintf("PRAGMA read_uncommitted = %t", set))
+}
+
+// Analyze implements SQLiteConn.
+func (sc *BaseSQLiteConn) Analyze() error {
+	err := sc.Exec("ANALYZE")
+	sc.mutex.Lock()
+	defer sc.mutex.Unlock()
+	sc.lastAnalyze = time.Now()
+	return err
+}
+
+// LastAnalyze implements SQLiteConn.
+func (sc *BaseSQLiteConn) LastAnalyze() time.Time {
+	sc.mutex.Lock()
+	defer sc.mutex.Unlock()
+	return sc.lastAnalyze
 }
 
 // Backup implements SQLiteConn.

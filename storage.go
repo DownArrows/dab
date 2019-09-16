@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"time"
 )
 
@@ -117,90 +116,44 @@ func (s *Storage) WithConn(ctx context.Context, cb func(StorageConn) error) erro
 	return cb(conn)
 }
 
-// MakePool creates a pool of connections.
-func (s *Storage) MakePool(ctx context.Context, size uint) (StorageConnPool, error) {
-	pool := NewStorageConnPool(ctx, size)
-	for i := uint(0); i < size; i++ {
-		conn, err := s.GetConn(ctx)
-		if err != nil {
-			pool.Close()
-			return pool, err
-		}
-		pool.Release(conn)
-	}
-	return pool, nil
-}
-
 // StorageConnPool is a simple pool with a limited size.
 // Do not release more conns than the set size, there's no check,
 // and it will not behave properly relatively to cancellation.
 type StorageConnPool struct {
-	ch   chan StorageConn
-	ctx  context.Context
-	size uint
+	actual SQLiteConnPool
 }
 
 // NewStorageConnPool creates a new StorageConnPool with a global context.
-func NewStorageConnPool(ctx context.Context, size uint) StorageConnPool {
-	return StorageConnPool{
-		ch:   make(chan StorageConn, size),
-		ctx:  ctx,
-		size: size,
-	}
+func NewStorageConnPool(ctx context.Context, size uint, cb func(context.Context) (StorageConn, error)) (StorageConnPool, error) {
+	pool, err := NewSQLiteConnPool(ctx, size, func(ctx context.Context) (SQLiteConn, error) { return cb(ctx) })
+	return StorageConnPool{actual: pool}, err
 }
 
-// Acquire gets a connection or waits until it is cancelled or receives a connection.
+// Analyze wraps SQLiteConnPool.
+func (pool StorageConnPool) Analyze(ctx context.Context, interval time.Duration) error {
+	return pool.actual.Analyze(ctx, interval)
+}
+
+// Acquire wraps SQLiteConnPool.
 func (pool StorageConnPool) Acquire(ctx context.Context) (StorageConn, error) {
-	var conn StorageConn
-	var err error
-	select {
-	case <-pool.ctx.Done():
-		err = pool.ctx.Err()
-	case <-ctx.Done():
-		err = ctx.Err()
-	case conn = <-pool.ch:
-	}
-	return conn, err
-}
-
-// Release puts a connection back into the pool.
-func (pool StorageConnPool) Release(conn StorageConn) {
-	pool.ch <- conn
-}
-
-// WithConn automatically acquires and releases a connection.
-func (pool StorageConnPool) WithConn(ctx context.Context, cb func(StorageConn) error) error {
-	conn, err := pool.Acquire(ctx)
+	conn, err := pool.actual.Acquire(ctx)
 	if err != nil {
-		return err
+		return StorageConn{}, err
 	}
-	defer pool.Release(conn)
-	return cb(conn)
+	return conn.(StorageConn), nil
 }
 
-// ForEach runs a function on every connection of the database, assuming nothing else is using the pool at the same time.
-func (pool StorageConnPool) ForEach(ctx context.Context, cb func(StorageConn) error) error {
-	for i := uint(0); i < pool.size; i++ {
-		if err := pool.WithConn(ctx, cb); err != nil {
-			return err
-		}
-	}
-	return nil
+// Release wraps SQLiteConnPool.
+func (pool StorageConnPool) Release(conn StorageConn) {
+	pool.actual.Release(conn)
 }
 
-// Close closes all connections; Release panics after this.
+// WithConn wraps SQLiteConnPool.
+func (pool StorageConnPool) WithConn(ctx context.Context, cb func(StorageConn) error) error {
+	return pool.actual.WithConn(ctx, func(conn SQLiteConn) error { return cb(conn.(StorageConn)) })
+}
+
+// Close wraps SQLiteConnPool.
 func (pool StorageConnPool) Close() error {
-	errs := NewErrorGroup()
-	nb := uint(0)
-	close(pool.ch)
-	for conn := range pool.ch {
-		if err := conn.Close(); err != nil {
-			errs.Add(err)
-		}
-		nb++
-	}
-	if nb != pool.size {
-		errs.Add(fmt.Errorf("connection pool closed %d on the expected %d", nb, pool.size))
-	}
-	return errs.ToError()
+	return pool.actual.Close()
 }

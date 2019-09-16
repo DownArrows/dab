@@ -78,6 +78,9 @@ func (rs *RedditScanner) Run(ctx context.Context) error {
 			}
 		}
 
+		if err := conn.Analyze(); err != nil {
+			return err
+		}
 	}
 
 	rs.logger.Debug("scanner run done")
