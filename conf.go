@@ -107,7 +107,8 @@ type WatchSubmissions struct {
 type RedditUsersConf struct {
 	Compendium               WatchCompendiumConf `json:"compendium"`
 	CompendiumUpdateInterval Duration            `json:"compendium_update_interval"` // Deprecated
-	UnsuspensionInterval     Duration            `json:"unsuspension_interval"`
+	ResurrectionsInterval    Duration            `json:"resurrections_interval"`
+	UnsuspensionInterval     Duration            `json:"unsuspension_interval"` // Deprecated
 }
 
 // WatchCompendiumConf describes the configuration for watching the users added to a third-party compendium (deprecated).
@@ -223,6 +224,10 @@ func NewConfiguration(path string) (Configuration, error) {
 		conf.Discord.DiscordBotConf.Graveyard = conf.Discord.DiscordBotConf.General
 	}
 
+	if conf.Reddit.UnsuspensionInterval.Value != 0 {
+		conf.Reddit.ResurrectionsInterval.Value = conf.Reddit.UnsuspensionInterval.Value
+	}
+
 	return conf, nil
 }
 
@@ -244,8 +249,8 @@ func (conf Configuration) HasSaneValues() error {
 		return errors.New("max comment age for further scanning can't be less than a day")
 	} else if conf.Reddit.HighScoreThreshold > -1 {
 		return errors.New("high-score threshold can't be positive")
-	} else if val := conf.Reddit.UnsuspensionInterval.Value; val != 0 && val < time.Minute {
-		return errors.New("interval between batches of checks of suspended and deleted users can't be less than a minute if non-zero")
+	} else if val := conf.Reddit.ResurrectionsInterval.Value; val != 0 && val < time.Minute {
+		return errors.New("interval between batches of checks of resurrections of users can't be less than a minute if non-zero")
 	} else if conf.Report.Leeway.Value < 0 { // Deprecated
 		return errors.New("reports' leeway can't be negative")
 	} else if conf.Report.CutOff > 0 {
@@ -285,6 +290,9 @@ func (conf Configuration) Deprecations() []string {
 		msgs = append(msgs, "report.leeway is deprecated")
 	}
 
+	if conf.Reddit.UnsuspensionInterval.Value != 0 {
+		msgs = append(msgs, "reddit.unsuspension_interval is deprecated, use reddit.resurrections_interval instead")
+	}
 	return msgs
 }
 

@@ -401,9 +401,9 @@ func (bot *DiscordBot) onMessage(dgMsg *discordgo.MessageCreate) error {
 	return bot.command(msg)
 }
 
-// SignalSuspensions signals on discord the suspended or deleted User sent on the given channel.
+// SignalDeaths signals on discord the suspended or deleted User sent on the given channel.
 // It needs to be launched independently of the bot.
-func (bot *DiscordBot) SignalSuspensions(suspensions <-chan User) {
+func (bot *DiscordBot) SignalDeaths(suspensions <-chan User) {
 	for user := range suspensions {
 		state := "suspended"
 		if user.NotFound {
@@ -416,11 +416,11 @@ func (bot *DiscordBot) SignalSuspensions(suspensions <-chan User) {
 	}
 }
 
-// SignalUnsuspensions signals on discord as unsuspensions any User sent on the given channel.
+// SignalResurrections signals on discord as unsuspensions any User sent on the given channel.
 // It needs to be launched independently of the bot.
-func (bot *DiscordBot) SignalUnsuspensions(ch <-chan User) {
+func (bot *DiscordBot) SignalResurrections(ch <-chan User) {
 	for user := range ch {
-		msg := fmt.Sprintf("%s /u/%s has been unsuspended! %s", EmojiRainbow, user.Name, EmojiRainbow)
+		msg := fmt.Sprintf("%s /u/%s has been resurrected! %s", EmojiRainbow, user.Name, EmojiRainbow)
 		bot.tasks.SpawnCtx(func(_ context.Context) error {
 			return bot.channelMessageSend(bot.channelsID.Graveyard, msg)
 		})

@@ -14,9 +14,9 @@ type RedditUsers struct {
 	api    *RedditAPI
 	logger LevelLogger
 
-	unsuspensions              chan User
-	unsuspensionInterval       time.Duration
-	UnsuspensionWatcherEnabled bool
+	resurrections               chan User
+	ResurrectionsInterval       time.Duration
+	ResurrectionsWatcherEnabled bool
 }
 
 // NewRedditUsers creates a RedditUsers.
@@ -25,9 +25,9 @@ func NewRedditUsers(logger LevelLogger, api *RedditAPI, conf RedditUsersConf) *R
 		api:    api,
 		logger: logger,
 
-		unsuspensions:              make(chan User, DefaultChannelSize),
-		unsuspensionInterval:       conf.UnsuspensionInterval.Value,
-		UnsuspensionWatcherEnabled: conf.UnsuspensionInterval.Value > 0,
+		resurrections:               make(chan User, DefaultChannelSize),
+		ResurrectionsInterval:       conf.ResurrectionsInterval.Value,
+		ResurrectionsWatcherEnabled: conf.ResurrectionsInterval.Value > 0,
 	}
 }
 
@@ -70,23 +70,23 @@ func (ru *RedditUsers) Add(ctx context.Context, conn StorageConn, username strin
 	return query
 }
 
-// OpenUnsuspensions returns a channel that alerts of newly unsuspended or undeleted users.
-func (ru *RedditUsers) OpenUnsuspensions() <-chan User {
-	return ru.unsuspensions
+// OpenResurrections returns a channel that alerts of newly unsuspended or undeleted users.
+func (ru *RedditUsers) OpenResurrections() <-chan User {
+	return ru.resurrections
 }
 
-// CloseUnsuspensions closes the channel that signals unsuspended or undeleted users.
-func (ru *RedditUsers) CloseUnsuspensions() {
-	close(ru.unsuspensions)
+// CloseResurrections closes the channel that signals unsuspended or undeleted users.
+func (ru *RedditUsers) CloseResurrections() {
+	close(ru.resurrections)
 }
 
-// UnsuspensionWatcher is a Task to be launched independently that watches unsuspensions
-// and send the unsuspended users User to the channel returned by Unsuspensions.
-func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context, conn StorageConn) error {
-	ru.logger.Infof("watching unsuspensions/undeletions with interval %s", ru.unsuspensionInterval)
+// ResurrectionsWatcher is a Task to be launched independently that watches resurrections
+// and send the ressurrected Users to the channel returned by Resurrections.
+func (ru *RedditUsers) ResurrectionsWatcher(ctx context.Context, conn StorageConn) error {
+	ru.logger.Infof("watching resurrections with interval %s", ru.ResurrectionsInterval)
 
-	for SleepCtx(ctx, ru.unsuspensionInterval) {
-		ru.logger.Debug("checking uspended/deleted users")
+	for SleepCtx(ctx, ru.ResurrectionsInterval) {
+		ru.logger.Debug("checking resurrections users")
 
 		users, err := conn.ListSuspendedAndNotFound()
 		if err != nil {
@@ -94,18 +94,18 @@ func (ru *RedditUsers) UnsuspensionWatcher(ctx context.Context, conn StorageConn
 		}
 
 		for _, user := range users {
-			ru.logger.Debugf("checking suspended/deleted user %+v", user)
+			ru.logger.Debugf("checking resurrected user %+v", user)
 
 			res := ru.api.AboutUser(ctx, user.Name)
 			if res.Error != nil {
 				if IsCancellation(res.Error) {
 					return res.Error
 				}
-				ru.logger.Errorf("unsuspensions/undeletions watcher network error, skipping %q: %v", user.Name, res.Error)
+				ru.logger.Errorf("resurrections watcher network error, skipping %q: %v", user.Name, res.Error)
 				continue
 			}
 
-			ru.logger.Debugf("unsuspensions/undeletions watcher found about user %+v data from Reddit %+v", user, res)
+			ru.logger.Debugf("resurrections watcher found about user %+v data from Reddit %+v", user, res)
 
 			if err := conn.WithTx(func() error { return ru.updateRedditUserStatus(conn, user, res) }); err != nil {
 				if IsSQLiteForeignKeyErr(err) { // indicates that the user has been purged
@@ -162,7 +162,7 @@ func (ru *RedditUsers) updateRedditUserStatus(conn StorageConn, user User, res U
 
 	user.NotFound = res.Exists
 	user.Suspended = res.User.Suspended
-	ru.unsuspensions <- res.User
+	ru.resurrections <- res.User
 
 	return nil
 }

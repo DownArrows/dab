@@ -249,11 +249,12 @@ and [template](http://golang.org/pkg/text/template/).
       must be at least one day
     - `max_batches` *integer* (5): maximum number of batches of comments to get from Reddit for a single user before moving to the next one
     - `password` *string* (*none*): Reddit password for the bot's account; leave out to disable the Reddit component
+    - `resurrections_interval` *duration* (*none*): interval between each batch of checks for suspended or deleted users;
 	 - `retry_connection` *dictionary*:
        - `times` *int* (10): maximum number of times to try to connect to Reddit; use -1 for infinite retries
        - `max_interval` *duration* (5m): maximum wait between connection retries
     - `secret` *string* (*none*): Reddit application secret for the bot; leave out to disable the Reddit component
-    - `unsuspension_interval` *duration* (*none*): interval between each batch of checks for suspended or deleted users;
+    - `unsuspension_interval` *duration* (*none*) **Deprecated**: see `resurrections_interval`
       leave out to disable, else must be at least one minute
     - `user_agent` *template* (*none*): user agent of the bot on reddit; `OS` and `Version` are provided; leave out to disable the Reddit component
     - `username` *string* (*none*): Reddit user name for the bot's account; leave out to disable the Reddit component

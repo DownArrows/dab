@@ -15,8 +15,8 @@ type RedditScanner struct {
 
 	// communication with the outside
 	sync.Mutex
-	suspensions chan User
-	highScores  chan Comment
+	deaths     chan User
+	highScores chan Comment
 
 	// configuration
 	fullScanInterval    time.Duration
@@ -85,23 +85,23 @@ func (rs *RedditScanner) Run(ctx context.Context) error {
 	return ctx.Err()
 }
 
-// OpenSuspensions creates, set, and returns a channel that sends newly suspended or deleted User.
-func (rs *RedditScanner) OpenSuspensions() <-chan User {
+// OpenDeaths creates, set, and returns a channel that sends newly suspended or deleted User.
+func (rs *RedditScanner) OpenDeaths() <-chan User {
 	rs.Lock()
 	defer rs.Unlock()
-	if rs.suspensions == nil {
-		rs.suspensions = make(chan User, DefaultChannelSize)
+	if rs.deaths == nil {
+		rs.deaths = make(chan User, DefaultChannelSize)
 	}
-	return rs.suspensions
+	return rs.deaths
 }
 
-// CloseSuspensions closes and unsets the channel that sends suspended and deleted User.
-func (rs *RedditScanner) CloseSuspensions() {
+// CloseDeaths closes and unsets the channel that sends suspended and deleted User.
+func (rs *RedditScanner) CloseDeaths() {
 	rs.Lock()
 	defer rs.Unlock()
-	if rs.suspensions != nil {
-		close(rs.suspensions)
-		rs.suspensions = nil
+	if rs.deaths != nil {
+		close(rs.deaths)
+		rs.deaths = nil
 	}
 }
 
@@ -171,8 +171,8 @@ OUTER:
 
 			if user.Suspended || user.NotFound {
 				rs.Lock()
-				if rs.suspensions != nil {
-					rs.suspensions <- user
+				if rs.deaths != nil {
+					rs.deaths <- user
 				}
 				rs.Unlock()
 				break

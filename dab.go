@@ -187,15 +187,15 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 	if dab.components.ConfState.Reddit.Enabled && dab.components.ConfState.Discord.Enabled {
 
-		tasks.Spawn(func() { dab.components.Discord.SignalSuspensions(dab.components.RedditScanner.OpenSuspensions()) })
+		tasks.Spawn(func() { dab.components.Discord.SignalDeaths(dab.components.RedditScanner.OpenDeaths()) })
 
-		if dab.components.RedditUsers.UnsuspensionWatcherEnabled {
+		if dab.components.RedditUsers.ResurrectionsWatcherEnabled {
 			tasks.SpawnCtx(func(ctx context.Context) error {
 				return dab.layers.Storage.WithConn(ctx, func(conn StorageConn) error {
-					return dab.components.RedditUsers.UnsuspensionWatcher(ctx, conn)
+					return dab.components.RedditUsers.ResurrectionsWatcher(ctx, conn)
 				})
 			})
-			tasks.Spawn(func() { dab.components.Discord.SignalUnsuspensions(dab.components.RedditUsers.OpenUnsuspensions()) })
+			tasks.Spawn(func() { dab.components.Discord.SignalResurrections(dab.components.RedditUsers.OpenResurrections()) })
 		}
 
 		if dab.conf.Discord.HighScores != "" {
@@ -204,8 +204,8 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 
 		tasks.SpawnCtx(func(ctx context.Context) error {
 			<-ctx.Done()
-			dab.components.RedditUsers.CloseUnsuspensions()
-			dab.components.RedditScanner.CloseSuspensions()
+			dab.components.RedditUsers.CloseResurrections()
+			dab.components.RedditScanner.CloseDeaths()
 			dab.components.RedditScanner.CloseHighScores()
 			return ctx.Err()
 		})
