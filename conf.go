@@ -29,6 +29,7 @@ const Defaults string = `{
 	},
 
 	"discord": {
+		"dirty_reads": true,
 		"retry_connection": {
 			"times": 5,
 			"max_interval": "2m",
@@ -135,6 +136,7 @@ type ReportConf struct {
 // DiscordBotConf describes the configuration for the bot for Discord.
 type DiscordBotConf struct {
 	DiscordBotChannelsID
+	DirtyReads     bool     `json:"dirty_reads"`
 	HidePrefix     string   `json:"hide_prefix"`
 	Prefix         string   `json:"prefix"`
 	PrivilegedRole string   `json:"privileged_role"`

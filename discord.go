@@ -228,6 +228,12 @@ func NewDiscordBot(logger LevelLogger, conn StorageConn, addUser AddRedditUser, 
 		return nil, err
 	}
 
+	if conf.DirtyReads {
+		if err := conn.ReadUncommitted(true); err != nil {
+			return nil, err
+		}
+	}
+
 	bot := &DiscordBot{
 		addUser: addUser,
 		client:  session,

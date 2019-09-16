@@ -213,6 +213,7 @@ and [template](http://golang.org/pkg/text/template/).
     - `admin` *string* (*none*): Discord ID of the privileged user (use Discord's developer mode to get them);
       if empty will use the owner of the channels' server, and if no channel is enabled, will disable privileged commands.
       **Deprecated**: starting with version 1.8.0 this option has no effect.
+    - `dirty_reads` *bool* (true): allow reading inconsistent data from the database in exchange of better concurrency
     - `general` *string* (*none*): Discord ID of the main channel where loggable links are taken from and welcome messages are posted;
       required to have welcome messages and logged links, disabled if left empty
     - `graveyard` *string* (copy of `general`): Discord ID of the channel where to post messages about (un)suspensions and (un)deletions
