@@ -65,7 +65,7 @@ var StorageMigrations = []SQLiteMigration{
 		},
 	}, {
 		From: SemVer{1, 20, 1},
-		To:   SemVer{1, 20, 2},
+		To:   SemVer{1, 21, 0},
 		Exec: func(conn SQLiteConn) error {
 			return conn.MultiExecWithTx([]SQLQuery{
 				{SQL: "DROP INDEX user_archive_idx"},
