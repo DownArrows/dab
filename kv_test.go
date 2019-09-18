@@ -48,7 +48,8 @@ func TestKeyValue(t *testing.T) {
 	})
 
 	t.Run("write many", func(t *testing.T) {
-		if err := kv.SaveMany(conn, "key1", []string{"value2", "value3"}); err != nil {
+		err := conn.WithTx(func() error { return kv.SaveMany(conn, "key1", []string{"value2", "value3"}) })
+		if err != nil {
 			t.Error(err)
 			return
 		}

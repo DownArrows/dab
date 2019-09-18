@@ -240,7 +240,8 @@ func (rs *RedditScanner) alertIfHighScore(conn StorageConn, comments []Comment) 
 		}
 	}
 
-	if err := rs.storage.KV().SaveMany(conn, "highscores", highscoresID); err != nil {
+	err := conn.WithTx(func() error { return rs.storage.KV().SaveMany(conn, "highscores", highscoresID) })
+	if err != nil {
 		return err
 	}
 

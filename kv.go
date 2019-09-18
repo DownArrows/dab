@@ -71,44 +71,37 @@ func (kv *KeyValueStore) Save(conn SQLiteConn, key string, value string) error {
 }
 
 // SaveMany saves several values associated with a single key.
+// You have to start the transaction yourself.
 func (kv *KeyValueStore) SaveMany(conn SQLiteConn, key string, values []string) error {
 	todo := make(map[string]struct{})
 
-	err := conn.WithTx(func() error {
-		stmt, err := conn.Prepare(kv.insertQuery)
-		if err != nil {
-			return err
-		}
-		defer stmt.Close()
+	stmt, err := conn.Prepare(kv.insertQuery)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
 
-		kv.RLock()
-		if _, hasKey := kv.store[key]; !hasKey {
-			for _, value := range values {
-				if _, hasValue := kv.store[key][value]; !hasValue {
-					todo[value] = struct{}{}
-				}
-			}
-		} else {
-			for _, value := range values {
+	kv.RLock()
+	if _, hasKey := kv.store[key]; !hasKey {
+		for _, value := range values {
+			if _, hasValue := kv.store[key][value]; !hasValue {
 				todo[value] = struct{}{}
 			}
 		}
-		kv.RUnlock()
-
-		for value := range todo {
-			if err := stmt.Exec(key, value, time.Now().Unix()); err != nil {
-				return err
-			}
-			if err := stmt.ClearBindings(); err != nil {
-				return err
-			}
+	} else {
+		for _, value := range values {
+			todo[value] = struct{}{}
 		}
+	}
+	kv.RUnlock()
 
-		return nil
-	})
-
-	if err != nil {
-		return err
+	for value := range todo {
+		if err := stmt.Exec(key, value, time.Now().Unix()); err != nil {
+			return err
+		}
+		if err := stmt.ClearBindings(); err != nil {
+			return err
+		}
 	}
 
 	kv.Lock()
@@ -141,6 +134,19 @@ func (kv *KeyValueStore) HasKey(key string) bool {
 	_, ok := kv.store[key]
 	kv.RUnlock()
 	return ok
+}
+
+// Get returns the list of values associated with the key, which is empty if the key doesn't exist.
+func (kv *KeyValueStore) Get(key string) []string {
+	kv.RLock()
+	defer kv.RUnlock()
+	var values []string
+	if valuesMap, ok := kv.store[key]; ok {
+		for value := range valuesMap {
+			values = append(values, value)
+		}
+	}
+	return values
 }
 
 // TODO cleanup values older than T

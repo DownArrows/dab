@@ -46,7 +46,8 @@ If they accept Reddit user names, they accept them as `AGreatUsername`, `/u/AGre
 
  - `ban` (privileged) ban the mentioned user with an optional reason
  - `hide` hide a user from reports
- - `info` information about a user: creation date, registration date, suspension or deletion status, inactive status
+ - `info` information about a user: creation date, registration date, suspension or deletion status,
+    inactive status, and which discord user registered the user (only if known or any did)
  - `invite` (privileged) create an invite limited to a single use within a week
  - `karma` give negative/positive/total karma for the given user name
  - `purge` (privileged) completely remove from the database one or several users

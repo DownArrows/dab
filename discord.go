@@ -35,8 +35,9 @@ const (
 
 // Knowledge about Discord
 const (
-	DiscordMessageLengthLimit = 2000
-	DiscordDefaultRoleColor   = 0
+	DiscordMessageLengthLimit  = 2000
+	DiscordDefaultRoleColor    = 0
+	DiscordPrefixWhoRegistered = "register-from-discord"
 )
 
 const (
@@ -501,7 +502,7 @@ func (bot *DiscordBot) command(msg DiscordMessage) error {
 	bot.logger.Debugf("matched command %q, args %v, from user %s", cmd.Command, msg.Args, msg.Author.FQN())
 
 	if err := bot.client.ChannelTyping(msg.ChannelID); err != nil {
-		bot.logger.Errorf("discord bot error when setting typing status: %v", err)
+		bot.logger.Errorf("discord bot error when setting typing status: %v", err)
 	}
 
 	if err := cmd.Callback(msg); err != nil {
@@ -667,7 +668,7 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 			} else if !reply.Exists {
 				return errors.New("not found")
 			}
-			return nil
+			return bot.kv.Save(bot.conn, DiscordPrefixWhoRegistered+reply.User.Name, msg.Author.ID)
 		})
 	})(msg)
 }
@@ -678,6 +679,9 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 	bot.conn.Lock()
 	query := bot.conn.GetUser(username)
 	bot.conn.Unlock()
+	if query.Error != nil {
+		return query.Error
+	}
 
 	if !query.Exists {
 		response := fmt.Sprintf("user %q not found in the database.", username)
@@ -722,6 +726,17 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 			Value:  user.LastScan.In(bot.timezone).Format(time.RFC850),
 			Inline: true,
 		})
+	}
+
+	whoKey := DiscordPrefixWhoRegistered + user.Name
+	if from := bot.kv.Get(whoKey); len(from) == 1 {
+		embed.AddField(DiscordEmbedField{
+			Name:   "Registered by",
+			Value:  fmt.Sprintf("<@%s>", from[0]),
+			Inline: true,
+		})
+	} else if len(from) > 1 {
+		bot.logger.Fatalf("potential bug, only one value should be associated with %q, found %d: %v", whoKey, len(from), from)
 	}
 
 	return bot.channelEmbedSend(msg.ChannelID, embed)
