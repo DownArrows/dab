@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"math/rand"
@@ -189,8 +190,9 @@ type DiscordBot struct {
 	addUser AddRedditUser
 	client  *discordgo.Session
 	conn    StorageConn // a single one is enough, it's not heavily used
-	tasks   *TaskGroup
+	kv      *KeyValueStore
 	logger  LevelLogger
+	tasks   *TaskGroup
 
 	// state information
 	ID string
@@ -211,7 +213,13 @@ type DiscordBot struct {
 }
 
 // NewDiscordBot returns a new DiscordBot.
-func NewDiscordBot(logger LevelLogger, conn StorageConn, addUser AddRedditUser, conf DiscordBotConf) (*DiscordBot, error) {
+func NewDiscordBot(
+	logger LevelLogger,
+	conn StorageConn,
+	kv *KeyValueStore,
+	addUser AddRedditUser,
+	conf DiscordBotConf,
+) (*DiscordBot, error) {
 	discordgo.Logger = func(msgL, caller int, format string, dgArgs ...interface{}) {
 		args := []interface{}{msgL, caller}
 		args = append(args, dgArgs...)
@@ -238,6 +246,7 @@ func NewDiscordBot(logger LevelLogger, conn StorageConn, addUser AddRedditUser, 
 		addUser: addUser,
 		client:  session,
 		conn:    conn,
+		kv:      kv,
 		logger:  logger,
 
 		channelsID:     conf.DiscordBotChannelsID,
@@ -616,53 +625,6 @@ func (bot *DiscordBot) simpleError(str string, args ...interface{}) func(Discord
 	}
 }
 
-func (bot *DiscordBot) register(msg DiscordMessage) error {
-	names := msg.Args
-	bot.logger.Infof("%s wants to register %v", msg.Author.FQN(), names)
-
-	if bot.addUser == nil {
-		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, "registration service is unavailable")
-	}
-
-	status := &DiscordEmbed{
-		Title:       "Registration",
-		Description: fmt.Sprintf("request from <@%s>", msg.Author.ID),
-	}
-
-	for _, name := range names {
-		if err := bot.client.ChannelTyping(msg.ChannelID); err != nil {
-			return err
-		}
-
-		hidden := strings.HasPrefix(name, bot.hidePrefix)
-		name = TrimUsername(strings.TrimPrefix(name, bot.hidePrefix))
-		bot.conn.Lock()
-		reply := bot.addUser(bot.tasks.Context, bot.conn, name, hidden, false)
-		bot.conn.Unlock()
-
-		var embedName string
-		if hidden {
-			embedName = fmt.Sprintf("%s (hidden)", reply.User.Name)
-		} else {
-			embedName = reply.User.Name
-		}
-
-		var embedValue string
-		if IsCancellation(reply.Error) {
-			continue
-		} else if reply.Error != nil {
-			embedValue = fmt.Sprintf("%s %s", EmojiCrossMark, reply.Error)
-		} else if !reply.Exists {
-			embedValue = EmojiCrossMark + " not found"
-		} else {
-			embedValue = EmojiCheckMark
-		}
-		status.AddField(DiscordEmbedField{Name: embedName, Value: embedValue})
-	}
-
-	return bot.channelEmbedSend(msg.ChannelID, status)
-}
-
 func (bot *DiscordBot) editUsers(actionName string, action func(string) error) func(DiscordMessage) error {
 	return func(msg DiscordMessage) error {
 		names := msg.Args
@@ -689,6 +651,25 @@ func (bot *DiscordBot) editUsers(actionName string, action func(string) error) f
 
 		return bot.channelEmbedSend(msg.ChannelID, status)
 	}
+}
+
+func (bot *DiscordBot) register(msg DiscordMessage) error {
+	if bot.addUser == nil {
+		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, "registration service is unavailable")
+	}
+	return bot.editUsers("register", func(name string) error {
+		return bot.conn.WithTx(func() error {
+			hidden := strings.HasPrefix(name, bot.hidePrefix)
+			name = TrimUsername(strings.TrimPrefix(name, bot.hidePrefix))
+			reply := bot.addUser(bot.tasks.Context, bot.conn, name, hidden, false)
+			if reply.Error != nil {
+				return reply.Error
+			} else if !reply.Exists {
+				return errors.New("not found")
+			}
+			return nil
+		})
+	})(msg)
 }
 
 func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
