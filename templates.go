@@ -189,36 +189,6 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 {{template "BackToTop"}}
 </article>
 </html>`,
-).MustAddParse("CompendiumStats",
-	`<table class="large">
-<thead>
-<tr>
-	<th>Rank</th>
-	<th>Name</th>
-	<th>Karma</th>
-	<th>Count</th>
-	<th>Average</th>
-	<th>Last commented</th>
-</tr>
-</thead>
-<tbody>
-{{range . -}}
-<tr>
-	<td>{{.Number}}</td>
-	<td><a href="/compendium/user/{{.Name}}">{{.Name}}</a></td>
-	<td>{{.Stats.Sum}}</td>
-	<td>{{.Stats.Count}}</td>
-	<td>{{.Stats.Average}}</td>
-	<td>
-		<span class="detail">{{.Stats.Latest.Format "15:04"}}</span>
-		<span>{{.Stats.Latest.Format "2006-01-02"}}</span>
-		<span class="detail">{{.Stats.Latest.Format "MST"}}</span>
-	</td>
-</tr>
-{{end -}}
-</tbody>
-</table>
-<p><em>NB: comments from after a sub has been quarantined aren't saved, but comments deleted by the user are kept.</em></p>`,
 ).MustAddParse("UserComments",
 	`{{range .}}
 <article class="comment">
@@ -243,6 +213,36 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 	</blockquote>
 </article>
 {{end}}`,
+).MustAddParse("CompendiumStatsPerSub",
+	`<table class="large">
+<thead>
+<tr>
+	<th>Rank</th>
+	<th>Sub</th>
+	<th>Karma</th>
+	<th>Count</th>
+	<th>Average</th>
+	<th>Last commented</th>
+</tr>
+</thead>
+<tbody>
+{{range . -}}
+<tr>
+	<td>{{.Number}}</td>
+	<td><a href="https://www.reddit.com/r/{{.Name}}">{{.Name}}</a></td>
+	<td>{{.Stats.Sum}}</td>
+	<td>{{.Stats.Count}}</td>
+	<td>{{.Stats.Average}}</td>
+	<td>
+		<span class="detail">{{.Stats.Latest.Format "15:04"}}</span>
+		<span>{{.Stats.Latest.Format "2006-01-02"}}</span>
+		<span class="detail">{{.Stats.Latest.Format "MST"}}</span>
+	</td>
+</tr>
+{{end -}}
+</tbody>
+</table>
+<p><em>NB: comments from after a sub has been quarantined aren't saved, but comments deleted by the user are kept.</em></p>`,
 ).MustAddParse("CompendiumUser",
 	`<!DOCTYPE html>
 <html lang="en">
@@ -348,7 +348,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 {{if .Negative -}}
 <section>
 <h1 id="named-negative">Negative per sub</h1>
-{{template "CompendiumStats" .Negative}}
+{{template "CompendiumStatsPerSub" .Negative}}
 {{template "BackToTop"}}
 </section>
 {{- end}}
@@ -356,7 +356,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 {{if .All -}}
 <section>
 <h1 id="named">Per sub</h1>
-{{template "CompendiumStats" .All}}
+{{template "CompendiumStatsPerSub" .All}}
 {{template "BackToTop"}}
 </section>
 {{- end}}
@@ -420,6 +420,35 @@ Next {{.CommentsLen}} comments &rarr;
 	</blockquote>
 </article>
 {{end}}`,
+).MustAddParse("CompendiumStatsPerUser",
+	`<table class="large">
+<thead>
+<tr>
+	<th>Rank</th>
+	<th>User</th>
+	<th>Karma</th>
+	<th>Count</th>
+	<th>Average</th>
+	<th>Last commented</th>
+</tr>
+</thead>
+<tbody>
+{{range . -}}
+<tr>
+	<td>{{.Number}}</td>
+	<td><a href="/compendium/user/{{.Name}}">{{.Name}}</a></td>
+	<td>{{.Stats.Sum}}</td>
+	<td>{{.Stats.Count}}</td>
+	<td>{{.Stats.Average}}</td>
+	<td>
+		<span class="detail">{{.Stats.Latest.Format "15:04"}}</span>
+		<span>{{.Stats.Latest.Format "2006-01-02"}}</span>
+		<span class="detail">{{.Stats.Latest.Format "MST"}}</span>
+	</td>
+</tr>
+{{end -}}
+</tbody>
+</table>`,
 ).MustAddParse("Compendium",
 	`<!DOCTYPE html>
 <html lang="en">
@@ -473,7 +502,7 @@ Next {{.CommentsLen}} comments &rarr;
 {{if .Negative -}}
 <section>
 <h1 id="named-negative">Negative karma per user</h1>
-{{template "CompendiumStats" .Negative}}
+{{template "CompendiumStatsPerUser" .Negative}}
 {{template "BackToTop"}}
 </section>
 {{- end}}
@@ -482,7 +511,7 @@ Next {{.CommentsLen}} comments &rarr;
 <section>
 <h1 id="named">Karma per user</h1>
 <table>
-{{template "CompendiumStats" .All}}
+{{template "CompendiumStatsPerUser" .All}}
 {{template "BackToTop"}}
 </section>
 {{- end}}
