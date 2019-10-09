@@ -37,13 +37,15 @@ const (
 const (
 	DiscordMessageLengthLimit  = 2000
 	DiscordDefaultRoleColor    = 0
-	DiscordPrefixWhoRegistered = "register-from-discord"
+	DiscordPrefixWhoRegistered = "register-from-discord-"
 )
 
 const (
-	discordMessageDeletionWait   = 15 * time.Second
-	discordInvitesMaxUses        = 1
 	discordInvitesDaysOfValidity = 7
+	discordInvitesMaxUses        = 1
+	discordMessageDeletionWait   = 15 * time.Second
+	discordStatus                = "Downvote Counter"
+	discordStatusInterval        = 30 * time.Minute
 )
 
 var (
@@ -284,6 +286,12 @@ func (bot *DiscordBot) Run(ctx context.Context) error {
 	bot.Unlock()
 	bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.client.Open() })
 	bot.tasks.SpawnCtx(func(ctx context.Context) error {
+		for SleepCtx(ctx, discordStatusInterval) {
+			bot.setStatus()
+		}
+		return ctx.Err()
+	})
+	bot.tasks.SpawnCtx(func(ctx context.Context) error {
 		<-ctx.Done()
 		return bot.client.Close()
 	})
@@ -332,14 +340,15 @@ func (bot *DiscordBot) myColor(channelID string) int {
 	return DiscordDefaultRoleColor
 }
 
+func (bot *DiscordBot) setStatus() {
+	if err := bot.client.UpdateStatus(0, discordStatus); err != nil {
+		bot.logger.Errorf("couldn't set status on discord: %v", err)
+	}
+}
+
 // this is executed on each (re)-connection to Discord
 func (bot *DiscordBot) onReady(r *discordgo.Ready) error {
 	bot.logger.Debug("(re-)connected to discord, checking settings")
-
-	// set status
-	if err := bot.client.UpdateStatus(0, "Downvote Counter"); err != nil {
-		return fmt.Errorf("couldn't set status on discord: %v", err)
-	}
 
 	// guild-related information and checks
 	if nb := len(r.Guilds); nb != 1 {
@@ -380,6 +389,8 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) error {
 	// other
 
 	bot.ID = r.User.ID
+
+	bot.setStatus()
 
 	return nil
 }
