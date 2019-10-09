@@ -72,5 +72,13 @@ var StorageMigrations = []SQLiteMigration{
 				{SQL: "DROP INDEX comments_stats_idx"},
 			})
 		},
+	}, {
+		From: SemVer{1, 22, 1},
+		To:   SemVer{1, 22, 2},
+		Exec: func(conn SQLiteConn) error {
+			return conn.Exec(`UPDATE key_value
+				SET key = "register-from-discord_" || TRIM(key, "register-from-discord")
+				WHERE key LIKE "register-from-discord%"`)
+		},
 	},
 }
