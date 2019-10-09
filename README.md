@@ -20,6 +20,7 @@ Table of contents:
  - [Developer manual](#developer-manual)
     - [Conventions](#conventions)
     - [Architecture](#architecture)
+    - [Using the database](#using-the-database)
     - [Database schema](#database-schema)
     - [TODO](#todo)
 
@@ -410,6 +411,24 @@ The goal of a task group is to launch a function as a goroutine with a [context]
 and wait for it to return normally or with an error (this was inspired by Trio's nurseries).
 By extension, we call a task any function that can be turned into a proper task with a trivial wrapping function.
 They communicate together through channels that are passed either via a closure or via the data structure they are attached to.
+
+## Using the database
+
+The database is used with a non-standard driver that makes use of features specific to SQLite.
+Its interface is wrapped in custom data structures to allow for context-based cancellation and less code repetition.
+See the [driver's documentation](https://godoc.org/github.com/bvinc/go-sqlite-lite/sqlite3) and the interface
+`SQLiteConn` to get an overview of what each connection can do.
+Note that mass insertion isn't automated, since it may require flexibility; you're expected to
+wrap everything in a transaction, prepare the statement, defer its closing, and after each execution clear the bindings.
+Moreover, instead of pooling connections automatically, you're expected to hold them for each long-running goroutine,
+or use a custom pooling mechanism (a basic one is defined by `SQLiteConnPool`).
+
+The application also defines a small framework in `SQLiteDatabase`
+to create and manage SQLite databases, and enable their useful non-default features.
+It checks and writes the application's identifier, its version, runs a basic migration system,
+and checks the data's integrity on every startup.
+Files that start with `sqlite` define the code that isn't really specific to the application.
+If you need to add new methods to do queries on the database, you probably only need to modify `storage_conn.go`.
 
 ## Database schema
 
