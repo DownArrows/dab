@@ -80,5 +80,13 @@ var StorageMigrations = []SQLiteMigration{
 				SET key = "register-from-discord_" || TRIM(key, "register-from-discord")
 				WHERE key LIKE "register-from-discord%"`)
 		},
+	}, {
+		From: SemVer{1, 22, 2},
+		To:   SemVer{1, 22, 3},
+		Exec: func(conn SQLiteConn) error {
+			return conn.Exec(`UPDATE key_value
+				SET key = "register-from-discord_" || TRIM(key, "register-from-discord-")
+				WHERE key LIKE "register-from-discord-%"`)
+		},
 	},
 }

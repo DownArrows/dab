@@ -37,7 +37,7 @@ const (
 const (
 	DiscordMessageLengthLimit  = 2000
 	DiscordDefaultRoleColor    = 0
-	DiscordPrefixWhoRegistered = "register-from-discord-"
+	DiscordPrefixWhoRegistered = "register-from-discord_"
 )
 
 const (
