@@ -324,7 +324,9 @@ func (bot *DiscordBot) channelErrorSend(channelID, userID, content string) error
 		return err
 	}
 	bot.tasks.SpawnCtx(func(ctx context.Context) error {
-		SleepCtx(ctx, discordMessageDeletionWait)
+		if !SleepCtx(ctx, discordMessageDeletionWait) {
+			return ctx.Err()
+		}
 		if err := bot.client.ChannelMessageDelete(channelID, msg.ID); err != nil {
 			bot.logger.Errorf("error when deleting message %q on channel %q: %v", channelID, msg.ID, err)
 		}
@@ -522,7 +524,9 @@ func (bot *DiscordBot) command(msg DiscordMessage) error {
 
 	if !msg.IsDM {
 		bot.tasks.SpawnCtx(func(ctx context.Context) error {
-			SleepCtx(ctx, discordMessageDeletionWait)
+			if !SleepCtx(ctx, discordMessageDeletionWait) {
+				return ctx.Err()
+			}
 			if err := bot.client.ChannelMessageDelete(msg.ChannelID, msg.ID); err != nil {
 				bot.logger.Errorf("error when deleting message %q on channel %q: %v", msg.ChannelID, msg.ID, err)
 			}
