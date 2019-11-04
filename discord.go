@@ -807,9 +807,7 @@ func (bot *DiscordBot) ban(msg DiscordMessage) error {
 
 	matches := matchDiscordMention.FindStringSubmatch(msg.Args[0])
 	if len(matches) == 0 {
-		if err := bot.channelErrorSend(msg.ChannelID, msg.Author.ID, "Invalid user mention."); err != nil {
-			return err
-		}
+		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, "Invalid user mention.")
 	}
 
 	id := matches[1]
