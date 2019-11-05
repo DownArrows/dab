@@ -329,7 +329,7 @@ func (bot *DiscordBot) channelErrorSend(channelID, userID, content string) error
 			return ctx.Err()
 		}
 		if err := bot.client.ChannelMessageDelete(channelID, msg.ID); err != nil {
-			bot.logger.Errorf("error when deleting message %q on channel %q: %v", channelID, msg.ID, err)
+			bot.logger.Errorf("error when deleting message %q on channel %q: %v", msg.ID, channelID, err)
 		}
 		return nil
 	})
