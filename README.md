@@ -46,6 +46,8 @@ Some are reserved to privileged users (the server's owner and a specific role).
 If they accept Reddit user names, they accept them as `AGreatUsername`, `/u/AGreatUsername`, and `u/AGreatUsername`.
 
  - `ban` (privileged) ban the mentioned user with an optional reason
+ - `delete` (privileged) mass-delete messages in the current channel;
+    the first argument is the number to delete, and the optional second one is the offset at which to start the deletion
  - `hide` hide a user from reports
  - `info` information about a user: creation date, registration date, suspension or deletion status,
     inactive status, and which discord user registered the user (only if known or any did)

@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -626,6 +627,11 @@ func (bot *DiscordBot) getCommandsDescriptors() []DiscordCommand {
 	}, {
 		Command:  "date",
 		Callback: bot.date,
+	}, {
+		Command:    "delete",
+		Callback:   bot.deletion,
+		Privileged: true,
+		HasArgs:    true,
 	}}
 }
 
@@ -841,6 +847,52 @@ func (bot *DiscordBot) invite(msg DiscordMessage) error {
 
 func (bot *DiscordBot) date(msg DiscordMessage) error {
 	return bot.channelMessageSend(msg.ChannelID, time.Now().In(bot.timezone).Format(time.RFC850))
+}
+
+func (bot *DiscordBot) deletion(msg DiscordMessage) error {
+	nbArgs := len(msg.Args)
+	if nbArgs > 2 {
+		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, "This command takes at most two arguments.")
+	}
+
+	nb, err := strconv.Atoi(msg.Args[0])
+	if err != nil {
+		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, fmt.Sprintf("Invalid number of messages to delete: %v", err))
+	} else if nb < 1 {
+		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, "The number of messages to delete must be higher than 0")
+	}
+
+	offset := 0
+	if nbArgs > 1 {
+		var err error
+		offset, err = strconv.Atoi(msg.Args[1])
+		if err != nil {
+			return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, fmt.Sprintf("Invalid deletion offset: %v", err))
+		} else if offset < 0 {
+			return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, "The deletion offset must be at least 0")
+		}
+	}
+
+	if nb+offset > 100 {
+		reply := "The sum of the number of messages to delete (%d) and the offset (%d) cannot be more than 100."
+		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, fmt.Sprintf(reply, nb, offset))
+	}
+
+	messages, err := bot.client.ChannelMessages(msg.ChannelID, nb+offset, msg.ID, "", "")
+	if err != nil {
+		return err
+	}
+
+	var ids []string
+	for _, message := range messages {
+		if offset > 0 {
+			offset--
+		} else {
+			ids = append(ids, message.ID)
+		}
+	}
+
+	return bot.client.ChannelMessagesBulkDelete(msg.ChannelID, ids)
 }
 
 // TrimUsername trims reddit user names so that the application is liberal in what it accepts.
