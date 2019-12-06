@@ -322,7 +322,7 @@ var HTMLTemplates = NewHTMLTemplate("Root").MustAddParse("BackToTop",
 		</tr>
 		<tr>
 			<td>Average per comment<td>
-			<td><strong>{{.Summary.Average}}</strong>, and <strong>{{.SummaryNegative.Average}}</strong> if negative only<td>
+			<td><strong>{{.Summary.Average}}</strong>{{if .SummaryNegative.Count}}, and <strong>{{.SummaryNegative.Average}}</strong> if negative only{{end}}<td>
 		</tr>
 		{{- end}}
 	</table>
