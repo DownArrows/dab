@@ -6,4 +6,5 @@ dab.db
 dab.db.*
 Makefile
 *.sh
+.*.sentinel
 .*.swp

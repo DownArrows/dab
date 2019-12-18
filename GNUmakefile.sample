@@ -8,12 +8,18 @@
 #  - rsync
 #  - systemd (on remote host)
 #  Feel free to adapt to your needs.
-#
+
+# Make options
+.ONESHELL:
+.DELETE_ON_ERROR:
+
+# Variables
 HOST = # user@your.server
 TAG = $$(git describe --tags)
 URL = # URL of the bot's web interface
 TARBALL = dab-$(TAG)-$$(uname -s)-$$(uname -p).tar.xz
 STATIC_DIR = /srv/dab
+
 
 dab: *.go
 	go build
@@ -26,12 +32,14 @@ dab: *.go
 
 dab.db: dab.db.bak
 	cp $< $@
+.PHONY: dab.db
 
 dab.db.bak:
 	wget --header='Accept-Encoding: gzip' $(URL)/backup -O- | gzip -dc > $@
 
 test: *.go
 	go test -race -vet=all -timeout 5s github.com/DownArrows/dab
+.PHONY: test
 
 README.html: README.md
 	pandoc $< -p --self-contained -t html -M lang=en -M title="Down Arrows Bot" > $@
@@ -45,17 +53,23 @@ README.html: README.md
 #	sed '/<\/title>/ a \  <link rel="stylesheet" href="/css/main"/>' \
 #	> $@
 
-tarball: dab LICENSE README.md
+tarball: .tarball.sentinel
+.PHONY: tarball
+
+.tarball.sentinel: dab LICENSE README.md
 	tar cJf $(TARBALL) $^
+	touch .tarball.sentinel
 
 release: tarball
 	hub push origin HEAD:master
 	hub push origin HEAD:master --tags
 	hub release create -a $(TARBALL) $(TAG)
+.PHONY: release
 
 deploy: dab
 	rsync -z --progress ./dab $(HOST):/usr/local/bin
 	ssh $(HOST) 'systemctl restart dab'
+.PHONY: deploy
 
 # Uncomment if you want to upload static files if you've enabled web.root_dir.
 # You could add the modified README.html, and add this target to deploy.
@@ -64,5 +78,4 @@ deploy: dab
 
 clean:
 	rm -f dab dab-v*.tar.xz dab.db dab.db-shm dab.db-wal README.html dab.db.backup
-
-.PHONY: dab.db
+.PHONY: clean
