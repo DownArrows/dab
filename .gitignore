@@ -5,6 +5,7 @@ static/
 dab.db
 dab.db.*
 Makefile
+GNUMakefile
 *.sh
 .*.sentinel
 .*.swp
