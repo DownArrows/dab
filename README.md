@@ -276,6 +276,7 @@ and [template](http://golang.org/pkg/text/template/).
  - `web`
     - `default_limit` *integer* (100): default number of items per page of paginated data
     - `dirty_reads` *bool* (true): allow reading inconsistent data from the database in exchange of better concurrency
+    - `ip_header` *string* (*none*): HTTP header that contains the true IP, so that logs can be accurate (use if behind a reverse-proxy)
     - `listen` *string* (*none*): `hostname:port` or `ip:port` or `:port` (all interfaces)
       specification for the webserver to listen to; leave out to disable
     - `max_limit` *integer* (1000): maximum number of items per page of paginated data

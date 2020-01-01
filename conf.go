@@ -158,6 +158,7 @@ type WebConf struct {
 	DBOptimize   Duration `json:"db_optimize"`
 	DefaultLimit uint     `json:"default_limit"`
 	DirtyReads   bool     `json:"dirty_reads"`
+	IPHeader     string   `json:"ip_header"`
 	Listen       string   `json:"listen"`
 	MaxLimit     uint     `json:"max_limit"`
 	NbDBConn     uint     `json:"nb_db_conn"`

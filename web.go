@@ -74,15 +74,17 @@ func (w *ResponseWriter) WriteHeader(statusCode int) {
 
 // ServeMux is a minimal wrapper for http.ServeMux uses our ResponseWriter
 type ServeMux struct {
-	actual *http.ServeMux
-	logger LevelLogger
+	actual   *http.ServeMux
+	logger   LevelLogger
+	IPHeader string
 }
 
 // NewServeMux returns a ServeMux wrapping an http.NewServeMux.
-func NewServeMux(logger LevelLogger) *ServeMux {
+func NewServeMux(logger LevelLogger, ipHeader string) *ServeMux {
 	return &ServeMux{
-		actual: http.NewServeMux(),
-		logger: logger,
+		actual:   http.NewServeMux(),
+		logger:   logger,
+		IPHeader: ipHeader,
 	}
 }
 
@@ -100,15 +102,22 @@ func (mux *ServeMux) Handle(pattern string, handler http.Handler) {
 func (mux *ServeMux) ServeHTTP(baseWriter http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if err := recover(); err != nil {
-			mux.logger.Errorf("error in response to %s %s for %s: %v", r.Method, r.URL, r.RemoteAddr, err)
+			mux.logger.Errorf("error in response to %s %s for %s: %v", r.Method, r.URL, getIP(r, mux.IPHeader), err)
 		}
 	}()
-	mux.logger.Infof("serve %s %s for %s with user agent %q", r.Method, r.URL, r.RemoteAddr, r.Header.Get("User-Agent"))
+	mux.logger.Infof("serve %s %s for %s with user agent %q", r.Method, r.URL, getIP(r, mux.IPHeader), r.Header.Get("User-Agent"))
 	w := NewResponseWriter(baseWriter, r)
 	mux.actual.ServeHTTP(w, r)
 	if err := w.Close(); err != nil {
 		panic(err)
 	}
+}
+
+func getIP(r *http.Request, header string) string {
+	if header == "" {
+		return r.RemoteAddr
+	}
+	return r.Header.Get(header)
 }
 
 // WebServer serves the stored data as HTML pages and a backup of the database.
@@ -133,7 +142,7 @@ func NewWebServer(logger LevelLogger, storage *Storage, reports ReportFactory, c
 		storage:    storage,
 	}
 
-	mux := NewServeMux(wsrv.logger)
+	mux := NewServeMux(wsrv.logger, wsrv.IPHeader)
 	mux.HandleFunc("/css/", wsrv.immutableCache(wsrv.CSS))
 	mux.HandleFunc("/reports", wsrv.ReportIndex)
 	mux.HandleFunc("/reports/", wsrv.Report)
@@ -505,7 +514,7 @@ func (wsrv *WebServer) err(w http.ResponseWriter, r *http.Request, err error, co
 
 func (wsrv *WebServer) errMsg(w http.ResponseWriter, r *http.Request, msg string, code int) {
 	wsrv.logger.Errorf("error %d %q in response to %s %s for %s with user agent %q",
-		code, msg, r.Method, r.URL, r.RemoteAddr, r.Header.Get("User-Agent"))
+		code, msg, r.Method, r.URL, getIP(r, wsrv.IPHeader), r.Header.Get("User-Agent"))
 	http.Error(w, msg, code)
 }
 
