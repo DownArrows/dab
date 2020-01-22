@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/russross/blackfriday"
+	"github.com/russross/blackfriday/v2"
 	"html/template"
 	"net"
 	"net/http"
