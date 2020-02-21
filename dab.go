@@ -152,7 +152,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		dab.components.RedditUsers = NewRedditUsers(dab.logger, redditAPI, dab.conf.Reddit.RedditUsersConf)
 
 		retrier := NewRetrier(dab.conf.Reddit.Retry, func(r *Retrier, err error) {
-			dab.logger.Errorf("error in reddit component, restarting (%d retries, %s backoff): %v", r.Retries, r.Backoff, err)
+			dab.logger.Errorf("error in reddit component, restarting (%s): %v", r, err)
 		})
 
 		tasks.SpawnCtx(retrier.Set(func(ctx context.Context) error {
@@ -177,7 +177,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		}
 
 		retrier := NewRetrier(dab.conf.Discord.Retry, func(r *Retrier, err error) {
-			dab.logger.Errorf("error in discord component, restarting (%d retries, %s backoff): %v", r.Retries, r.Backoff, err)
+			dab.logger.Errorf("error in discord component, restarting (%s): %v", r, err)
 		})
 
 		tasks.SpawnCtx(retrier.Set(func(ctx context.Context) error {

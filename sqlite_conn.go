@@ -271,7 +271,8 @@ func (sc *BaseSQLiteConn) retry(cb func() error) error {
 }
 
 func (sc *BaseSQLiteConn) logRetry(r *Retrier, err error) {
-	sc.logger.Errorf("SQLite connection %p at %q got an error, retrying: %v", sc, sc.path, err)
+	sc.logger.Debugf("error with SQLite connection %p at %q, retrying (%s): %v", sc, sc.path, r, err)
+	sc.logger.Errorf("error when executing a database operation, retrying (%s): %v", r, err)
 }
 
 // SQLiteBackup is a wrapper for *sqlite.Backup with retries.
@@ -296,9 +297,8 @@ func (b *SQLiteBackup) Step(n int) error {
 }
 
 func (b *SQLiteBackup) logRetry(r *Retrier, err error) {
-	b.logger.Debugf("error when saving pages with SQLite backup %p from %s to %s, retrying: %v", b, b.srcPath, b.destPath, err)
-	b.logger.Errorf("error with a database backup from %s to %s, retrying (%d/%d, backoff %s): %v",
-		b.srcPath, b.destPath, r.Retries, r.Times, r.Backoff, err)
+	b.logger.Debugf("error when saving pages with SQLite backup %p from %s to %s, retrying (%s): %v", b, b.srcPath, b.destPath, r, err)
+	b.logger.Errorf("error with a database backup from %s to %s, retrying (%s): %v", b.srcPath, b.destPath, r, err)
 }
 
 // SQLiteStmt is a wrapper for sqlite.Stmt that supports automatic retry with busy errors.
@@ -403,9 +403,8 @@ func (stmt *SQLiteStmt) retry(cb func() error) error {
 }
 
 func (stmt *SQLiteStmt) logRetry(r *Retrier, err error) {
-	stmt.logger.Debugf("error in SQLite statement %p, retrying: %v", stmt, err)
-	stmt.logger.Errorf("error within a database connection, retrying (%d/%d, backoff %s): %v",
-		r.Retries, r.Times, r.Backoff, err)
+	stmt.logger.Debugf("error with SQLite statement %p, retrying (%s): %v", stmt, r, err)
+	stmt.logger.Errorf("error when executing a database operation, retrying (%s): %v", r, err)
 }
 
 // IsSQLiteForeignKeyErr tests if the error is an error with a foreign key constraint.

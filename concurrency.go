@@ -173,6 +173,19 @@ func NewRetrier(conf RetryConf, onError func(*Retrier, error)) *Retrier {
 	}
 }
 
+// Implement the Stringer interface with human-readable information about the state of the retrier.
+func (r *Retrier) String() string {
+	times := ""
+	max_interval := ""
+	if r.Times > -1 {
+		times = fmt.Sprintf("/%d", r.Times)
+	}
+	if r.MaxInterval > 0 {
+		max_interval = fmt.Sprintf("/%s", r.MaxInterval)
+	}
+	return fmt.Sprintf("%d%s retries with %s%s of backoff", r.Retries, times, r.Backoff, max_interval)
+}
+
 // Set binds a Retrier to a Task and returns the Retrier so that the method can be chained.
 func (r *Retrier) Set(task Task) *Retrier {
 	r.Callback = task
