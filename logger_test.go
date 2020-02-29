@@ -21,6 +21,10 @@ func (tl TestLevelLogger) Debugf(template string, msg ...interface{}) {
 	tl.t.Logf(template, msg...)
 }
 
+func (tl TestLevelLogger) Debugd(cb func() interface{}) {
+	tl.t.Log(cb())
+}
+
 func (tl TestLevelLogger) Error(err error) {
 	tl.t.Error(err)
 }
@@ -28,6 +32,11 @@ func (tl TestLevelLogger) Error(err error) {
 func (tl TestLevelLogger) Errorf(template string, msg ...interface{}) {
 	tl.t.Errorf(template, msg...)
 }
+
+func (tl TestLevelLogger) Errord(cb func() interface{}) {
+	tl.t.Error(cb())
+}
+
 
 func (tl TestLevelLogger) Fatal(err error) {
 	tl.t.Fatal(err)
@@ -43,4 +52,8 @@ func (tl TestLevelLogger) Info(msg interface{}) {
 
 func (tl TestLevelLogger) Infof(template string, msg ...interface{}) {
 	tl.t.Logf(template, msg...)
+}
+
+func (tl TestLevelLogger) Infod(cb func() interface{}) {
+	tl.t.Log(cb())
 }
