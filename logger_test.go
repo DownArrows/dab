@@ -33,10 +33,9 @@ func (tl TestLevelLogger) Errorf(template string, msg ...interface{}) {
 	tl.t.Errorf(template, msg...)
 }
 
-func (tl TestLevelLogger) Errord(cb func() interface{}) {
+func (tl TestLevelLogger) Errord(cb func() error) {
 	tl.t.Error(cb())
 }
-
 
 func (tl TestLevelLogger) Fatal(err error) {
 	tl.t.Fatal(err)

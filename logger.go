@@ -31,6 +31,7 @@ type LevelLogger interface {
 	Debugd(func() interface{})
 	Debugf(string, ...interface{})
 	Error(error)
+	Errord(func() error)
 	Errorf(string, ...interface{})
 	Fatal(error)
 	Fatalf(string, ...interface{})
@@ -54,6 +55,7 @@ func NewStdLevelLogger(out io.Writer, level string) (*StdLevelLogger, error) {
 	}
 	return &StdLevelLogger{out: out, level: priority}, nil
 }
+
 // Debug writes a debug message.
 func (ll *StdLevelLogger) Debug(msg interface{}) {
 	if ll.include("Debug") {
@@ -91,8 +93,10 @@ func (ll *StdLevelLogger) Errorf(template string, opts ...interface{}) {
 }
 
 // Errord logs a deferred error.
-func (ll *StdLevelLogger) Errord(cb func() interface{}) {
-	ll.logLevelDeferred("Error", cb)
+func (ll *StdLevelLogger) Errord(cb func() error) {
+	if ll.include("Error") {
+		ll.log(cb())
+	}
 }
 
 // Fatal logs an error and stops the application.
@@ -119,7 +123,9 @@ func (ll *StdLevelLogger) Infof(template string, opts ...interface{}) {
 
 // Infod writes a deferred info-level message.
 func (ll *StdLevelLogger) Infod(cb func() interface{}) {
-	ll.logLevelDeferred("Info", cb)
+	if ll.include("Info") {
+		ll.log(cb())
+	}
 }
 
 func (ll *StdLevelLogger) include(level string) bool {
@@ -128,12 +134,6 @@ func (ll *StdLevelLogger) include(level string) bool {
 		panic(fmt.Sprintf("invalid logging level %s; this is a mistake in the source code", level))
 	}
 	return ll.level >= priority
-}
-
-func (ll *StdLevelLogger) logLevelDeferred(level string, cb func() interface{}) {
-	if ll.include(level) {
-		ll.logLevel(level, cb())
-	}
 }
 
 func (ll *StdLevelLogger) logLevel(level string, msg interface{}) {

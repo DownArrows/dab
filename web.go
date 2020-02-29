@@ -102,10 +102,16 @@ func (mux *ServeMux) Handle(pattern string, handler http.Handler) {
 func (mux *ServeMux) ServeHTTP(baseWriter http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if err := recover(); err != nil {
-			mux.logger.Errorf("web server error in response to %s %s for %s: %v", r.Method, r.URL, getIP(r, mux.IPHeader), err)
+			mux.logger.Errord(func() error {
+				return fmt.Errorf("web server error in response to %s %s for %s: %v",
+					r.Method, r.URL, getIP(r, mux.IPHeader), err)
+			})
 		}
 	}()
-	mux.logger.Infof("web server serve %s %s for %s with user agent %q", r.Method, r.URL, getIP(r, mux.IPHeader), r.Header.Get("User-Agent"))
+	mux.logger.Infod(func() interface{} {
+		return fmt.Sprintf("web server serve %s %s for %s with user agent %q",
+			r.Method, r.URL, getIP(r, mux.IPHeader), r.Header.Get("User-Agent"))
+	})
 	w := NewResponseWriter(baseWriter, r)
 	mux.actual.ServeHTTP(w, r)
 	if err := w.Close(); err != nil {
@@ -513,8 +519,10 @@ func (wsrv *WebServer) err(w http.ResponseWriter, r *http.Request, err error, co
 }
 
 func (wsrv *WebServer) errMsg(w http.ResponseWriter, r *http.Request, msg string, code int) {
-	wsrv.logger.Errorf("web server error %d %q in response to %s %s for %s with user agent %q",
-		code, msg, r.Method, r.URL, getIP(r, wsrv.IPHeader), r.Header.Get("User-Agent"))
+	wsrv.logger.Errord(func() error {
+		return fmt.Errorf("web server error %d %q in response to %s %s for %s with user agent %q",
+			code, msg, r.Method, r.URL, getIP(r, wsrv.IPHeader), r.Header.Get("User-Agent"))
+	})
 	http.Error(w, msg, code)
 }
 
