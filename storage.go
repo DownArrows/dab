@@ -90,7 +90,7 @@ func (s *Storage) Backup(ctx context.Context, conn StorageConn) error {
 	if older, err := FileOlderThan(s.BackupPath(), s.backupMaxAge); err != nil {
 		return err
 	} else if !older {
-		s.logger.Debugf("database backup was not older than %v, nothing was done", s.backupMaxAge)
+		s.logger.Debugf("in Storage %p on %s, database backup was not older than %v, nothing was done", s, s.backupMaxAge)
 		return nil
 	}
 	return s.db.Backup(ctx, conn, SQLiteBackupOptions{

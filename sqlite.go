@@ -82,8 +82,8 @@ func NewSQLiteDatabase(ctx context.Context, logger LevelLogger, opts SQLiteDatab
 		logger:  logger,
 	}
 
-	db.logger.Debugf("opening database %p at %q, version %s, application ID 0x%x, cleanup interval %s",
-		db, db.Path, db.Version, db.AppID, db.CleanupInterval)
+	db.logger.Debugf("opening %s, version %s, application ID 0x%x, cleanup interval %s",
+		db, db.Version, db.AppID, db.CleanupInterval)
 
 	conn, err := db.GetConn(ctx)
 	if err != nil {
@@ -201,12 +201,16 @@ func (db *SQLiteDatabase) getWrittenVersion(conn SQLiteConn) error {
 	}
 
 	db.WrittenVersion = SemVerFromInt(intVersion)
-	db.logger.Debugf("%p found database at %q with version %s", db, db.Path, db.WrittenVersion)
+	db.logger.Debugf("%s found version %s", db, db.WrittenVersion)
 	return nil
 }
 
+func (db *SQLiteDatabase) String() string {
+	return fmt.Sprintf("SQLite database %p at %q", db, db.Path)
+}
+
 func (db *SQLiteDatabase) setVersion(conn SQLiteConn, version SemVer) error {
-	db.logger.Debugf("database %p writing version %s at %q", db, version, db.Path)
+	db.logger.Debugf("%s writing version %s", db, version)
 	// String interpolation is needed because the driver for SQLite doesn't deal with this case
 	if err := conn.Exec(fmt.Sprintf("PRAGMA user_version = %d", version.ToInt())); err != nil {
 		return err
@@ -220,11 +224,11 @@ func (db *SQLiteDatabase) migrate(conn SQLiteConn) error {
 		// The migrations are supposed to be sorted from lowest to highest version,
 		// so there's no point in having a stop condition.
 		if migration.From.AfterOrEqual(db.WrittenVersion) && db.Version.AfterOrEqual(migration.To) {
-			db.logger.Infof("migrating database %p at %q from version %s to %s", db, db.Path, migration.From, migration.To)
+			db.logger.Infof("migrating database %q from version %s to %s", db.Path, migration.From, migration.To)
 			if err := migration.Exec(conn); err != nil {
 				return err
 			}
-			db.logger.Infof("migration of database %p at %q from version %s to %s successful", db, db.Path, migration.From, migration.To)
+			db.logger.Infof("migration of database %q from version %s to %s successful", db.Path, migration.From, migration.To)
 			// Set new version in case there's an error in the next loop,
 			// so that the user can easily retry the migration.
 			if err := db.setVersion(conn, migration.To); err != nil {
@@ -249,7 +253,7 @@ func (db *SQLiteDatabase) foreignKeysCheck(conn SQLiteConn) error {
 		return err
 	}
 	if len(checks) > 0 {
-		return fmt.Errorf("foreign key error(s) in database at %q: %+v", db.Path, checks)
+		return fmt.Errorf("foreign key error(s) in database %q: %+v", db.Path, checks)
 	}
 	return nil
 }
@@ -268,7 +272,7 @@ func (db *SQLiteDatabase) quickCheck(conn SQLiteConn) error {
 		return err
 	}
 	if len(errs) > 0 {
-		return fmt.Errorf("integrity check error(s) in database at %q: %v", db.Path, errs)
+		return fmt.Errorf("integrity check error(s) in database %q: %v", db.Path, errs)
 	}
 	return nil
 }
@@ -287,7 +291,7 @@ func (db *SQLiteDatabase) PeriodicCleanup(ctx context.Context) error {
 	defer conn.Close()
 
 	for SleepCtx(ctx, db.CleanupInterval) {
-		db.logger.Debugf("performing incremental vacuum of database %p at %q", db, db.Path)
+		db.logger.Debugf("performing incremental vacuum of %s", db)
 		if err := conn.Exec("PRAGMA incremental_vacuum"); err != nil {
 			return err
 		}
@@ -300,7 +304,7 @@ func (db *SQLiteDatabase) Backup(ctx context.Context, srcConn SQLiteConn, opts S
 	db.backups.Lock()
 	defer db.backups.Unlock()
 
-	db.logger.Debugf("opening connection at %q for backup from database %p at %q", opts.DestPath, db, db.Path)
+	db.logger.Debugf("opening connection at %q for backup from %s", opts.DestPath, db)
 	destOpts := db.getConnDefaultOptions()
 	destOpts.Path = opts.DestPath
 	destConn, err := NewBaseSQLiteConn(ctx, db.logger, destOpts)
@@ -315,15 +319,15 @@ func (db *SQLiteDatabase) Backup(ctx context.Context, srcConn SQLiteConn, opts S
 	}
 	defer backup.Close()
 
-	db.logger.Debugf("backup connection %p and %p from %q to %q established",
-		srcConn, destConn, db.Path, opts.DestPath)
+	db.logger.Debugf("with %s, backup connection %p and %p from %q to %q established",
+		db, srcConn, destConn, db.Path, opts.DestPath)
 
 	for {
 		// Surprisingly, this is the best way to avoid getting a "database locked" error,
 		// instead of saving a few pages at a time.
 		// This is probably due to SQLite's deadlock detetection in its notify API.
-		db.logger.Debugf("backup connection %p and %p from %q to %q trying to backup all pages",
-			srcConn, destConn, db.Path, opts.DestPath)
+		db.logger.Debugf("with %s, backup connection %p and %p from %q to %q trying to backup all pages",
+			db, srcConn, destConn, db.Path, opts.DestPath)
 		err = backup.Step(-1) // -1 saves all remaining pages.
 		if err != nil {
 			break

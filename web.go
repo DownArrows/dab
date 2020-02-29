@@ -102,10 +102,10 @@ func (mux *ServeMux) Handle(pattern string, handler http.Handler) {
 func (mux *ServeMux) ServeHTTP(baseWriter http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if err := recover(); err != nil {
-			mux.logger.Errorf("error in response to %s %s for %s: %v", r.Method, r.URL, getIP(r, mux.IPHeader), err)
+			mux.logger.Errorf("web server error in response to %s %s for %s: %v", r.Method, r.URL, getIP(r, mux.IPHeader), err)
 		}
 	}()
-	mux.logger.Infof("serve %s %s for %s with user agent %q", r.Method, r.URL, getIP(r, mux.IPHeader), r.Header.Get("User-Agent"))
+	mux.logger.Infof("web server serve %s %s for %s with user agent %q", r.Method, r.URL, getIP(r, mux.IPHeader), r.Header.Get("User-Agent"))
 	w := NewResponseWriter(baseWriter, r)
 	mux.actual.ServeHTTP(w, r)
 	if err := w.Close(); err != nil {
@@ -156,7 +156,7 @@ func NewWebServer(logger LevelLogger, storage *Storage, reports ReportFactory, c
 	mux.HandleFunc("/compendium/comments/user/", wsrv.CompendiumUserComments)
 	mux.HandleFunc("/backup", wsrv.Backup)
 	if conf.RootDir != "" {
-		wsrv.logger.Infof("web server serving the directory %q", wsrv.RootDir)
+		wsrv.logger.Infof("web server serving directory %q", wsrv.RootDir)
 		mux.Handle("/", http.FileServer(http.Dir(wsrv.RootDir)))
 	}
 
@@ -195,7 +195,7 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 		tasks.SpawnCtx(func(ctx context.Context) error { return wsrv.conns.Analyze(ctx, interval) })
 	}
 
-	wsrv.logger.Infof("web server listening on http://%s", wsrv.server.Addr)
+	wsrv.logger.Infof("listening on http://%s", wsrv.server.Addr)
 
 	return tasks.Wait().ToError()
 }
@@ -513,7 +513,7 @@ func (wsrv *WebServer) err(w http.ResponseWriter, r *http.Request, err error, co
 }
 
 func (wsrv *WebServer) errMsg(w http.ResponseWriter, r *http.Request, msg string, code int) {
-	wsrv.logger.Errorf("error %d %q in response to %s %s for %s with user agent %q",
+	wsrv.logger.Errorf("web server error %d %q in response to %s %s for %s with user agent %q",
 		code, msg, r.Method, r.URL, getIP(r, wsrv.IPHeader), r.Header.Get("User-Agent"))
 	http.Error(w, msg, code)
 }

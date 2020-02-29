@@ -85,7 +85,7 @@ func NewBaseSQLiteConn(ctx context.Context, logger LevelLogger, conf SQLiteConnO
 	}
 
 	err := sc.retry(func() error {
-		sc.logger.Debugf("trying to connect SQLite connection %p to %q", sc, sc.path)
+		sc.logger.Debugf("trying to connect %s", sc)
 		conn, err := sqlite.Open(conf.Path, conf.OpenOptions)
 		if err != nil {
 			return err
@@ -102,7 +102,7 @@ func NewBaseSQLiteConn(ctx context.Context, logger LevelLogger, conf SQLiteConnO
 		return nil, err
 	}
 
-	sc.logger.Debugf("created SQLite connection %p to %q", sc, sc.path)
+	sc.logger.Debugf("created %s", sc)
 	return sc, nil
 }
 
@@ -124,16 +124,16 @@ func (sc *BaseSQLiteConn) Close() error {
 		return nil
 	}
 	sc.closed = true
-	sc.logger.Debugf("closing SQLite connection %p to %q", sc, sc.path)
+	sc.logger.Debugf("closing %s", sc)
 	if sc.AnalyzeOnClose {
-		sc.logger.Debugf("analyzing statistics of SQLite connection %p to %q", sc, sc.path)
+		sc.logger.Debugf("analyzing statistics of %s", sc)
 		if err := sc.Exec("ANALYZE"); err != nil && !IsCancellation(err) {
-			sc.logger.Errorf("error when analyzing statistics of SQLite connnection %p to %q before closing: %v", sc, sc.path, err)
+			sc.logger.Errorf("error when analyzing statistics of %s before closing: %v", sc, err)
 		}
 	}
 	err := sc.conn.Close()
 	if err != nil {
-		sc.logger.Debugf("closed SQLite connection %p to %q with error %v", sc, sc.path, err)
+		sc.logger.Debugf("closed %s with error %v", sc, err)
 	}
 	return err
 }
@@ -191,7 +191,7 @@ func (sc *BaseSQLiteConn) Prepare(sql string, args ...interface{}) (*SQLiteStmt,
 	var sqltStmt *sqlite.Stmt
 	err := sc.retry(func() error {
 		var err error
-		sc.logger.Debugf("preparing SQL statement |%v| with arguments %v for connection %p on %q", sql, args, sc, sc.path)
+		sc.logger.Debugf("preparing for %s an SQL statement with the query |%v| and arguments %v", sc, sql, args)
 		sqltStmt, err = sc.conn.Prepare(sql, args...)
 		return err
 	})
@@ -201,14 +201,19 @@ func (sc *BaseSQLiteConn) Prepare(sql string, args ...interface{}) (*SQLiteStmt,
 		Retry:  sc.Retry,
 		stmt:   sqltStmt,
 	}
-	sc.logger.Debugf("prepared SQL statement %p with query |%v| and arguments %v for connection %p on %q: %+v", stmt, sql, args, sc, sc.path, stmt)
+	sc.logger.Debugf("running for %s prepared statement %s with query |%v| and arguments %v", sc, stmt, sql, args)
 	return stmt, err
+}
+
+// String implements Stringer interface for better logging.
+func (sc *BaseSQLiteConn) String() string {
+	return fmt.Sprintf("SQLite connection %p on %q", sc, sc.path)
 }
 
 // Select implements SQLiteConn.
 func (sc *BaseSQLiteConn) Select(sql string, cb func(*SQLiteStmt) error, args ...interface{}) error {
 	return sc.retry(func() error {
-		sc.logger.Debugf("row scan from SQL statement |%v| with arguments %v for connection %p on %q", sql, args, sc, sc.path)
+		sc.logger.Debugf("row scan from SQL statement |%v| with arguments %v for %s", sql, args, sc)
 		stmt, err := sc.Prepare(sql, args...)
 		if err != nil {
 			return err
@@ -221,7 +226,7 @@ func (sc *BaseSQLiteConn) Select(sql string, cb func(*SQLiteStmt) error, args ..
 // Exec implements SQLiteConn.
 func (sc *BaseSQLiteConn) Exec(sql string, args ...interface{}) error {
 	return sc.retry(func() error {
-		sc.logger.Debugf("executing SQL statement |%v| with arguments %v for connection %p on %q", sql, args, sc, sc.path)
+		sc.logger.Debugf("executing SQL statement |%v| with arguments %v for %s", sql, args, sc)
 		return sc.conn.Exec(sql, args...)
 	})
 }
@@ -229,7 +234,7 @@ func (sc *BaseSQLiteConn) Exec(sql string, args ...interface{}) error {
 // MultiExec implements SQLiteConn.
 func (sc *BaseSQLiteConn) MultiExec(queries []SQLQuery) error {
 	return sc.retry(func() error {
-		sc.logger.Debugf("executing with SQLite connection %p at %q multiple SQL queries: %+v", sc, sc.path, queries)
+		sc.logger.Debugf("executing with %s multiple SQL queries: %+v", sc, queries)
 		for _, query := range queries {
 			if err := sc.Exec(query.SQL, query.Args...); err != nil {
 				return err
@@ -242,7 +247,7 @@ func (sc *BaseSQLiteConn) MultiExec(queries []SQLQuery) error {
 // WithTx implements SQLiteConn.
 func (sc *BaseSQLiteConn) WithTx(cb func() error) error {
 	return sc.retry(func() error {
-		sc.logger.Debugf("executing SQL transaction with connection %p on %q", sc, sc.path)
+		sc.logger.Debugf("executing SQL transaction with %s", sc)
 		return sc.conn.WithTx(cb)
 	})
 }
@@ -250,7 +255,7 @@ func (sc *BaseSQLiteConn) WithTx(cb func() error) error {
 // MultiExecWithTx implements SQLiteConn.
 func (sc *BaseSQLiteConn) MultiExecWithTx(queries []SQLQuery) error {
 	return sc.retry(func() error {
-		sc.logger.Debugf("executing with SQLite connection %p at %q within a transaction multiple SQL queries: %+v", sc, sc.path, queries)
+		sc.logger.Debugf("executing with %s multiple SQL queries within a transaction: %+v", sc, queries)
 		return sc.conn.WithTx(func() error { return sc.MultiExec(queries) })
 	})
 }
@@ -271,7 +276,7 @@ func (sc *BaseSQLiteConn) retry(cb func() error) error {
 }
 
 func (sc *BaseSQLiteConn) logRetry(r *Retrier, err error) {
-	sc.logger.Debugf("error with SQLite connection %p at %q, retrying (%s): %v", sc, sc.path, r, err)
+	sc.logger.Debugf("error with %s, retrying (%s): %v", sc, r, err)
 	sc.logger.Errorf("error when executing a database operation, retrying (%s): %v", r, err)
 }
 
@@ -307,6 +312,11 @@ type SQLiteStmt struct {
 	ctx    context.Context
 	logger LevelLogger
 	stmt   *sqlite.Stmt
+}
+
+// String implements the Stringer interface for better logging.
+func (stmt *SQLiteStmt) String() string {
+	return fmt.Sprintf("SQLite statement %p wrapping %p and using context %p", stmt, stmt.stmt, stmt.ctx)
 }
 
 // Close closes the statement (simple wrapper).
