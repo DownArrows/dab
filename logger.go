@@ -6,19 +6,23 @@ import (
 	"os"
 	"path"
 	"runtime"
-	"strconv"
 )
 
-// LevelLoggerLevels is a list of the names of the available levels of logging.
-var LevelLoggerLevels = []string{"Fatal", "Error", "Info", "Debug"}
-
-// Constants corresponding to the available levels of logging, such as the most important level is the lowest integer.
-const (
-	LevelLoggerFatal = iota
-	LevelLoggerError
-	LevelLoggerInfo
-	LevelLoggerDebug
+var (
+	// LevelLoggerLevels is a list of the names of the available levels of logging,
+	// ordered from the most important to the least.
+	LevelLoggerLevels = []string{"Fatal", "Error", "Info", "Debug"}
+	// LevelLoggerPriority is a map from the names of the logging levels to their priority.
+	LevelLoggerPriority = makeLevelLoggerPriorities()
 )
+
+func makeLevelLoggerPriorities() map[string]int {
+	priorities := make(map[string]int)
+	for priority, level := range LevelLoggerLevels {
+		priorities[level] = priority
+	}
+	return priorities
+}
 
 // LevelLogger is a logger that has several levels of severity
 // and has methods for easy templating of the messages.
@@ -42,79 +46,65 @@ type StdLevelLogger struct {
 // NewStdLevelLogger creates a new StdLevelLogger that writes to the given io.Writer messages up to the level with the given name.
 // Returns an error if the name of the logging level is invalid.
 func NewStdLevelLogger(out io.Writer, level string) (*StdLevelLogger, error) {
-
-	intMap := map[string]int{
-		"Fatal": LevelLoggerFatal,
-		"Error": LevelLoggerError,
-		"Info":  LevelLoggerInfo,
-		"Debug": LevelLoggerDebug,
-	}
-	if _, ok := intMap[level]; !ok {
+	priority, exists := LevelLoggerPriority[level]
+	if !exists {
 		return nil, fmt.Errorf("invalid logging level %s", level)
 	}
-
-	return &StdLevelLogger{out: out, level: intMap[level]}, nil
+	return &StdLevelLogger{out: out, level: priority}, nil
 }
 
 // Debug writes a debug message.
 func (ll *StdLevelLogger) Debug(msg interface{}) {
-	if ll.level >= LevelLoggerDebug {
+	if ll.level >= LevelLoggerPriority["Debug"] {
 		file, line := locateInSource(2)
-		ll.log(LevelLoggerDebug, fmt.Sprintf("%s:%d: %s", file, line, msg))
+		ll.log(LevelLoggerPriority["Debug"], fmt.Sprintf("%s:%d: %s", file, line, msg))
 	}
 }
 
 // Debugf writes a debug message with a template.
 func (ll *StdLevelLogger) Debugf(template string, opts ...interface{}) {
-	if ll.level >= LevelLoggerDebug {
+	if ll.level >= LevelLoggerPriority["Debug"] {
 		file, line := locateInSource(2)
-		ll.logf(LevelLoggerDebug, file+":"+strconv.Itoa(line)+": "+template, opts...)
+		full_template := fmt.Sprintf("%s:%d: %s", file, line, template)
+		ll.log(LevelLoggerPriority["Debug"], fmt.Sprintf(full_template, opts...))
 	}
 }
 
 // Error logs an error.
 func (ll *StdLevelLogger) Error(err error) {
-	ll.log(LevelLoggerError, err)
+	ll.log(LevelLoggerPriority["Error"], err)
 }
 
 // Errorf logs an error with a template.
 func (ll *StdLevelLogger) Errorf(template string, opts ...interface{}) {
-	ll.logf(LevelLoggerError, template, opts...)
+	ll.log(LevelLoggerPriority["Error"], fmt.Sprintf(template, opts...))
 }
 
 // Fatal logs an error and stops the application.
 func (ll *StdLevelLogger) Fatal(err error) {
-	ll.log(LevelLoggerFatal, err)
+	ll.log(LevelLoggerPriority["Fatal"], err)
 	os.Exit(1)
 }
 
 // Fatalf logs an error with a template and stops the application.
 func (ll *StdLevelLogger) Fatalf(template string, opts ...interface{}) {
-	ll.logf(LevelLoggerFatal, template, opts...)
+	ll.log(LevelLoggerPriority["Fatal"], fmt.Sprintf(template, opts...))
 	os.Exit(1)
 }
 
 // Info writes an info-level message.
 func (ll *StdLevelLogger) Info(msg interface{}) {
-	ll.log(LevelLoggerInfo, msg)
+	ll.log(LevelLoggerPriority["Info"], msg)
 }
 
 // Infof writes an info-level message with a template.
 func (ll *StdLevelLogger) Infof(template string, opts ...interface{}) {
-	ll.logf(LevelLoggerInfo, template, opts...)
+	ll.log(LevelLoggerPriority["Info"], fmt.Sprintf(template, opts...))
 }
 
 func (ll *StdLevelLogger) log(level int, msg interface{}) {
 	if ll.level >= level {
 		if _, err := fmt.Fprintf(ll.out, "%s\n", msg); err != nil {
-			panic(err)
-		}
-	}
-}
-
-func (ll *StdLevelLogger) logf(level int, template string, opts ...interface{}) {
-	if ll.level >= level {
-		if _, err := fmt.Fprintf(ll.out, template+"\n", opts...); err != nil {
 			panic(err)
 		}
 	}
