@@ -165,7 +165,7 @@ This can be used in a backup script called by cron, like so:
 	#!/bin/sh
 	set -e
 	bak="/srv/dab/dab.db.bak"
-	wget -O"$bak" -q http://localhost:12345/backup
+	wget -O"$bak" -q http://localhost:3499/backup
 	rsync -e "ssh -i /root/.ssh/backup" "$bak" backup@anothercomputer:/var/backups/dab.sqlite3
 
 If after the bot has stopped there are files ending in `-shm`, `-wal` and `-journal` in the folder containing the database file,
