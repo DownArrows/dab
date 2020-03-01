@@ -140,12 +140,10 @@ If you want to run it with [systemd](https://en.wikipedia.org/wiki/Systemd), her
 	WantedBy=multi-user.target
 
 	[Service]
-	ExecStart=/usr/local/bin/dab -log Error -config /etc/dab.conf.json
+	ExecStart=/usr/local/bin/dab -config /etc/dab.conf.json
 	Restart=on-failure
 
 It also partially supports systemd's socket activation, with a limitation to a single socket for the moment being.
-
-If you feel the need to be sure it is actually doing something, run it with `-log Debug`.
 
 The bot shuts down on the following UNIX signals: SIGINT, SIGTERM, and SIGKILL.
 On Windows it will not respond to Ctrl+C.
@@ -183,7 +181,7 @@ The command line interface only affects the overall behavior of the program:
  - `-config` Path to the configuration file. Defaults to `./dab.conf.json`
  - `-help` Print the help for the command line interface.
  - `-initdb` Initialize the database and exit.
- - `-log` Logging level (`Error`, `Info`, `Debug`). Defaults to `Info`.
+ - `-log` (deprecated) Logging level (`Error`, `Info`, `Debug`). Defaults to `Info`.
  - `-report` Print the report for last week on the standard output and exit.
  - `-useradd` (deprecated) Add one or multiple user names separated by a white space or a comma to be tracked and exit.
 
@@ -200,6 +198,8 @@ There are three application-specific types, which are JSON strings interpreted a
 and [template](http://golang.org/pkg/text/template/).
 
  - `hide_prefix` *string* (hide/): prefix you can add to user names to hide them from reports (used by `-useradd` and on Discord)
+ - `log_level` *string* (Info): top-level logging level and default logging level for components
+   ("Fatal", "Error", "Info", "Debug", case-insensitive)
  - `timezone` *timezone* (UTC): timezone used to format dates and compute weeks and years
  - `database`
     - `backup_max_age` *duration* (24h): if the backup is older than that when a backup is requested,
@@ -207,6 +207,7 @@ and [template](http://golang.org/pkg/text/template/).
     - `backup_path` *string* (./dab.db.backup): path to the backup of the database
     - `cleanup_interval` *duration* (30m): interval between clean-ups of the database (reduces its size and optimizes queries);
        put at `0s` to disable, else must be at least one minute
+    - `log_level` *string* (*parent `log_level`*): logging level for this component ("Fatal", "Error", "Info", "Debug", case-insensitive)
     - `path` *string* (./dab.db): path to the database file
     - `retry_connection` *dictionary*:
        - `times` *int* (25): maximum number of times to try to create a connection to the database; use -1 for infinite retries
@@ -225,6 +226,7 @@ and [template](http://golang.org/pkg/text/template/).
     - `highscores` *string* (*none*): Discord ID of the channel where links to high-scoring comments are posted; disabled if left empty
     - `highscore_threshold` *int* (-1000): score at and below which a comment will be linked to in the highscore channel
     - `log` *string* (*none*): Discord ID of the channel where links to comments on reddit are reposted; disabled if left empty
+    - `log_level` *string* (*parent `log_level`*): logging level for this component ("Fatal", "Error", "Info", "Debug", case-insensitive)
     - `prefix` *string* (!): prefix for commands
     - `privileged_role` *string* (*none*): Discord ID of the role that can use privileged commands, along with the server's owner
     - `retry_connection` *dictionary*:
@@ -235,8 +237,8 @@ and [template](http://golang.org/pkg/text/template/).
     - `welcome` *template* (*none*): template of the welcome message; it is provided with three top-level keys,
       `ChannelsID`, `Member`, and `BotID`. `ChannelsID` provides `General`, `Log` and `HighScores`, which contains the numeric ID of those channels.
       `Member` provides `ID`, `Name`, and `FQN` (name followed by a discriminator).
-		`BotID` is the ID of the bot so that you can mention it with `<@{{.BotID}}>`.
-		Welcome messages are disabled if the template is empty or not set
+      `BotID` is the ID of the bot so that you can mention it with `<@{{.BotID}}>`.
+      Welcome messages are disabled if the template is empty or not set
  - `reddit`
     - `compendium` *dictionary* **Deprecated**:
        - `sub` *string* (*none*): sub on which the compendium can be found; leave out to disable scans of the compendium
@@ -250,12 +252,13 @@ and [template](http://golang.org/pkg/text/template/).
     - `id` *string* (*none*): Reddit application ID for the bot; leave out to disable the Reddit component
     - `inactivity_threshold` *duration* (2200h): if a user hasn't commented since that long ago,
       consider them "inactive" and scan them less often; must be at least one day
+    - `log_level` *string* (*parent `log_level`*): logging level for this component ("Fatal", "Error", "Info", "Debug", case-insensitive)
     - `max_age` *duration* (24h): don't get more batches of a user's comments if the oldest comment found is older than that;
       must be at least one day
     - `max_batches` *integer* (5): maximum number of batches of comments to get from Reddit for a single user before moving to the next one
     - `password` *string* (*none*): Reddit password for the bot's account; leave out to disable the Reddit component
     - `resurrections_interval` *duration* (*none*): interval between each batch of checks for suspended or deleted users;
-	 - `retry_connection` *dictionary*:
+    - `retry_connection` *dictionary*:
        - `times` *int* (10): maximum number of times to try to connect to Reddit; use -1 for infinite retries
        - `max_interval` *duration* (5m): maximum wait between connection retries
     - `secret` *string* (*none*): Reddit application secret for the bot; leave out to disable the Reddit component
@@ -279,6 +282,7 @@ and [template](http://golang.org/pkg/text/template/).
     - `ip_header` *string* (*none*): HTTP header that contains the true IP, so that logs can be accurate (use if behind a reverse-proxy)
     - `listen` *string* (*none*): `hostname:port` or `ip:port` or `:port` (all interfaces)
       specification for the webserver to listen to; leave out to disable
+    - `log_level` *string* (*parent `log_level`*): logging level for this component ("Fatal", "Error", "Info", "Debug", case-insensitive)
     - `max_limit` *integer* (1000): maximum number of items per page of paginated data
     - `nb_db_conn` *integer* (10): number of database connections open for the web server
     - `root_dir` *string* (*none*): root directory that is served at the root URL, with automatic directory index generation,
@@ -316,6 +320,7 @@ Note how the last value of a dictionary must not be followed by a comma:
 		},
 
 		"web": {
+			"log_level": "info",
 			"listen": "localhost:3499"
 		}
 
