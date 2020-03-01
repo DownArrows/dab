@@ -26,6 +26,7 @@ var userAddSeparators = regexp.MustCompile("[ ,]")
 type DownArrowsBot struct {
 	flagSet *flag.FlagSet
 	logger  LevelLogger
+	logLvl  string
 	logOut  io.Writer
 	stdOut  io.Writer
 
@@ -96,6 +97,13 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	}
 
 	dab.logger.Infof("running DAB version %s", Version)
+
+	if dab.runtimeConf.Report {
+		dab.logger.Info("the -report option has been superseded by the the web reports and is deprecated")
+	}
+	if dab.logLvl != "" {
+		dab.logger.Info("the -log option is deprecated and is without effect, use the configuration file instead")
+	}
 
 	for _, msg := range dab.conf.Deprecations() {
 		dab.logger.Info(msg)
@@ -229,27 +237,20 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 }
 
 func (dab *DownArrowsBot) parseFlags(args []string) error {
-	var log_lvl string
 	dab.flagSet.SetOutput(dab.stdOut)
-	dab.flagSet.StringVar(&log_lvl, "log", "", "Logging level ("+strings.Join(LevelLoggerLevels, ", ")+").")
+	dab.flagSet.StringVar(&dab.logLvl, "log", "", "Logging level ("+strings.Join(LevelLoggerLevels, ", ")+").")
 	dab.flagSet.StringVar(&dab.runtimeConf.ConfPath, "config", "./dab.conf.json", "Path to the configuration file.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.InitDB, "initdb", false, "Initialize the database and exit.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.Report, "report", false, "Print the report for the last week and exit (deprecated).")
 	dab.flagSet.StringVar(&dab.runtimeConf.UserAdd, "useradd", "",
 		"Add one or multiple usernames separated by a white space or a comma to be tracked and exit.")
+
 	if err := dab.flagSet.Parse(args); err != nil {
 		return err
 	}
 
 	if dab.flagSet.NArg() > 0 {
 		return errors.New("the application doesn't take any argument other than those given to its options as single strings")
-	}
-
-	if dab.runtimeConf.Report {
-		dab.logger.Info("the -report option has been superseded by the the web reports and is deprecated")
-	}
-	if log_lvl != "" {
-		dab.logger.Info("the -log option is deprecated and is without effect, use the configuration file instead")
 	}
 
 	return nil
