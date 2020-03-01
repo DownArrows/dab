@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strings"
 )
 
 var (
@@ -44,16 +45,18 @@ type LevelLogger interface {
 type StdLevelLogger struct {
 	out   io.Writer
 	level int
+	tag   string
 }
 
 // NewStdLevelLogger creates a new StdLevelLogger that writes to the given io.Writer messages up to the level with the given name.
 // Returns an error if the name of the logging level is invalid.
-func NewStdLevelLogger(out io.Writer, level string) (*StdLevelLogger, error) {
+func NewStdLevelLogger(name string, out io.Writer, level string) (*StdLevelLogger, error) {
+	level = strings.Title(strings.ToLower(level))
 	priority, exists := LevelLoggerPriority[level]
 	if !exists {
-		return nil, fmt.Errorf("invalid logging level %s", level)
+		return nil, fmt.Errorf("invalid logging level %q", level)
 	}
-	return &StdLevelLogger{out: out, level: priority}, nil
+	return &StdLevelLogger{out: out, level: priority, tag: "[" + name + "] "}, nil
 }
 
 // Debug writes a debug message.
@@ -79,7 +82,7 @@ func (ll *StdLevelLogger) Debugd(cb func() interface{}) {
 
 func (ll *StdLevelLogger) logDebug(msg interface{}) {
 	file, line := locateInSource(3)
-	ll.log(fmt.Sprintf("%s:%d: %s", file, line, msg))
+	ll.log("Debug", fmt.Sprintf("%s:%d: %s", file, line, msg))
 }
 
 // Error logs an error.
@@ -95,7 +98,7 @@ func (ll *StdLevelLogger) Errorf(template string, opts ...interface{}) {
 // Errord logs a deferred error.
 func (ll *StdLevelLogger) Errord(cb func() error) {
 	if ll.include("Error") {
-		ll.log(cb())
+		ll.log("Error", cb())
 	}
 }
 
@@ -124,7 +127,7 @@ func (ll *StdLevelLogger) Infof(template string, opts ...interface{}) {
 // Infod writes a deferred info-level message.
 func (ll *StdLevelLogger) Infod(cb func() interface{}) {
 	if ll.include("Info") {
-		ll.log(cb())
+		ll.log("Info", cb())
 	}
 }
 
@@ -138,12 +141,12 @@ func (ll *StdLevelLogger) include(level string) bool {
 
 func (ll *StdLevelLogger) logLevel(level string, msg interface{}) {
 	if ll.include(level) {
-		ll.log(msg)
+		ll.log(level, msg)
 	}
 }
 
-func (ll *StdLevelLogger) log(msg interface{}) {
-	if _, err := fmt.Fprintf(ll.out, "%s\n", msg); err != nil {
+func (ll *StdLevelLogger) log(level string, msg interface{}) {
+	if _, err := fmt.Fprintf(ll.out, "%s%s: %s\n", ll.tag, level, msg); err != nil {
 		panic(err)
 	}
 }

@@ -12,8 +12,9 @@ import (
 
 // Defaults defines the default configuration of the whole application.
 const Defaults string = `{
-	"timezone": "UTC",
+	"log_level": "Info",
 	"hide_prefix": "hide/",
+	"timezone": "UTC",
 
 	"database": {
 		"backup_max_age": "24h",
@@ -70,6 +71,7 @@ type StorageConf struct {
 	BackupMaxAge    Duration  `json:"backup_max_age"`
 	BackupPath      string    `json:"backup_path"`
 	CleanupInterval Duration  `json:"cleanup_interval"`
+	LogLevel        string    `json:"log_level"`
 	Path            string    `json:"path"`
 	Retry           RetryConf `json:"retry_connection"`
 	Timeout         Duration  `json:"timeout"`
@@ -167,16 +169,21 @@ type WebConf struct {
 
 // Configuration holds the configuration for the whole application.
 type Configuration struct {
-	Timezone   Timezone `json:"timezone"`
 	HidePrefix string   `json:"hide_prefix"`
+	LogLevel   string   `json:"log_level"`
+	Timezone   Timezone `json:"timezone"`
 
-	Database StorageConf
+	Database struct {
+		LogLevel string `json:"log_level"`
+		StorageConf
+	}
 
 	Reddit struct {
 		RedditAuth
 		RedditScannerConf
 		RedditUsersConf
 		DVTInterval      Duration           `json:"dvt_interval"` // Deprecated
+		LogLevel         string             `json:"log_level"`
 		Retry            RetryConf          `json:"retry_connection"`
 		UserAgent        string             `json:"user_agent"`
 		WatchSubmissions []WatchSubmissions `json:"watch_submissions"` // Deprecated
@@ -189,10 +196,14 @@ type Configuration struct {
 		DiscordBotConf
 		Admin              string    `json:"admin"` // Deprecated
 		HighScoreThreshold int64     `json:"highscore_threshold"`
+		LogLevel           string    `json:"log_level"`
 		Retry              RetryConf `json:"retry_connection"`
 	}
 
-	Web WebConf
+	Web struct {
+		LogLevel string `json:"log_level"`
+		WebConf
+	}
 }
 
 // NewConfiguration returns the configuration for the whole application by reading a JSON file given as a path.
@@ -231,6 +242,19 @@ func NewConfiguration(path string) (Configuration, error) {
 
 	if conf.Reddit.UnsuspensionInterval.Value != 0 {
 		conf.Reddit.ResurrectionsInterval.Value = conf.Reddit.UnsuspensionInterval.Value
+	}
+
+	if conf.Database.LogLevel == "" {
+		conf.Database.LogLevel = conf.LogLevel
+	}
+	if conf.Discord.LogLevel == "" {
+		conf.Discord.LogLevel = conf.LogLevel
+	}
+	if conf.Reddit.LogLevel == "" {
+		conf.Reddit.LogLevel = conf.LogLevel
+	}
+	if conf.Web.LogLevel == "" {
+		conf.Web.LogLevel = conf.LogLevel
 	}
 
 	return conf, nil

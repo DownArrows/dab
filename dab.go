@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"regexp"
 	"strings"
@@ -25,7 +26,6 @@ var userAddSeparators = regexp.MustCompile("[ ,]")
 type DownArrowsBot struct {
 	flagSet *flag.FlagSet
 	logger  LevelLogger
-	logLvl  string
 	logOut  io.Writer
 	stdOut  io.Writer
 
@@ -77,19 +77,11 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	var logger LevelLogger
-	if logger, err = NewStdLevelLogger(dab.logOut, dab.logLvl); err != nil {
-		return err
-	}
-	dab.logger = logger
-
-	dab.logger.Infof("running DAB version %s", Version)
-
 	// Most of the decisions about what parts of the code
 	// should be enabled is done there.
 	var conf Configuration
 	if conf, err = NewConfiguration(dab.runtimeConf.ConfPath); err != nil {
-		return err
+		return fmt.Errorf("error when reading configuration for DAB version %s: %v", Version, err)
 	}
 	dab.conf = conf
 	dab.components.ConfState = conf.Components()
@@ -98,12 +90,23 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
+	dab.logger, err = NewStdLevelLogger("dab", dab.logOut, conf.LogLevel)
+	if err != nil {
+		return fmt.Errorf("error when setting a logging level for the dab component: %v", err)
+	}
+
+	dab.logger.Infof("running DAB version %s", Version)
+
 	for _, msg := range dab.conf.Deprecations() {
 		dab.logger.Info(msg)
 	}
 
 	dab.logger.Infof("using database %s", dab.conf.Database.Path)
-	storage, conn, err := NewStorage(ctx, dab.logger, dab.conf.Database)
+	db_logger, err := NewStdLevelLogger("db", dab.logOut, conf.Database.LogLevel)
+	if err != nil {
+		return fmt.Errorf("error when setting a logging level for the database: %v", err)
+	}
+	storage, conn, err := NewStorage(ctx, db_logger, dab.conf.Database.StorageConf)
 	if err != nil {
 		return err
 	}
@@ -134,7 +137,11 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	dab.logger.Info(dab.components.ConfState)
 
 	if dab.components.ConfState.Web.Enabled {
-		dab.components.Web = NewWebServer(dab.logger, dab.layers.Storage, dab.layers.Report, dab.layers.Compendium, dab.conf.Web)
+		web_logger, err := NewStdLevelLogger("web", dab.logOut, dab.conf.Web.LogLevel)
+		if err != nil {
+			return fmt.Errorf("error when setting a logging level for the web server: %v", err)
+		}
+		dab.components.Web = NewWebServer(web_logger, dab.layers.Storage, dab.layers.Report, dab.layers.Compendium, dab.conf.Web.WebConf)
 		tasks.SpawnCtx(dab.components.Web.Run)
 	}
 
@@ -148,8 +155,12 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 			return err
 		}
 
-		dab.components.RedditScanner = NewRedditScanner(dab.logger, dab.layers.Storage, redditAPI, dab.conf.Reddit.RedditScannerConf)
-		dab.components.RedditUsers = NewRedditUsers(dab.logger, redditAPI, dab.conf.Reddit.RedditUsersConf)
+		reddit_logger, err := NewStdLevelLogger("reddit", dab.logOut, dab.conf.Reddit.LogLevel)
+		if err != nil {
+			return fmt.Errorf("error when setting a logging level for the reddit components: %v", err)
+		}
+		dab.components.RedditScanner = NewRedditScanner(reddit_logger, dab.layers.Storage, redditAPI, dab.conf.Reddit.RedditScannerConf)
+		dab.components.RedditUsers = NewRedditUsers(reddit_logger, redditAPI, dab.conf.Reddit.RedditUsersConf)
 
 		retrier := NewRetrier(dab.conf.Reddit.Retry, func(r *Retrier, err error) {
 			dab.logger.Errorf("error in reddit component, restarting (%s): %v", r, err)
@@ -167,10 +178,12 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	}
 
 	if dab.components.ConfState.Discord.Enabled {
-		var err error
-
+		discord_logger, err := NewStdLevelLogger("discord", dab.logOut, dab.conf.Discord.LogLevel)
+		if err != nil {
+			return err
+		}
 		// We're re-using the database's first connection here, don't share it with any other component.
-		dab.components.Discord, err = NewDiscordBot(dab.logger, conn, dab.layers.Storage.KV(),
+		dab.components.Discord, err = NewDiscordBot(discord_logger, conn, dab.layers.Storage.KV(),
 			dab.components.RedditUsers.Add, dab.conf.Discord.DiscordBotConf)
 		if err != nil {
 			return err
@@ -216,8 +229,9 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 }
 
 func (dab *DownArrowsBot) parseFlags(args []string) error {
+	var log_lvl string
 	dab.flagSet.SetOutput(dab.stdOut)
-	dab.flagSet.StringVar(&dab.logLvl, "log", "Info", "Logging level ("+strings.Join(LevelLoggerLevels, ", ")+").")
+	dab.flagSet.StringVar(&log_lvl, "log", "", "Logging level ("+strings.Join(LevelLoggerLevels, ", ")+").")
 	dab.flagSet.StringVar(&dab.runtimeConf.ConfPath, "config", "./dab.conf.json", "Path to the configuration file.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.InitDB, "initdb", false, "Initialize the database and exit.")
 	dab.flagSet.BoolVar(&dab.runtimeConf.Report, "report", false, "Print the report for the last week and exit (deprecated).")
@@ -233,6 +247,9 @@ func (dab *DownArrowsBot) parseFlags(args []string) error {
 
 	if dab.runtimeConf.Report {
 		dab.logger.Info("the -report option has been superseded by the the web reports and is deprecated")
+	}
+	if log_lvl != "" {
+		dab.logger.Info("the -log option is deprecated and is without effect, use the configuration file instead")
 	}
 
 	return nil

@@ -345,17 +345,17 @@ func (bot *DiscordBot) myColor(channelID string) int {
 
 func (bot *DiscordBot) setStatus() {
 	if err := bot.client.UpdateStatus(0, discordStatus); err != nil {
-		bot.logger.Errorf("couldn't set status on discord: %v", err)
+		bot.logger.Errorf("couldn't set status: %v", err)
 	}
 }
 
 // this is executed on each (re)-connection to Discord
 func (bot *DiscordBot) onReady(r *discordgo.Ready) error {
-	bot.logger.Debug("(re-)connected to discord, checking settings")
+	bot.logger.Debug("(re-)connected, checking settings")
 
 	// guild-related information and checks
 	if nb := len(r.Guilds); nb != 1 {
-		return fmt.Errorf("the bot needs to be in one and only one discord server (found in %d server(s))", nb)
+		return fmt.Errorf("the bot needs to be in one and only one server (found in %d server(s))", nb)
 	}
 
 	// The data structure representing guilds only has their ID set at this point.
@@ -369,9 +369,9 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) error {
 	bot.adminID = guild.OwnerID
 
 	if bot.privilegedRole == "" {
-		bot.logger.Info("no privileged discord role has been set, only the server's owner can use privileged commands")
+		bot.logger.Info("no privileged role has been set, only the server's owner can use privileged commands")
 	} else if !rolesHaveRoleID(guild.Roles, bot.privilegedRole) {
-		return fmt.Errorf("the discord server doesn't have a role with ID %s", bot.privilegedRole)
+		return fmt.Errorf("the server doesn't have a role with ID %s", bot.privilegedRole)
 	}
 
 	// check the channels
@@ -385,7 +385,7 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) error {
 		}
 
 		if _, err := bot.client.Channel(channelID); err != nil {
-			return fmt.Errorf("discord channel %s: %v", name, err)
+			return fmt.Errorf("channel %s: %v", name, err)
 		}
 	}
 
@@ -409,7 +409,7 @@ func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) error {
 			Discriminator: member.User.Discriminator,
 		},
 	}
-	bot.logger.Debugf("welcoming discord user %s", data.Member.FQN())
+	bot.logger.Debugf("welcoming user %s", data.Member.FQN())
 	if err := bot.welcome.Execute(&msg, data); err != nil {
 		return err
 	}
@@ -516,7 +516,7 @@ func (bot *DiscordBot) command(msg DiscordMessage) error {
 	bot.logger.Debugf("matched command %q, args %v, from user %s", cmd.Command, msg.Args, msg.Author.FQN())
 
 	if err := bot.client.ChannelTyping(msg.ChannelID); err != nil {
-		bot.logger.Errorf("discord bot error when setting typing status: %v", err)
+		bot.logger.Errorf("error when setting typing status: %v", err)
 	}
 
 	if err := cmd.Callback(msg); err != nil {
@@ -546,7 +546,7 @@ func (bot *DiscordBot) isLoggableRedditLink(msg DiscordMessage) bool {
 
 func (bot *DiscordBot) processRedditLink(msg DiscordMessage) error {
 	if err := bot.addRandomReactionTo(msg); err != nil {
-		bot.logger.Errorf("discord bot failed to add a reaction to a link towards reddit: %v", err)
+		bot.logger.Errorf("failed to add a reaction to a link towards reddit: %v", err)
 	}
 	if bot.channelsID.Log == "" {
 		return nil

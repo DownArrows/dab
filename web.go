@@ -103,13 +103,13 @@ func (mux *ServeMux) ServeHTTP(baseWriter http.ResponseWriter, r *http.Request) 
 	defer func() {
 		if err := recover(); err != nil {
 			mux.logger.Errord(func() error {
-				return fmt.Errorf("web server error in response to %s %s for %s: %v",
+				return fmt.Errorf("error in response to %s %s for %s: %v",
 					r.Method, r.URL, getIP(r, mux.IPHeader), err)
 			})
 		}
 	}()
 	mux.logger.Infod(func() interface{} {
-		return fmt.Sprintf("web server serve %s %s for %s with user agent %q",
+		return fmt.Sprintf("serve %s %s for %s with user agent %q",
 			r.Method, r.URL, getIP(r, mux.IPHeader), r.Header.Get("User-Agent"))
 	})
 	w := NewResponseWriter(baseWriter, r)
@@ -162,7 +162,7 @@ func NewWebServer(logger LevelLogger, storage *Storage, reports ReportFactory, c
 	mux.HandleFunc("/compendium/comments/user/", wsrv.CompendiumUserComments)
 	mux.HandleFunc("/backup", wsrv.Backup)
 	if conf.RootDir != "" {
-		wsrv.logger.Infof("web server serving directory %q", wsrv.RootDir)
+		wsrv.logger.Infof("serving directory %q", wsrv.RootDir)
 		mux.Handle("/", http.FileServer(http.Dir(wsrv.RootDir)))
 	}
 
@@ -209,7 +209,7 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 func (wsrv *WebServer) initDBPool(ctx context.Context) (StorageConnPool, error) {
 	pool, err := NewStorageConnPool(ctx, wsrv.NbDBConn, wsrv.getConn)
 	if wsrv.DirtyReads && err == nil {
-		wsrv.logger.Info("web server has enabled dirty reads of the database")
+		wsrv.logger.Info("dirty reads of the database enabled ")
 	}
 	return pool, nil
 }
@@ -520,7 +520,7 @@ func (wsrv *WebServer) err(w http.ResponseWriter, r *http.Request, err error, co
 
 func (wsrv *WebServer) errMsg(w http.ResponseWriter, r *http.Request, msg string, code int) {
 	wsrv.logger.Errord(func() error {
-		return fmt.Errorf("web server error %d %q in response to %s %s for %s with user agent %q",
+		return fmt.Errorf("error %d %q in response to %s %s for %s with user agent %q",
 			code, msg, r.Method, r.URL, getIP(r, wsrv.IPHeader), r.Header.Get("User-Agent"))
 	})
 	http.Error(w, msg, code)
