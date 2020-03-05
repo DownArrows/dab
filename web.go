@@ -359,14 +359,14 @@ func (wsrv *WebServer) listen() error {
 			return err
 		}
 	}
+	defer listener.Close()
 
 	if wsrv.TLS.Enabled() {
 		tls_conf := &tls.Config{Certificates: []tls.Certificate{wsrv.certificate}}
 		listener = tls.NewListener(listener, tls_conf)
 		wsrv.logger.Infof("TLS enabled on %s", wsrv.Listen)
+		defer listener.Close()
 	}
-
-	defer listener.Close()
 
 	wsrv.logger.Infof("listening on %s", wsrv.SelfLink)
 
