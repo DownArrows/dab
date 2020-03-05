@@ -300,7 +300,7 @@ func NewWebServer(
 }
 
 // Run runs the web server and blocks until it is cancelled or returns an error.
-func (wsrv *WebServer) Run(ctx context.Context) error {
+func (wsrv *WebServer) Run(ctx Ctx) error {
 	pool, err := wsrv.initDBPool(ctx)
 	if err != nil {
 		return err
@@ -318,13 +318,13 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 	}
 
 	if interval := wsrv.DBOptimize.Value; interval != 0 {
-		tasks.SpawnCtx(func(ctx context.Context) error { return wsrv.conns.Analyze(ctx, interval) })
+		tasks.SpawnCtx(func(ctx Ctx) error { return wsrv.conns.Analyze(ctx, interval) })
 	}
 
 	return tasks.Wait().ToError()
 }
 
-func (wsrv *WebServer) initDBPool(ctx context.Context) (StorageConnPool, error) {
+func (wsrv *WebServer) initDBPool(ctx Ctx) (StorageConnPool, error) {
 	pool, err := NewStorageConnPool(ctx, wsrv.NbDBConn, wsrv.getConn)
 	if wsrv.DirtyReads && err == nil {
 		wsrv.logger.Info("dirty reads of the database enabled")
@@ -332,7 +332,7 @@ func (wsrv *WebServer) initDBPool(ctx context.Context) (StorageConnPool, error) 
 	return pool, nil
 }
 
-func (wsrv *WebServer) getConn(ctx context.Context) (StorageConn, error) {
+func (wsrv *WebServer) getConn(ctx Ctx) (StorageConn, error) {
 	conn, err := wsrv.storage.GetConn(ctx)
 	if err != nil {
 		return conn, err
@@ -745,7 +745,7 @@ func ignoreWebServerCloseErr(err error) error {
 }
 
 func webServerShutdown(srv *http.Server) Task {
-	return func(ctx context.Context) error {
+	return func(ctx Ctx) error {
 		<-ctx.Done()
 		return srv.Shutdown(context.Background())
 	}

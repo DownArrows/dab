@@ -14,7 +14,7 @@ func IsCancellation(err error) bool {
 
 // SleepCtx sleeps with the ability to be cancelled,
 // and returns whether it has slept without being cancelled (makes use in for loops easier).
-func SleepCtx(ctx context.Context, duration time.Duration) bool {
+func SleepCtx(ctx Ctx, duration time.Duration) bool {
 	select {
 	case <-time.After(duration):
 		return true
@@ -24,11 +24,10 @@ func SleepCtx(ctx context.Context, duration time.Duration) bool {
 }
 
 // Shortcut for the often-used context.Context
-// TODO: generalize to the whole codebase
 type Ctx = context.Context
 
 // Task is a function that can be managed by a TaskGroup.
-type Task func(context.Context) error
+type Task func(Ctx) error
 
 // TaskGroup launches and shuts down a group of goroutine which take a context and return an error.
 // Use TaskGroup.Spawn to launch functions asynchronously,
@@ -43,13 +42,13 @@ type Task func(context.Context) error
 // and have the parent group wait on the sub-group with SpawnCtx, so that errors can propagate.
 type TaskGroup struct {
 	Cancel  context.CancelFunc
-	Context context.Context
+	Context Ctx
 	Errors  *ErrorGroup
 	wait    *sync.WaitGroup
 }
 
 // NewTaskGroup returns a new TaskGroup which depends on a parent context.
-func NewTaskGroup(parentCtx context.Context) *TaskGroup {
+func NewTaskGroup(parentCtx Ctx) *TaskGroup {
 	ctx, cancel := context.WithCancel(parentCtx)
 	return &TaskGroup{
 		Cancel:  cancel,
@@ -203,7 +202,7 @@ func (r *Retrier) SetErrorFilter(filter func(error) bool) *Retrier {
 }
 
 // Task wraps with retry logic the Task to which the Retrier has been bound to.
-func (r *Retrier) Task(ctx context.Context) error {
+func (r *Retrier) Task(ctx Ctx) error {
 	var err error
 	for {
 		r.LastRestart = time.Now()
@@ -251,7 +250,7 @@ func (r *Retrier) shouldRestartOn(err error) bool {
 	return r.Retries < r.Times
 }
 
-func (r *Retrier) sleepCtx(ctx context.Context) bool {
+func (r *Retrier) sleepCtx(ctx Ctx) bool {
 	var sleeptime time.Duration
 	if r.MaxInterval > 0 && r.Backoff > r.MaxInterval {
 		sleeptime = r.MaxInterval
@@ -264,7 +263,7 @@ func (r *Retrier) sleepCtx(ctx context.Context) bool {
 
 // WithCtx adds a cancellation point before the execution of the given callback.
 func WithCtx(cb func() error) Task {
-	return func(ctx context.Context) error {
+	return func(ctx Ctx) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}

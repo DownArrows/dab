@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	sqlite "github.com/bvinc/go-sqlite-lite/sqlite3"
@@ -74,7 +73,7 @@ type SQLiteDatabase struct {
 // NewSQLiteDatabase creates a new SQLiteDatabase.
 // It returns the connection it needed to run the checks; if you are using a temporary database, keep it open until shut down.
 // It treats already existing empty files as new databases.
-func NewSQLiteDatabase(ctx context.Context, logger LevelLogger, opts SQLiteDatabaseOptions) (*SQLiteDatabase, SQLiteConn, error) {
+func NewSQLiteDatabase(ctx Ctx, logger LevelLogger, opts SQLiteDatabaseOptions) (*SQLiteDatabase, SQLiteConn, error) {
 	db := &SQLiteDatabase{
 		SQLiteDatabaseOptions: opts,
 
@@ -98,7 +97,7 @@ func NewSQLiteDatabase(ctx context.Context, logger LevelLogger, opts SQLiteDatab
 }
 
 // GetConn returns an SQLiteConn.
-func (db *SQLiteDatabase) GetConn(ctx context.Context) (SQLiteConn, error) {
+func (db *SQLiteDatabase) GetConn(ctx Ctx) (SQLiteConn, error) {
 	return NewBaseSQLiteConn(ctx, db.logger, db.getConnDefaultOptions())
 }
 
@@ -279,7 +278,7 @@ func (db *SQLiteDatabase) quickCheck(conn SQLiteConn) error {
 
 // PeriodicCleanup is a Task to be launched independently which periodically optimizes the database,
 // according to the interval set in the SQLiteDatabaseOptions.
-func (db *SQLiteDatabase) PeriodicCleanup(ctx context.Context) error {
+func (db *SQLiteDatabase) PeriodicCleanup(ctx Ctx) error {
 	if !(db.CleanupInterval > 0) {
 		return fmt.Errorf("database at %q cannot run periodic cleanup with an interval of %s", db.Path, db.CleanupInterval)
 	}
@@ -300,7 +299,7 @@ func (db *SQLiteDatabase) PeriodicCleanup(ctx context.Context) error {
 }
 
 // Backup creates or clobbers a backup of the current database at the destination set in the SQLiteBackupOptinos.
-func (db *SQLiteDatabase) Backup(ctx context.Context, srcConn SQLiteConn, opts SQLiteBackupOptions) error {
+func (db *SQLiteDatabase) Backup(ctx Ctx, srcConn SQLiteConn, opts SQLiteBackupOptions) error {
 	db.backups.Lock()
 	defer db.backups.Unlock()
 
@@ -349,12 +348,12 @@ func (db *SQLiteDatabase) Backup(ctx context.Context, srcConn SQLiteConn, opts S
 // and it will not behave properly relatively to cancellation.
 type SQLiteConnPool struct {
 	ch   chan SQLiteConn
-	ctx  context.Context
+	ctx  Ctx
 	size uint
 }
 
 // NewSQLiteConnPool creates a new SQLiteConnPool with a global context.
-func NewSQLiteConnPool(ctx context.Context, size uint, get func(context.Context) (SQLiteConn, error)) (SQLiteConnPool, error) {
+func NewSQLiteConnPool(ctx Ctx, size uint, get func(Ctx) (SQLiteConn, error)) (SQLiteConnPool, error) {
 	pool := SQLiteConnPool{
 		ch:   make(chan SQLiteConn, size),
 		ctx:  ctx,
@@ -372,7 +371,7 @@ func NewSQLiteConnPool(ctx context.Context, size uint, get func(context.Context)
 }
 
 // Analyze runs evenly spaced Analyze on each connection of the pool so that each is analyzed once per the set interval.
-func (pool SQLiteConnPool) Analyze(ctx context.Context, interval time.Duration) error {
+func (pool SQLiteConnPool) Analyze(ctx Ctx, interval time.Duration) error {
 	for SleepCtx(ctx, interval/time.Duration(pool.size)) {
 		pool.WithConn(ctx, func(conn SQLiteConn) error {
 			if time.Now().Sub(conn.LastAnalyze()) < interval {
@@ -385,7 +384,7 @@ func (pool SQLiteConnPool) Analyze(ctx context.Context, interval time.Duration) 
 }
 
 // Acquire gets a connection or waits until it is cancelled or receives a connection.
-func (pool SQLiteConnPool) Acquire(ctx context.Context) (SQLiteConn, error) {
+func (pool SQLiteConnPool) Acquire(ctx Ctx) (SQLiteConn, error) {
 	var conn SQLiteConn
 	var err error
 	select {
@@ -404,7 +403,7 @@ func (pool SQLiteConnPool) Release(conn SQLiteConn) {
 }
 
 // WithConn automatically acquires and releases a connection.
-func (pool SQLiteConnPool) WithConn(ctx context.Context, cb func(SQLiteConn) error) error {
+func (pool SQLiteConnPool) WithConn(ctx Ctx, cb func(SQLiteConn) error) error {
 	conn, err := pool.Acquire(ctx)
 	if err != nil {
 		return err

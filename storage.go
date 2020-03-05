@@ -1,9 +1,6 @@
 package main
 
-import (
-	"context"
-	"time"
-)
+import "time"
 
 // ApplicationFileID is the identification integer written in the SQLite file specific to the application.
 const ApplicationFileID int = 0xdab
@@ -19,7 +16,7 @@ type Storage struct {
 
 // NewStorage returns a Storage instance after running initialization, checks, and migrations onto the target database file.
 // It returns the connection it needed to run the checks; if you are using a temporary database, keep it open until shut down.
-func NewStorage(ctx context.Context, logger LevelLogger, conf StorageConf) (*Storage, StorageConn, error) {
+func NewStorage(ctx Ctx, logger LevelLogger, conf StorageConf) (*Storage, StorageConn, error) {
 	conn := StorageConn{}
 	db, baseConn, err := NewSQLiteDatabase(ctx, logger, SQLiteDatabaseOptions{
 		AppID:           ApplicationFileID,
@@ -76,7 +73,7 @@ func (s *Storage) PeriodicCleanupIsEnabled() bool {
 }
 
 // PeriodicCleanup is a Task that periodically cleans up and optimizes the underlying database.
-func (s *Storage) PeriodicCleanup(ctx context.Context) error {
+func (s *Storage) PeriodicCleanup(ctx Ctx) error {
 	return s.db.PeriodicCleanup(ctx)
 }
 
@@ -86,7 +83,7 @@ func (s *Storage) BackupPath() string {
 }
 
 // Backup performs a backup on the destination returned by BackupPath.
-func (s *Storage) Backup(ctx context.Context, conn StorageConn) error {
+func (s *Storage) Backup(ctx Ctx, conn StorageConn) error {
 	if older, err := FileOlderThan(s.BackupPath(), s.backupMaxAge); err != nil {
 		return err
 	} else if !older {
@@ -101,13 +98,13 @@ func (s *Storage) Backup(ctx context.Context, conn StorageConn) error {
 }
 
 // GetConn creates new connections to the associated database.
-func (s *Storage) GetConn(ctx context.Context) (StorageConn, error) {
+func (s *Storage) GetConn(ctx Ctx) (StorageConn, error) {
 	conn, err := s.db.GetConn(ctx)
 	return StorageConn{actual: conn}, err
 }
 
 // WithConn manages a connection's lifecycle.
-func (s *Storage) WithConn(ctx context.Context, cb func(StorageConn) error) error {
+func (s *Storage) WithConn(ctx Ctx, cb func(StorageConn) error) error {
 	conn, err := s.GetConn(ctx)
 	if err != nil {
 		return err
@@ -124,18 +121,18 @@ type StorageConnPool struct {
 }
 
 // NewStorageConnPool creates a new StorageConnPool with a global context.
-func NewStorageConnPool(ctx context.Context, size uint, cb func(context.Context) (StorageConn, error)) (StorageConnPool, error) {
-	pool, err := NewSQLiteConnPool(ctx, size, func(ctx context.Context) (SQLiteConn, error) { return cb(ctx) })
+func NewStorageConnPool(ctx Ctx, size uint, cb func(Ctx) (StorageConn, error)) (StorageConnPool, error) {
+	pool, err := NewSQLiteConnPool(ctx, size, func(ctx Ctx) (SQLiteConn, error) { return cb(ctx) })
 	return StorageConnPool{actual: pool}, err
 }
 
 // Analyze wraps SQLiteConnPool.
-func (pool StorageConnPool) Analyze(ctx context.Context, interval time.Duration) error {
+func (pool StorageConnPool) Analyze(ctx Ctx, interval time.Duration) error {
 	return pool.actual.Analyze(ctx, interval)
 }
 
 // Acquire wraps SQLiteConnPool.
-func (pool StorageConnPool) Acquire(ctx context.Context) (StorageConn, error) {
+func (pool StorageConnPool) Acquire(ctx Ctx) (StorageConn, error) {
 	conn, err := pool.actual.Acquire(ctx)
 	if err != nil {
 		return StorageConn{}, err
@@ -149,7 +146,7 @@ func (pool StorageConnPool) Release(conn StorageConn) {
 }
 
 // WithConn wraps SQLiteConnPool.
-func (pool StorageConnPool) WithConn(ctx context.Context, cb func(StorageConn) error) error {
+func (pool StorageConnPool) WithConn(ctx Ctx, cb func(StorageConn) error) error {
 	return pool.actual.WithConn(ctx, func(conn SQLiteConn) error { return cb(conn.(StorageConn)) })
 }
 

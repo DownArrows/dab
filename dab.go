@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -68,7 +67,7 @@ func NewDownArrowsBot(logOut io.Writer, output io.Writer) *DownArrowsBot {
 }
 
 // Run launches a DownArrowsBot with the given args and blocks until it is shutdown.
-func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
+func (dab *DownArrowsBot) Run(ctx Ctx, args []string) error {
 	var err error
 
 	if err := dab.parseFlags(args); err != nil {
@@ -181,7 +180,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 			dab.logger.Errorf("error in reddit component, restarting (%s): %v", r, err)
 		})
 
-		tasks.SpawnCtx(retrier.Set(func(ctx context.Context) error {
+		tasks.SpawnCtx(retrier.Set(func(ctx Ctx) error {
 			dab.logger.Info("attempting to log into reddit")
 			if err := redditAPI.Connect(ctx); err != nil {
 				return err
@@ -208,7 +207,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 			dab.logger.Errorf("error in discord component, restarting (%s): %v", r, err)
 		})
 
-		tasks.SpawnCtx(retrier.Set(func(ctx context.Context) error {
+		tasks.SpawnCtx(retrier.Set(func(ctx Ctx) error {
 			dab.logger.Info("attempting to log into discord")
 			return dab.components.Discord.Run(ctx)
 		}).Task)
@@ -219,7 +218,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		tasks.Spawn(func() { dab.components.Discord.SignalDeaths(dab.components.RedditScanner.OpenDeaths()) })
 
 		if dab.components.RedditUsers.ResurrectionsWatcherEnabled {
-			tasks.SpawnCtx(func(ctx context.Context) error {
+			tasks.SpawnCtx(func(ctx Ctx) error {
 				return dab.layers.Storage.WithConn(ctx, func(conn StorageConn) error {
 					return dab.components.RedditUsers.ResurrectionsWatcher(ctx, conn)
 				})
@@ -231,7 +230,7 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 			tasks.Spawn(func() { dab.components.Discord.SignalHighScores(dab.components.RedditScanner.OpenHighScores()) })
 		}
 
-		tasks.SpawnCtx(func(ctx context.Context) error {
+		tasks.SpawnCtx(func(ctx Ctx) error {
 			<-ctx.Done()
 			dab.components.RedditUsers.CloseResurrections()
 			dab.components.RedditScanner.CloseDeaths()
@@ -263,7 +262,7 @@ func (dab *DownArrowsBot) parseFlags(args []string) error {
 	return nil
 }
 
-func (dab *DownArrowsBot) makeRedditAPI(ctx context.Context) (*RedditAPI, error) {
+func (dab *DownArrowsBot) makeRedditAPI(ctx Ctx) (*RedditAPI, error) {
 	userAgent, err := template.New("UserAgent").Parse(dab.conf.Reddit.UserAgent)
 	if err != nil {
 		return nil, err
@@ -277,7 +276,7 @@ func (dab *DownArrowsBot) makeRedditAPI(ctx context.Context) (*RedditAPI, error)
 	return ra, nil
 }
 
-func (dab *DownArrowsBot) report(ctx context.Context, conn StorageConn) error {
+func (dab *DownArrowsBot) report(ctx Ctx, conn StorageConn) error {
 	dab.logger.Info("printing report for last week")
 
 	year, week := dab.layers.Report.LastWeekCoordinates()
@@ -291,7 +290,7 @@ func (dab *DownArrowsBot) report(ctx context.Context, conn StorageConn) error {
 	return MarkdownReport.Execute(dab.stdOut, report)
 }
 
-func (dab *DownArrowsBot) userAdd(ctx context.Context, conn StorageConn) error {
+func (dab *DownArrowsBot) userAdd(ctx Ctx, conn StorageConn) error {
 	ra, err := dab.makeRedditAPI(ctx)
 	if err != nil {
 		return err

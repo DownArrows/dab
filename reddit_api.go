@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -95,7 +94,7 @@ type RedditAPI struct {
 // It receives a map with the keys "Version", which is the SemVer version of the application,
 // and "OS", which is the name of the type of platform (eg. "linux").
 // Before use, run the Connect method.
-func NewRedditAPI(ctx context.Context, auth RedditAuth, userAgent *template.Template) (*RedditAPI, error) {
+func NewRedditAPI(ctx Ctx, auth RedditAuth, userAgent *template.Template) (*RedditAPI, error) {
 	var ua strings.Builder
 	data := map[string]interface{}{
 		"Version": Version,
@@ -117,7 +116,7 @@ func NewRedditAPI(ctx context.Context, auth RedditAuth, userAgent *template.Temp
 }
 
 // Connect gets a token from Reddit's API which will be used for all requests.
-func (ra *RedditAPI) Connect(ctx context.Context) error {
+func (ra *RedditAPI) Connect(ctx Ctx) error {
 	authConf := url.Values{
 		"grant_type": {"password"},
 		"username":   {ra.auth.Username},
@@ -164,7 +163,7 @@ func (ra *RedditAPI) Connect(ctx context.Context) error {
 }
 
 // UserComments fetches nb comments for a User, and returns a slice of Comment and an updated User.
-func (ra *RedditAPI) UserComments(ctx context.Context, user User, nb uint) ([]Comment, User, error) {
+func (ra *RedditAPI) UserComments(ctx Ctx, user User, nb uint) ([]Comment, User, error) {
 	comments, position, status, err := ra.getListing(ctx, "/u/"+user.Name+"/comments", user.Position, nb)
 	if err != nil {
 		return nil, user, err
@@ -191,7 +190,7 @@ func (ra *RedditAPI) UserComments(ctx context.Context, user User, nb uint) ([]Co
 //  - its name with the correct capitalization
 //  - when it was created
 // It returns an error without making a request if username contains characters that are forbidden by Reddit.
-func (ra *RedditAPI) AboutUser(ctx context.Context, username string) UserQuery {
+func (ra *RedditAPI) AboutUser(ctx Ctx, username string) UserQuery {
 	query := UserQuery{User: User{Name: username}}
 
 	if !MatchValidRedditUsername.MatchString(username) {
@@ -227,7 +226,7 @@ func (ra *RedditAPI) AboutUser(ctx context.Context, username string) UserQuery {
 }
 
 // WikiPage returns the content of the page of the wiki of a subreddit.
-func (ra *RedditAPI) WikiPage(ctx context.Context, sub, page string) (string, error) {
+func (ra *RedditAPI) WikiPage(ctx Ctx, sub, page string) (string, error) {
 	relativeURL := &url.URL{Path: "/r/" + sub + "/wiki/" + page}
 	res := ra.request(ctx, "GET", relativeURL, nil)
 	if res.Error != nil {
@@ -245,7 +244,7 @@ func (ra *RedditAPI) WikiPage(ctx context.Context, sub, page string) (string, er
 	return parsed.Data.ContentMD, nil
 }
 
-func (ra *RedditAPI) getListing(ctx context.Context, path, position string, nb uint) ([]Comment, string, int, error) {
+func (ra *RedditAPI) getListing(ctx Ctx, path, position string, nb uint) ([]Comment, string, int, error) {
 	query := url.Values{}
 	query.Set("sort", "new")
 	query.Set("limit", fmt.Sprintf("%d", nb))
@@ -291,7 +290,7 @@ func (ra *RedditAPI) getListing(ctx context.Context, path, position string, nb u
 }
 
 // Never pass nil as the URL, it can't deal with it. The data argument can be nil though.
-func (ra *RedditAPI) request(ctx context.Context, verb string, relativeURL *url.URL, data io.Reader) redditResponse {
+func (ra *RedditAPI) request(ctx Ctx, verb string, relativeURL *url.URL, data io.Reader) redditResponse {
 	makeReq := func() (*http.Request, error) {
 		query, err := url.ParseQuery(relativeURL.RawQuery)
 		if err != nil {
@@ -308,7 +307,7 @@ func (ra *RedditAPI) request(ctx context.Context, verb string, relativeURL *url.
 // Why take a closure instead of a request object directly?
 // Request objects are single use, and this method will automatically retry if
 // we are not authenticated anymore.
-func (ra *RedditAPI) rawRequest(ctx context.Context, makeReq func() (*http.Request, error)) redditResponse {
+func (ra *RedditAPI) rawRequest(ctx Ctx, makeReq func() (*http.Request, error)) redditResponse {
 	select {
 	case <-ra.ticker.C:
 		break
@@ -351,7 +350,7 @@ func (ra *RedditAPI) rawRequest(ctx context.Context, makeReq func() (*http.Reque
 	return res
 }
 
-func (ra *RedditAPI) prepareRequest(ctx context.Context, req *http.Request) *http.Request {
+func (ra *RedditAPI) prepareRequest(ctx Ctx, req *http.Request) *http.Request {
 	req.Header.Set("User-Agent", ra.userAgent)
 	req.Header.Set("Authorization", "bearer "+ra.oAuth.Token)
 	return req.WithContext(ctx)

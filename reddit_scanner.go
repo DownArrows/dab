@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"sync"
 	"time"
 )
@@ -45,7 +44,7 @@ func NewRedditScanner(logger LevelLogger, storage *Storage, api *RedditAPI, conf
 
 // Run launches the scanner and blocks until it errors out or is cancelled.
 // Note that network errors are only logged and not returned, as Reddit is rather unreliable.
-func (rs *RedditScanner) Run(ctx context.Context) error {
+func (rs *RedditScanner) Run(ctx Ctx) error {
 	var lastFullScan time.Time
 
 	conn, err := rs.storage.GetConn(ctx)
@@ -129,7 +128,7 @@ func (rs *RedditScanner) CloseHighScores() {
 }
 
 // Scan scans a slice of users once.
-func (rs *RedditScanner) Scan(ctx context.Context, conn StorageConn, users []User) error {
+func (rs *RedditScanner) Scan(ctx Ctx, conn StorageConn, users []User) error {
 OUTER:
 	for _, user := range users {
 
@@ -196,7 +195,7 @@ OUTER:
 	return nil
 }
 
-func (rs *RedditScanner) getUsersOrWait(ctx context.Context, conn StorageConn, fullScan bool) ([]User, error) {
+func (rs *RedditScanner) getUsersOrWait(ctx Ctx, conn StorageConn, fullScan bool) ([]User, error) {
 	var users []User
 	var err error
 	// We could be using a channel to signal when a new user is added,

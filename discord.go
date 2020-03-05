@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
@@ -266,33 +265,33 @@ func NewDiscordBot(
 
 	if conf.Welcome != "" && conf.General != "" {
 		session.AddHandler(func(_ *discordgo.Session, event *discordgo.GuildMemberAdd) {
-			bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.welcomeNewMember(event.Member) })
+			bot.tasks.SpawnCtx(func(_ Ctx) error { return bot.welcomeNewMember(event.Member) })
 		})
 	}
 
 	session.AddHandler(func(_ *discordgo.Session, msg *discordgo.MessageCreate) {
-		bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.onMessage(msg) })
+		bot.tasks.SpawnCtx(func(_ Ctx) error { return bot.onMessage(msg) })
 	})
 	session.AddHandler(func(_ *discordgo.Session, r *discordgo.Ready) {
-		bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.onReady(r) })
+		bot.tasks.SpawnCtx(func(_ Ctx) error { return bot.onReady(r) })
 	})
 
 	return bot, nil
 }
 
 // Run runs and blocks until the bot stops.
-func (bot *DiscordBot) Run(ctx context.Context) error {
+func (bot *DiscordBot) Run(ctx Ctx) error {
 	bot.Lock()
 	bot.tasks = NewTaskGroup(ctx)
 	bot.Unlock()
-	bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.client.Open() })
-	bot.tasks.SpawnCtx(func(ctx context.Context) error {
+	bot.tasks.SpawnCtx(func(_ Ctx) error { return bot.client.Open() })
+	bot.tasks.SpawnCtx(func(ctx Ctx) error {
 		for SleepCtx(ctx, discordStatusInterval) {
 			bot.setStatus()
 		}
 		return ctx.Err()
 	})
-	bot.tasks.SpawnCtx(func(ctx context.Context) error {
+	bot.tasks.SpawnCtx(func(ctx Ctx) error {
 		<-ctx.Done()
 		return bot.client.Close()
 	})
@@ -324,7 +323,7 @@ func (bot *DiscordBot) channelErrorSend(channelID, userID, content string) error
 	if err != nil {
 		return err
 	}
-	bot.tasks.SpawnCtx(func(ctx context.Context) error {
+	bot.tasks.SpawnCtx(func(ctx Ctx) error {
 		if !SleepCtx(ctx, discordMessageDeletionWait) {
 			return ctx.Err()
 		}
@@ -443,7 +442,7 @@ func (bot *DiscordBot) SignalDeaths(suspensions <-chan User) {
 			state = "deleted"
 		}
 		msg := fmt.Sprintf("RIP /u/%s %s (%s)", user.Name, EmojiPrayingHands, state)
-		bot.tasks.SpawnCtx(func(_ context.Context) error {
+		bot.tasks.SpawnCtx(func(_ Ctx) error {
 			return bot.channelMessageSend(bot.channelsID.Graveyard, msg)
 		})
 	}
@@ -454,7 +453,7 @@ func (bot *DiscordBot) SignalDeaths(suspensions <-chan User) {
 func (bot *DiscordBot) SignalResurrections(ch <-chan User) {
 	for user := range ch {
 		msg := fmt.Sprintf("%s /u/%s has been resurrected! %s", EmojiRainbow, user.Name, EmojiRainbow)
-		bot.tasks.SpawnCtx(func(_ context.Context) error {
+		bot.tasks.SpawnCtx(func(_ Ctx) error {
 			return bot.channelMessageSend(bot.channelsID.Graveyard, msg)
 		})
 	}
@@ -467,7 +466,7 @@ func (bot *DiscordBot) SignalHighScores(ch <-chan Comment) {
 		link := "https://www.reddit.com" + comment.Permalink
 		tmpl := "a comment by /u/%s has reached %d: %s"
 		msg := fmt.Sprintf(tmpl, comment.Author, comment.Score, link)
-		bot.tasks.SpawnCtx(func(_ context.Context) error {
+		bot.tasks.SpawnCtx(func(_ Ctx) error {
 			return bot.channelMessageSend(bot.channelsID.HighScores, msg)
 		})
 	}
@@ -524,7 +523,7 @@ func (bot *DiscordBot) command(msg DiscordMessage) error {
 	}
 
 	if !msg.IsDM {
-		bot.tasks.SpawnCtx(func(ctx context.Context) error {
+		bot.tasks.SpawnCtx(func(ctx Ctx) error {
 			if !SleepCtx(ctx, discordMessageDeletionWait) {
 				return ctx.Err()
 			}

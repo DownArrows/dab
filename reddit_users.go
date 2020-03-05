@@ -1,13 +1,12 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"time"
 )
 
 // AddRedditUser is a function for when the only thing needed is to add users by checking through Reddit first.
-type AddRedditUser func(context.Context, StorageConn, string, bool, bool) UserQuery
+type AddRedditUser func(Ctx, StorageConn, string, bool, bool) UserQuery
 
 // RedditUsers is a data structure to manage Reddit users by interacting with both the database and Reddit.
 type RedditUsers struct {
@@ -34,7 +33,7 @@ func NewRedditUsers(logger LevelLogger, api *RedditAPI, conf RedditUsersConf) *R
 // Add registers the a user, sets it to "hidden" or not,
 // and with the argument forceSuspended can add the user even if it was found to be suspended.
 // Case-insensitive.
-func (ru *RedditUsers) Add(ctx context.Context, conn StorageConn, username string, hidden, forceSuspended bool) UserQuery {
+func (ru *RedditUsers) Add(ctx Ctx, conn StorageConn, username string, hidden, forceSuspended bool) UserQuery {
 	query := UserQuery{User: User{Name: username}}
 
 	query = conn.GetUser(username)
@@ -82,7 +81,7 @@ func (ru *RedditUsers) CloseResurrections() {
 
 // ResurrectionsWatcher is a Task to be launched independently that watches resurrections
 // and send the ressurrected Users to the channel returned by Resurrections.
-func (ru *RedditUsers) ResurrectionsWatcher(ctx context.Context, conn StorageConn) error {
+func (ru *RedditUsers) ResurrectionsWatcher(ctx Ctx, conn StorageConn) error {
 	ru.logger.Infof("watching resurrections with interval %s", ru.ResurrectionsInterval)
 
 	for SleepCtx(ctx, ru.ResurrectionsInterval) {

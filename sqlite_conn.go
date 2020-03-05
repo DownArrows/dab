@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	sqlite "github.com/bvinc/go-sqlite-lite/sqlite3"
 	"sync"
@@ -65,7 +64,7 @@ type BaseSQLiteConn struct {
 	path        string
 	closed      bool
 	conn        *sqlite.Conn
-	ctx         context.Context
+	ctx         Ctx
 	lastAnalyze time.Time
 	logger      LevelLogger
 	mutex       *sync.Mutex
@@ -74,7 +73,7 @@ type BaseSQLiteConn struct {
 // NewBaseSQLiteConn creates a connection to a SQLite database.
 // Note that the timeout isn't taken into account for this phase;
 // it will return a "database locked" error if it can't immediately connect.
-func NewBaseSQLiteConn(ctx context.Context, logger LevelLogger, conf SQLiteConnOptions) (*BaseSQLiteConn, error) {
+func NewBaseSQLiteConn(ctx Ctx, logger LevelLogger, conf SQLiteConnOptions) (*BaseSQLiteConn, error) {
 	sc := &BaseSQLiteConn{
 		SQLiteConnOptions: conf,
 
@@ -284,7 +283,7 @@ func (sc *BaseSQLiteConn) logRetry(r *Retrier, err error) {
 type SQLiteBackup struct {
 	Retry    RetryConf
 	backup   *sqlite.Backup
-	ctx      context.Context
+	ctx      Ctx
 	destPath string
 	logger   LevelLogger
 	srcPath  string
@@ -309,7 +308,7 @@ func (b *SQLiteBackup) logRetry(r *Retrier, err error) {
 // SQLiteStmt is a wrapper for sqlite.Stmt that supports automatic retry with busy errors.
 type SQLiteStmt struct {
 	Retry  RetryConf
-	ctx    context.Context
+	ctx    Ctx
 	logger LevelLogger
 	stmt   *sqlite.Stmt
 }
