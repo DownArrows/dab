@@ -95,8 +95,11 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("error when setting a logging level for the dab component: %v", err)
 	}
-
 	dab.logger.Infof("running DAB version %s", Version)
+
+	for _, warning := range dab.conf.Warnings() {
+		dab.logger.Errorf(warning)
+	}
 
 	if dab.runtimeConf.Report {
 		dab.logger.Info("the -report option has been superseded by the the web reports and is deprecated")
@@ -149,7 +152,11 @@ func (dab *DownArrowsBot) Run(ctx context.Context, args []string) error {
 		if err != nil {
 			return fmt.Errorf("error when setting a logging level for the web server: %v", err)
 		}
-		dab.components.Web = NewWebServer(web_logger, dab.layers.Storage, dab.layers.Report, dab.layers.Compendium, dab.conf.Web.WebConf)
+		dab.components.Web, err = NewWebServer(web_logger, dab.layers.Storage,
+			dab.layers.Report, dab.layers.Compendium, dab.conf.Web.WebConf)
+		if err != nil {
+			return fmt.Errorf("error when creating the web server: %v", err)
+		}
 		tasks.SpawnCtx(dab.components.Web.Run)
 	}
 

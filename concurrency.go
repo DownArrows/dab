@@ -23,6 +23,10 @@ func SleepCtx(ctx context.Context, duration time.Duration) bool {
 	}
 }
 
+// Shortcut for the often-used context.Context
+// TODO: generalize to the whole codebase
+type Ctx = context.Context
+
 // Task is a function that can be managed by a TaskGroup.
 type Task func(context.Context) error
 

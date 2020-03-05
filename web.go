@@ -3,6 +3,7 @@ package main
 import (
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"github.com/russross/blackfriday/v2"
@@ -26,6 +27,27 @@ var matchTags = regexp.MustCompile("<([^>]*)>")
 
 // HTTPCacheMaxAge is the maxmimum cache age one can set in response to an HTTP request.
 const HTTPCacheMaxAge = 31536000
+const (
+	// WebServerListenFD is the file descriptor number onto which the web server will serve its content
+	// if activation basde on file descriptor is enabled.
+	WebServerListenFD = 3
+	// WebServerListenFDRedirector is the file descriptor number onto which the HTTPS redirector will run
+	// if activation basde on file descriptor is enabled.
+	WebServerListenFDRedirector = 4
+)
+
+// URLFromHostPort returns an URL from a listen specification compatible with the standard library,
+// adding the "listen on all" host if the host is empty.
+func URLFromHostPort(hostport string) (*url.URL, error) {
+	host, port, err := net.SplitHostPort(hostport)
+	if err != nil {
+		return nil, err
+	}
+	if host == "" {
+		host = "0.0.0.0"
+	}
+	return &url.URL{Host: net.JoinHostPort(host, port)}, nil
+}
 
 // ResponseWriter is a wrapper for http.ResponseWriter with basic GZip compression support.
 type ResponseWriter struct {
@@ -126,26 +148,132 @@ func getIP(r *http.Request, header string) string {
 	return r.Header.Get(header)
 }
 
+// Redirector is a simple HTTP server that redirects to another URL,
+// used with WebServer for forcing HTTPS.
+type Redirector struct {
+	RedirectorConf
+	logger   LevelLogger
+	SelfLink string
+	server   *http.Server
+}
+
+// NewRedirector creates a new redirection server.
+func NewRedirector(logger LevelLogger, conf RedirectorConf) (*Redirector, error) {
+	rdr := &Redirector{
+		RedirectorConf: conf,
+		logger:         logger,
+		server:         &http.Server{Addr: conf.Listen},
+	}
+	if self_link, err := rdr.getSelfLink(); err != nil {
+		return nil, err
+	} else {
+		rdr.SelfLink = self_link
+	}
+	rdr.server.Handler = rdr
+	return rdr, nil
+}
+
+func (rdr *Redirector) getSelfLink() (string, error) {
+	if rdr.ListenFDs > 0 {
+		return fmt.Sprintf("file descriptor %d", WebServerListenFDRedirector), nil
+	}
+	self_link, err := URLFromHostPort(rdr.Listen)
+	if err != nil {
+		return "", err
+	}
+	self_link.Scheme = "http"
+	return self_link.String(), nil
+}
+
+// Run is a Task that blocks until the context is cancelled, thereby shutting down the redirection server.
+func (rdr *Redirector) Run(ctx Ctx) error {
+	tasks := NewTaskGroup(ctx)
+	tasks.SpawnCtx(func(_ Ctx) error { return rdr.listen() })
+	tasks.SpawnCtx(webServerShutdown(rdr.server))
+	rdr.logger.Infof("redirector listening on %s", rdr.SelfLink)
+	return tasks.Wait().ToError()
+}
+
+func (rdr *Redirector) listen() error {
+	var err error
+	var listener net.Listener
+
+	if rdr.ListenFDs > 0 {
+		fd := os.NewFile(WebServerListenFDRedirector, "redirector")
+		defer fd.Close()
+		listener, err = net.FileListener(fd)
+		if err != nil {
+			msg := "error with the redirector's file descriptor %d when trying to create a listener on it: %v"
+			return fmt.Errorf(msg, WebServerListenFDRedirector, err)
+		}
+	} else {
+		listener, err = net.Listen("tcp", rdr.Listen)
+	}
+	defer listener.Close()
+
+	return ignoreWebServerCloseErr(rdr.server.Serve(listener))
+}
+
+func (rdr *Redirector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rdr.logger.Infod(func() interface{} {
+		return fmt.Sprintf("ignoring %s %s from %s with user agent %q and force redirect to https",
+			r.Method, r.URL, getIP(r, rdr.IPHeader), r.Header.Get("User-Agent"))
+	})
+	http.Redirect(w, r, rdr.Target, http.StatusSeeOther)
+}
+
 // WebServer serves the stored data as HTML pages and a backup of the database.
 type WebServer struct {
 	sync.Mutex
 	WebConf
-	compendium CompendiumFactory
-	conns      StorageConnPool
-	logger     LevelLogger
-	reports    ReportFactory
-	server     *http.Server
-	storage    *Storage
+	certificate tls.Certificate
+	compendium  CompendiumFactory
+	conns       StorageConnPool
+	logger      LevelLogger
+	redirector  *Redirector
+	reports     ReportFactory
+	SelfLink    string
+	server      *http.Server
+	storage     *Storage
 }
 
 // NewWebServer creates a new WebServer.
-func NewWebServer(logger LevelLogger, storage *Storage, reports ReportFactory, compendium CompendiumFactory, conf WebConf) *WebServer {
+func NewWebServer(
+	logger LevelLogger,
+	storage *Storage,
+	reports ReportFactory,
+	compendium CompendiumFactory,
+	conf WebConf,
+) (*WebServer, error) {
+
+	var err error
+
 	wsrv := &WebServer{
 		WebConf:    conf,
 		compendium: compendium,
 		logger:     logger,
 		reports:    reports,
 		storage:    storage,
+	}
+
+	if conf.TLS.Enabled() {
+		wsrv.certificate, err = tls.LoadX509KeyPair(conf.TLS.Cert, conf.TLS.Key)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if wsrv.TLS.RedirectorEnabled() {
+		wsrv.redirector, err = NewRedirector(wsrv.logger, wsrv.TLS.Redirector)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if link, err := wsrv.getSelfLink(); err != nil {
+		return nil, err
+	} else {
+		wsrv.SelfLink = link
 	}
 
 	mux := NewServeMux(wsrv.logger, wsrv.IPHeader)
@@ -168,7 +296,7 @@ func NewWebServer(logger LevelLogger, storage *Storage, reports ReportFactory, c
 
 	wsrv.server = &http.Server{Addr: conf.Listen, Handler: mux}
 
-	return wsrv
+	return wsrv, nil
 }
 
 // Run runs the web server and blocks until it is cancelled or returns an error.
@@ -180,28 +308,18 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 	wsrv.conns = pool
 	defer wsrv.conns.Close()
 
-	listener, err := wsrv.getListener()
-	if err != nil {
-		return err
+	tasks := NewTaskGroup(ctx)
+
+	tasks.SpawnCtx(func(_ Ctx) error { return wsrv.listen() })
+	tasks.SpawnCtx(webServerShutdown(wsrv.server))
+
+	if wsrv.TLS.RedirectorEnabled() {
+		tasks.SpawnCtx(wsrv.redirector.Run)
 	}
 
-	tasks := NewTaskGroup(ctx)
-	tasks.SpawnCtx(func(_ context.Context) error {
-		err := wsrv.server.Serve(listener)
-		if err == http.ErrServerClosed {
-			return nil
-		}
-		return err
-	})
-	tasks.SpawnCtx(func(ctx context.Context) error {
-		<-ctx.Done()
-		return wsrv.server.Shutdown(context.Background())
-	})
 	if interval := wsrv.DBOptimize.Value; interval != 0 {
 		tasks.SpawnCtx(func(ctx context.Context) error { return wsrv.conns.Analyze(ctx, interval) })
 	}
-
-	wsrv.logger.Infof("listening on http://%s", wsrv.server.Addr)
 
 	return tasks.Wait().ToError()
 }
@@ -209,7 +327,7 @@ func (wsrv *WebServer) Run(ctx context.Context) error {
 func (wsrv *WebServer) initDBPool(ctx context.Context) (StorageConnPool, error) {
 	pool, err := NewStorageConnPool(ctx, wsrv.NbDBConn, wsrv.getConn)
 	if wsrv.DirtyReads && err == nil {
-		wsrv.logger.Info("dirty reads of the database enabled ")
+		wsrv.logger.Info("dirty reads of the database enabled")
 	}
 	return pool, nil
 }
@@ -225,17 +343,34 @@ func (wsrv *WebServer) getConn(ctx context.Context) (StorageConn, error) {
 	return conn, nil
 }
 
-func (wsrv *WebServer) getListener() (net.Listener, error) {
-	if nb, err := strconv.Atoi(os.Getenv("LISTEN_FDS")); err == nil {
-		if nb > 1 {
-			return nil, errors.New("too many file descriptors set in environment variable LISTEN_FDS")
+func (wsrv *WebServer) listen() error {
+	var err error
+	var listener net.Listener
+
+	if wsrv.ListenFDs > 0 {
+		fd := os.NewFile(WebServerListenFD, "web server")
+		defer fd.Close()
+		if listener, err = net.FileListener(fd); err != nil {
+			msg := "error with the file descriptor %d when trying to create a listener on it: %v"
+			return fmt.Errorf(msg, WebServerListenFD, err)
 		}
-		if nb == 1 {
-			return net.FileListener(os.NewFile(3, "web_server_socket"))
+	} else {
+		if listener, err = net.Listen("tcp", wsrv.Listen); err != nil {
+			return err
 		}
 	}
 
-	return net.Listen("tcp", wsrv.server.Addr)
+	if wsrv.TLS.Enabled() {
+		tls_conf := &tls.Config{Certificates: []tls.Certificate{wsrv.certificate}}
+		listener = tls.NewListener(listener, tls_conf)
+		wsrv.logger.Infof("TLS enabled on %s", wsrv.Listen)
+	}
+
+	defer listener.Close()
+
+	wsrv.logger.Infof("listening on %s", wsrv.SelfLink)
+
+	return ignoreWebServerCloseErr(wsrv.server.Serve(listener))
 }
 
 // CSS serves the style sheets.
@@ -526,6 +661,22 @@ func (wsrv *WebServer) errMsg(w http.ResponseWriter, r *http.Request, msg string
 	http.Error(w, msg, code)
 }
 
+func (wsrv *WebServer) getSelfLink() (string, error) {
+	if wsrv.ListenFDs > 0 {
+		return fmt.Sprintf("file descriptor %d", WebServerListenFD), nil
+	}
+	address, err := URLFromHostPort(wsrv.Listen)
+	if err != nil {
+		return "", err
+	}
+	if wsrv.TLS.Enabled() {
+		address.Scheme = "https"
+	} else {
+		address.Scheme = "http"
+	}
+	return address.String(), nil
+}
+
 func (wsrv *WebServer) commentBodyConverter(src CommentView) (interface{}, error) {
 	// We replace < and > with look-alikes because blackfriday's HTML renderer is poorly configurable,
 	// and writing a replacement would be a timesink considering the original isn't very straightforward.
@@ -584,6 +735,20 @@ func (wsrv *WebServer) pagination(urlQuery url.Values) (Pagination, error) {
 	page.Offset = uint(offset)
 
 	return page, err
+}
+
+func ignoreWebServerCloseErr(err error) error {
+	if err == http.ErrServerClosed {
+		return nil
+	}
+	return err
+}
+
+func webServerShutdown(srv *http.Server) Task {
+	return func(ctx context.Context) error {
+		<-ctx.Done()
+		return srv.Shutdown(context.Background())
+	}
 }
 
 func subPath(prefix string, r *http.Request) []string {

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -62,9 +64,16 @@ const Defaults string = `{
 		"default_limit": 100,
 		"dirty_reads": true,
 		"max_limit": 1000,
-		"nb_db_conn": 10
+		"nb_db_conn": 10,
+		"tls": {
+			"redirector": {
+				"listen": ":80"
+			}
+		}
 	}
 }`
+
+const ListenFDsEnvVar = "LISTEN_FDS"
 
 // StorageConf describes the configuration of the Storage layer.
 type StorageConf struct {
@@ -162,9 +171,68 @@ type WebConf struct {
 	DirtyReads   bool     `json:"dirty_reads"`
 	IPHeader     string   `json:"ip_header"`
 	Listen       string   `json:"listen"`
+	ListenFDs    uint     `json:"-"`
 	MaxLimit     uint     `json:"max_limit"`
 	NbDBConn     uint     `json:"nb_db_conn"`
 	RootDir      string   `json:"root_dir"`
+	TLS          TLSConf  `json:"tls"`
+}
+
+// ListenFDs checks for an environment variable that allows to
+// pass file descriptors for the web server to listen to (used by systemd socket activation)
+func (wc WebConf) getListenFDs() (uint, error) {
+	raw_num := os.Getenv(ListenFDsEnvVar)
+	if raw_num == "" {
+		return 0, nil
+	}
+	num, err := strconv.Atoi(raw_num)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read a valid number in the environment variable %q: %v", ListenFDsEnvVar, err)
+	} else if num < 0 {
+		return 0, fmt.Errorf("the environment variable %q must not be less than 0 (got %d)", ListenFDsEnvVar, num)
+	} else if wc.TLS.RedirectorEnabled() {
+		if num != 2 {
+			cond := "if the web server has both TLS and the redirector enabled"
+			requirement := "socket activation through file descriptors must provide two and only two sockets"
+			return 0, fmt.Errorf(cond + ", " + requirement)
+		}
+	} else if num > 1 {
+		return 0, fmt.Errorf("the web server can only listen on a single socket")
+	} // now the number is necessarily 0, 1, or 2
+
+	return uint(num), nil
+}
+
+// TLSConf describes the configuration of TLS for the webserver,
+// and can check whether it's active or not.
+type TLSConf struct {
+	Cert       string         `json:"cert"`
+	Key        string         `json:"key"`
+	Redirector RedirectorConf `json:"redirector"`
+}
+
+// Enabled checks whether TLS is supposed to be active.
+func (tc TLSConf) Enabled() bool {
+	return tc.Cert != "" && tc.Key != ""
+}
+
+// PartiallyEnabled checks whether the TLS configuration is only partially filled-in,
+// which could indicate a mistake in the configuration file.
+func (tc TLSConf) PartiallyEnabled() bool {
+	return !tc.Enabled() && (tc.Cert != "" || tc.Key != "")
+}
+
+// RedirectorEnabled checks whether the redirector is supposed to be active.
+func (tc TLSConf) RedirectorEnabled() bool {
+	return tc.Enabled() && tc.Redirector.Listen != "" && tc.Redirector.Target != ""
+}
+
+// RedirectorConf describes the configuration of the redirection from HTTP to HTTPS.
+type RedirectorConf struct {
+	Listen    string `json:"listen"`
+	ListenFDs uint   `json:"-"`
+	Target    string `json:"target"`
+	IPHeader  string `json:"-"`
 }
 
 // Configuration holds the configuration for the whole application.
@@ -229,6 +297,14 @@ func NewConfiguration(path string) (Configuration, error) {
 	conf.Compendium.Timezone = conf.Timezone
 	conf.Discord.Timezone = conf.Timezone
 
+	if listen_fd_num, err := conf.Web.getListenFDs(); err != nil {
+		return conf, err
+	} else {
+		conf.Web.ListenFDs = listen_fd_num
+	}
+	conf.Web.TLS.Redirector.ListenFDs = conf.Web.ListenFDs
+	conf.Web.TLS.Redirector.IPHeader = conf.Web.IPHeader
+
 	conf.Compendium.NbTop = conf.Report.NbTop
 
 	conf.Reddit.RedditScannerConf.HighScoreThreshold = conf.Discord.HighScoreThreshold
@@ -261,6 +337,7 @@ func NewConfiguration(path string) (Configuration, error) {
 }
 
 // HasSaneValues protect against values that are very likely to be mistakes
+// TODO return a MultiError instead of a single, possibly incomplete, one.
 func (conf Configuration) HasSaneValues() error {
 	if conf.HidePrefix == "" {
 		return errors.New("prefix for hidden users can't be an empty string")
@@ -290,6 +367,17 @@ func (conf Configuration) HasSaneValues() error {
 		return errors.New("the number of database connections from the web server can't be 0")
 	}
 	return nil
+}
+
+// Warnings gets warnings about the configuration.
+func (conf Configuration) Warnings() []string {
+	var msgs []string
+
+	if conf.Web.TLS.PartiallyEnabled() {
+		msgs = append(msgs, "web.tls is only partially configured (missing certificate or key), TLS will not be enabled")
+	}
+
+	return msgs
 }
 
 // Deprecations returns a slice of deprecation messages.
@@ -360,7 +448,7 @@ func (conf Configuration) Components() ComponentsConf {
 	}
 
 	c.Web.Name = "web server"
-	if conf.Web.Listen == "" {
+	if conf.Web.Listen == "" && conf.Web.ListenFDs == 0 {
 		c.Web.Error = errors.New("missing or empty listen specification")
 	} else {
 		c.Web.Enabled = true

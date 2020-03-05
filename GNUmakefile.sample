@@ -19,7 +19,8 @@ TAG = $$(git describe --tags)
 URL = # URL of the bot's web interface
 TARBALL = dab-$(TAG)-$$(uname -s)-$$(uname -p).tar.xz
 STATIC_DIR = /srv/dab
-
+SYSD_LISTEN = [::1]:3499
+SYSD_LISTEN_REDIR = [::1]:3498
 
 dab: *.go
 	go build
@@ -28,7 +29,17 @@ dab: *.go
 #	Anonymize the binary if the USER environment variable is set.
 #	sed -i "s/$$USER/$$(echo $$USER | sed 's/./x/g')/g" dab
 
-dab: *.go
+fmt: *.go
+	gofmt -w -s $^
+
+run: dab
+	./$<
+
+sysd-run: dab
+	systemd-socket-activate -l "$(SYSD_LISTEN)" ./$<
+
+sysd-tls-run: dab
+	systemd-socket-activate -l "$(SYSD_LISTEN)" -l "$(SYSD_LISTEN_REDIR)" ./$<
 
 dab.db: dab.db.bak
 	cp $< $@
