@@ -175,7 +175,10 @@ type WebConf struct {
 	MaxLimit     uint     `json:"max_limit"`
 	NbDBConn     uint     `json:"nb_db_conn"`
 	RootDir      string   `json:"root_dir"`
-	TLS          TLSConf  `json:"tls"`
+	TLS          struct {
+		TLSConf
+		Redirector RedirectorConf `json:"redirector"`
+	} `json:"tls"`
 }
 
 // ListenFDs checks for an environment variable that allows to
@@ -190,7 +193,7 @@ func (wc WebConf) getListenFDs() (uint, error) {
 		return 0, fmt.Errorf("failed to read a valid number in the environment variable %q: %v", ListenFDsEnvVar, err)
 	} else if num < 0 {
 		return 0, fmt.Errorf("the environment variable %q must not be less than 0 (got %d)", ListenFDsEnvVar, num)
-	} else if wc.TLS.RedirectorEnabled() {
+	} else if wc.TLS.Enabled() && wc.TLS.Redirector.Enabled() {
 		if num != 2 {
 			cond := "if the web server has both TLS and the redirector enabled"
 			requirement := "socket activation through file descriptors must provide two and only two sockets"
@@ -206,9 +209,8 @@ func (wc WebConf) getListenFDs() (uint, error) {
 // TLSConf describes the configuration of TLS for the webserver,
 // and can check whether it's active or not.
 type TLSConf struct {
-	Cert       string         `json:"cert"`
-	Key        string         `json:"key"`
-	Redirector RedirectorConf `json:"redirector"`
+	Cert string `json:"cert"`
+	Key  string `json:"key"`
 }
 
 // Enabled checks whether TLS is supposed to be active.
@@ -222,17 +224,17 @@ func (tc TLSConf) PartiallyEnabled() bool {
 	return !tc.Enabled() && (tc.Cert != "" || tc.Key != "")
 }
 
-// RedirectorEnabled checks whether the redirector is supposed to be active.
-func (tc TLSConf) RedirectorEnabled() bool {
-	return tc.Enabled() && tc.Redirector.Listen != "" && tc.Redirector.Target != ""
-}
-
 // RedirectorConf describes the configuration of the redirection from HTTP to HTTPS.
 type RedirectorConf struct {
 	Listen    string `json:"listen"`
 	ListenFDs uint   `json:"-"`
 	Target    string `json:"target"`
 	IPHeader  string `json:"-"`
+}
+
+// Enabled checks whether the redirector is supposed to be active.
+func (rc RedirectorConf) Enabled() bool {
+	return rc.Listen != "" && rc.Target != ""
 }
 
 // Configuration holds the configuration for the whole application.

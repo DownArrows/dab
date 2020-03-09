@@ -7,6 +7,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"sync"
 	"text/template"
 )
 
@@ -23,6 +24,8 @@ var userAddSeparators = regexp.MustCompile("[ ,]")
 // together according to what is already decided in the configuration
 // data structure. It offers a clear view of how everything is organized.
 type DownArrowsBot struct {
+	sync.Mutex
+
 	flagSet *flag.FlagSet
 	logger  LevelLogger
 	logLvl  string
@@ -314,5 +317,37 @@ func (dab *DownArrowsBot) userAdd(ctx Ctx, conn StorageConn) error {
 			dab.logger.Infof("successfully registered user %q", res.User.Name)
 		}
 	}
+	return nil
+}
+
+func (dab *DownArrowsBot) Reload() {
+	dab.logger.Info("reloading configuration")
+	if err := dab.reload(); err != nil {
+		dab.logger.Error(err)
+	}
+	dab.logger.Info("reloading done")
+}
+
+func (dab *DownArrowsBot) reload() error {
+	// 1. re-read conf
+	// 2. set certificate
+	dab.Lock()
+	defer dab.Unlock()
+
+	var err error
+	var conf Configuration
+	if conf, err = NewConfiguration(dab.runtimeConf.ConfPath); err != nil {
+		return fmt.Errorf("error when reading configuration for DAB version %s: %v", Version, err)
+	}
+
+	if conf.Web.TLS != dab.conf.Web.TLS {
+		if err = dab.components.Web.SetCertificate(conf.Web.WebConf); err != nil {
+			return err
+		}
+	}
+
+	dab.conf = conf
+	dab.components.ConfState = conf.Components()
+
 	return nil
 }

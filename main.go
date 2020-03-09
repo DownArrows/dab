@@ -19,16 +19,26 @@ func main() {
 		done <- dab.Run(ctx, os.Args[1:])
 	}()
 
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGTERM, os.Interrupt, os.Kill)
+	kill := make(chan os.Signal, 1)
+	signal.Notify(kill, syscall.SIGTERM, os.Interrupt, os.Kill)
+
+	reload := make(chan os.Signal, 1)
+	signal.Notify(reload, syscall.SIGHUP)
 
 	var err error
-	select {
-	case err = <-done:
-		cancel()
-	case <-sig:
-		cancel()
-		err = <-done
+LOOP:
+	for {
+		select {
+		case err = <-done:
+			cancel()
+			break LOOP
+		case <-kill:
+			cancel()
+			err = <-done
+			break LOOP
+		case <-reload:
+			dab.Reload()
+		}
 	}
 
 	if err != nil && !IsCancellation(err) {

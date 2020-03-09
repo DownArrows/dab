@@ -224,17 +224,19 @@ func (rdr *Redirector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // WebServer serves the stored data as HTML pages and a backup of the database.
 type WebServer struct {
-	sync.Mutex
 	WebConf
-	certificate tls.Certificate
-	compendium  CompendiumFactory
-	conns       StorageConnPool
-	logger      LevelLogger
-	redirector  *Redirector
-	reports     ReportFactory
-	SelfLink    string
-	server      *http.Server
-	storage     *Storage
+	cert struct {
+		sync.Mutex
+		value *tls.Certificate
+	}
+	compendium CompendiumFactory
+	conns      StorageConnPool
+	logger     LevelLogger
+	redirector *Redirector
+	reports    ReportFactory
+	SelfLink   string
+	server     *http.Server
+	storage    *Storage
 }
 
 // NewWebServer creates a new WebServer.
@@ -256,14 +258,11 @@ func NewWebServer(
 		storage:    storage,
 	}
 
-	if conf.TLS.Enabled() {
-		wsrv.certificate, err = tls.LoadX509KeyPair(conf.TLS.Cert, conf.TLS.Key)
-		if err != nil {
-			return nil, err
-		}
+	if err := wsrv.SetCertificate(conf); err != nil {
+		return nil, err
 	}
 
-	if wsrv.TLS.RedirectorEnabled() {
+	if wsrv.TLS.Enabled() && wsrv.TLS.Redirector.Enabled() {
 		wsrv.redirector, err = NewRedirector(wsrv.logger, wsrv.TLS.Redirector)
 		if err != nil {
 			return nil, err
@@ -299,6 +298,20 @@ func NewWebServer(
 	return wsrv, nil
 }
 
+// SetCertificate sets and can hot-swap the TLS certificate.
+func (wsrv *WebServer) SetCertificate(conf WebConf) error {
+	if conf.TLS.Enabled() {
+		wsrv.cert.Lock()
+		defer wsrv.cert.Unlock()
+		if cert, err := tls.LoadX509KeyPair(conf.TLS.Cert, conf.TLS.Key); err != nil {
+			return err
+		} else {
+			wsrv.cert.value = &cert
+		}
+	}
+	return nil
+}
+
 // Run runs the web server and blocks until it is cancelled or returns an error.
 func (wsrv *WebServer) Run(ctx Ctx) error {
 	pool, err := wsrv.initDBPool(ctx)
@@ -313,7 +326,7 @@ func (wsrv *WebServer) Run(ctx Ctx) error {
 	tasks.SpawnCtx(func(_ Ctx) error { return wsrv.listen() })
 	tasks.SpawnCtx(webServerShutdown(wsrv.server))
 
-	if wsrv.TLS.RedirectorEnabled() {
+	if wsrv.TLS.Enabled() && wsrv.TLS.Redirector.Enabled() {
 		tasks.SpawnCtx(wsrv.redirector.Run)
 	}
 
@@ -363,8 +376,8 @@ func (wsrv *WebServer) listen() error {
 
 	if wsrv.TLS.Enabled() {
 		tls_conf := &tls.Config{
-			Certificates: []tls.Certificate{wsrv.certificate},
-			MinVersion:   tls.VersionTLS12,
+			GetCertificate: wsrv.getCertificate,
+			MinVersion:     tls.VersionTLS12,
 
 			PreferServerCipherSuites: false,
 			CipherSuites: []uint16{
@@ -384,6 +397,12 @@ func (wsrv *WebServer) listen() error {
 	wsrv.logger.Infof("listening on %s", wsrv.SelfLink)
 
 	return ignoreWebServerCloseErr(wsrv.server.Serve(listener))
+}
+
+func (wsrv *WebServer) getCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	wsrv.cert.Lock()
+	defer wsrv.cert.Unlock()
+	return wsrv.cert.value, nil
 }
 
 // CSS serves the style sheets.
