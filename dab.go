@@ -329,8 +329,6 @@ func (dab *DownArrowsBot) Reload() {
 }
 
 func (dab *DownArrowsBot) reload() error {
-	// 1. re-read conf
-	// 2. set certificate
 	dab.Lock()
 	defer dab.Unlock()
 
