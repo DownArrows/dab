@@ -22,23 +22,13 @@ func main() {
 	kill := make(chan os.Signal, 1)
 	signal.Notify(kill, syscall.SIGTERM, os.Interrupt, os.Kill)
 
-	reload := make(chan os.Signal, 1)
-	signal.Notify(reload, syscall.SIGHUP)
-
 	var err error
-LOOP:
-	for {
-		select {
-		case err = <-done:
-			cancel()
-			break LOOP
-		case <-kill:
-			cancel()
-			err = <-done
-			break LOOP
-		case <-reload:
-			dab.Reload()
-		}
+	select {
+	case err = <-done:
+		cancel()
+	case <-kill:
+		cancel()
+		err = <-done
 	}
 
 	if err != nil && !IsCancellation(err) {

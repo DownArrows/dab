@@ -248,8 +248,6 @@ func NewWebServer(
 	conf WebConf,
 ) (*WebServer, error) {
 
-	var err error
-
 	wsrv := &WebServer{
 		WebConf:    conf,
 		compendium: compendium,
@@ -258,14 +256,19 @@ func NewWebServer(
 		storage:    storage,
 	}
 
-	if err := wsrv.SetCertificate(conf); err != nil {
-		return nil, err
-	}
-
-	if wsrv.TLS.Enabled() && wsrv.TLS.Redirector.Enabled() {
-		wsrv.redirector, err = NewRedirector(wsrv.logger, wsrv.TLS.Redirector)
-		if err != nil {
+	if wsrv.TLS.Enabled() {
+		if cert, err := tls.LoadX509KeyPair(wsrv.TLS.Cert, wsrv.TLS.Key); err != nil {
 			return nil, err
+		} else {
+			wsrv.cert.value = &cert
+		}
+
+		if wsrv.TLS.Redirector.Enabled() {
+			if rdr, err := NewRedirector(wsrv.logger, wsrv.TLS.Redirector); err != nil {
+				return nil, err
+			} else {
+				wsrv.redirector = rdr
+			}
 		}
 	}
 
@@ -296,20 +299,6 @@ func NewWebServer(
 	wsrv.server = &http.Server{Addr: conf.Listen, Handler: mux}
 
 	return wsrv, nil
-}
-
-// SetCertificate sets and can hot-swap the TLS certificate.
-func (wsrv *WebServer) SetCertificate(conf WebConf) error {
-	if conf.TLS.Enabled() {
-		wsrv.cert.Lock()
-		defer wsrv.cert.Unlock()
-		if cert, err := tls.LoadX509KeyPair(conf.TLS.Cert, conf.TLS.Key); err != nil {
-			return err
-		} else {
-			wsrv.cert.value = &cert
-		}
-	}
-	return nil
 }
 
 // Run runs the web server and blocks until it is cancelled or returns an error.
