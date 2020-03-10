@@ -323,6 +323,21 @@ func (stmt *SQLiteStmt) Close() error {
 	return stmt.stmt.Close()
 }
 
+// ColumnBlob returns a slice of bytes for the given column number, starting at 0 (wrapper with retry).
+func (stmt *SQLiteStmt) ColumnBlob(pos int) ([]byte, bool, error) {
+	var result []byte
+	var ok bool
+	err := stmt.retry(func() error {
+		var err error
+		result, err = stmt.stmt.ColumnBlob(pos)
+		return err
+	})
+	if result != nil {
+		ok = true
+	}
+	return result, ok, err
+}
+
 // ColumnText returns a string for the given column number, starting at 0 (wrapper with retry).
 func (stmt *SQLiteStmt) ColumnText(pos int) (string, bool, error) {
 	var result string
