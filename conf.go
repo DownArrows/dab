@@ -351,7 +351,7 @@ func NewConfiguration(path string) (Configuration, error) {
 		conf.Discord.DiscordBotConf.Graveyard = conf.Discord.DiscordBotConf.General
 	}
 
-	if conf.Reddit.UnsuspensionInterval.Value != 0 {
+	if !conf.Reddit.UnsuspensionInterval.IsZero() {
 		conf.Reddit.ResurrectionsInterval.Value = conf.Reddit.UnsuspensionInterval.Value
 	}
 
@@ -437,7 +437,7 @@ func (conf Configuration) Deprecations() []string {
 		msgs = append(msgs, "discord.admin is deprecated, use discord.privileged_role instead")
 	}
 
-	if conf.Reddit.DVTInterval.Value != 0 {
+	if !conf.Reddit.DVTInterval.IsZero() {
 		msgs = append(msgs, "reddit.dvt_interval is deprecated")
 	}
 
@@ -445,7 +445,7 @@ func (conf Configuration) Deprecations() []string {
 		msgs = append(msgs, "reddit.watch_submissions is deprecated")
 	}
 
-	if conf.Reddit.CompendiumUpdateInterval.Value != 0 {
+	if !conf.Reddit.CompendiumUpdateInterval.IsZero() {
 		msgs = append(msgs, "reddit.compendium_update_interval is deprecated")
 	}
 
@@ -454,11 +454,11 @@ func (conf Configuration) Deprecations() []string {
 		msgs = append(msgs, "reddit.compendium is deprecated")
 	}
 
-	if conf.Report.Leeway.Value != 0 {
+	if !conf.Report.Leeway.IsZero() {
 		msgs = append(msgs, "report.leeway is deprecated")
 	}
 
-	if conf.Reddit.UnsuspensionInterval.Value != 0 {
+	if !conf.Reddit.UnsuspensionInterval.IsZero() {
 		msgs = append(msgs, "reddit.unsuspension_interval is deprecated, use reddit.resurrections_interval instead")
 	}
 
