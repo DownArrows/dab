@@ -16,12 +16,12 @@ Table of contents:
     - [Command line interface](#command-line-interface)
     - [Configuration](#configuration)
     - [Sample configuration](#sample-configuration)
-    - [Database identification](#database-management)
+    - [Database identification](#database-identification)
  - [Developer manual](#developer-manual)
     - [Conventions](#conventions)
     - [Architecture](#architecture)
-    - [Using the database](#using-the-database)
-    - [Database schema](#database-schema)
+    - [Using the database](#using-the-databases)
+    - [Database schemas](#database-schemas)
     - [TODO](#todo)
 
 # End user manual
@@ -29,6 +29,9 @@ Table of contents:
 ## Web interface
 
  - `/` shows a custom web page, file, or directory listing, if the administrator has enabled this feature
+ - `/backup` redirects to `/backup/main`
+ - `/backup/main` triggers and offers for download a backup of the application's main database
+ - `/backup/secrets` triggers a backup of the database of secrets, but doesn't offer it for download
  - `/reports/<year>/<week number>` shows the report for the specified week of the year,
    where the week number is an [ISO week number](https://en.wikipedia.org/wiki/ISO_week_date)
  - `/reports/current` redirects to the report of the current week
@@ -75,14 +78,31 @@ See [the administrator section](#database-identification) and [the developer sec
 
 # Administrator manual
 
-DAB has only been compiled and used on GNU/Linux so far.
-It should theoretically work on other platforms.
+DAB has only been compiled and used on GNU/Linux so far, support for other platforms is unknown.
+
+Versioning follows [semver](https://semver.org/) and applies to everything documented in the end user and administrator manuals.
 
 The configuration is organized around three main components — discord, reddit, the web server — that can be activated independently.
 You can only launch the web server on an already populated database, or only scan reddit and don't connect to discord.
 See the section on the available configuration options to see what is necessary to enable each component.
 
-Versioning follows [semver](https://semver.org/) and applies to everything documented in the end user and administrator manuals.
+The web interface can be secured by [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security),
+so that end users can view it through HTTPS.
+It can be enabled in two ways:
+
+ - set in the configuration file `web.tls.cert`, which must combine the certificate and any intermediary one,
+   and set `web.tls.key`, which must be the corresponding private key
+ - enable with `web.tls.acme` [ACME](https://en.wikipedia.org/wiki/Automated_Certificate_Management_Environment) to automatically
+   fetch [Let's Encrypt](https://en.wikipedia.org/wiki/Let%27s_Encrypt) certificates for a list of domain names you control
+
+With `tls.helper` it is possible to enable a secondary web server inside of DAB that will redirect HTTP requests to HTTPS,
+and provide to ACME a way independent of a working TLS configuration to create or renew certificates.
+
+DAB opens *two* database files:
+
+ - the *main* database, configured in `database.path`, contains most of the data
+ - the database of *secrets*, configured in `database.secrets_path`, which contains confidential data,
+   like cached TLS certificates obtained with ACME
 
 ## Compiling
 
@@ -128,7 +148,8 @@ root directory and take advantage of the application's style sheets.
 
 To run the bot simply call the binary. It will expect a file named `dab.conf.json` in the current directory.
 To use another path for the configuration file use `dab -config /your/custom/path/dab.conf.json` (note that the file can have any name).
-It needs a valid configuration file and to be able to open the database it is configured with (defaults to `dab.db` in the current directory).
+It needs a valid configuration file and to be able to open the databases it is configured with
+(defaults to `dab.db` and `secrets.db` in the current directory).
 
 If you want to run it with [systemd](https://en.wikipedia.org/wiki/Systemd), here is a sample unit file to get you started:
 
@@ -143,7 +164,11 @@ If you want to run it with [systemd](https://en.wikipedia.org/wiki/Systemd), her
 	ExecStart=/usr/local/bin/dab -config /etc/dab.conf.json
 	Restart=on-failure
 
-It also partially supports systemd's socket activation, with a limitation to a single socket for the moment being.
+systemd's socket activation is also supported.
+Only one socket is allowed if only HTTP or HTTPS alone is enabled;
+if the HTTP helper is enabled with HTTPS, the web server will listen on
+the first socket with HTTPS, and on the second one with the HTTP helper.
+It is a fatal error if there are too many or too little sockets.
 
 The bot shuts down on the following UNIX signals: SIGINT, SIGTERM, and SIGKILL.
 On Windows it will not respond to Ctrl+C.
@@ -155,16 +180,23 @@ On Windows it will not respond to Ctrl+C.
 If the bot has been offline for a while, it will pick everything back up where it left,
 save for messages on Discord and comments of Reddit users that got banned or deleted in the meantime.
 
-To backup the database, **do not** copy the file it opens (given in the `database` section of the config file, option `path`).
-Only use the built-in backup system by downloading the file with HTTP (which must be enabled in the `web` section by setting `listen`).
-It serves a cached backup if it is not too old (`backup_max_age` in the configuration file), and otherwise creates one before sending it.
-This can be used in a backup script called by cron, like so:
+To backup the databases, **do not** copy the file they open
+(given in the `database` section of the config file, options `path` and `secrets_path`).
+Only use the built-in backup system by downloading the file with HTTP (which must be enabled in the `web` section by setting `listen`)
+in the case of the main database, and by triggering the backup with HTTP and copying the backup file for the database of secrets.
+No new backup is made if the ones that already exist aren't old enough (`backup.max_age` in the configuration file).
+
+Those backup mechanisms can be used in a backup script called by cron.
+Here's an example that assumes the script is set in the crontab of a user which is configured to
+connect to `anothercomputer` without a password and put the `dab` folden in its home directory:
 
 	#!/bin/sh
 	set -e
-	bak="/srv/dab/dab.db.bak"
-	wget -O"$bak" -q http://localhost:3499/backup
-	rsync -e "ssh -i /root/.ssh/backup" "$bak" backup@anothercomputer:/var/backups/dab.sqlite3
+	dir="$HOME/dab"
+	wget -O "$dir/main.sqlite3" -q http://localhost:3499/backup/main
+	wget -O /dev/null -q http://localhost:3499/backup/secrets
+	cp /tmp/dab-secrets.bak "$dir/secrets.sqlite3"
+	rsync -a "$dir" $ anothercomputer:
 
 If after the bot has stopped there are files ending in `-shm`, `-wal` and `-journal` in the folder containing the database file,
 **do not** delete them, they probably contain data and deleting them could leave the database corrupted.
@@ -202,9 +234,16 @@ and [template](http://golang.org/pkg/text/template/).
    ("Fatal", "Error", "Info", "Debug", case-insensitive)
  - `timezone` *timezone* (UTC): timezone used to format dates and compute weeks and years
  - `database`
+    - `backup` *dictionary*:
+      - `max_age` *duration* (24h): if the backup is older than that when a backup is requested,
+         the backup will be refreshed; must be at least one hour.
+      - `main` *string* (./dab.db.backup): path to the backup of the main database
+      - `secrets` *string* (./dab.db.backup): path to the backup of the main database
     - `backup_max_age` *duration* (24h): if the backup is older than that when a backup is requested,
-      the backup will be refreshed; must be at least one hour
-    - `backup_path` *string* (./dab.db.backup): path to the backup of the database
+      the backup will be refreshed; must be at least one hour.
+      **Deprecated**: starting with version 1.26.0 this option is superseded by database.backup.max_age.
+    - `backup_path` *string* (./dab.secrets.backup): path to the backup of the database of secrets
+      **Deprecated**: starting with version 1.26.0 this option is superseded by database.backup.main.
     - `cleanup_interval` *duration* (30m): interval between clean-ups of the database (reduces its size and optimizes queries);
        put at `0s` to disable, else must be at least one minute
     - `log_level` *string* (*parent `log_level`*): logging level for this component ("Fatal", "Error", "Info", "Debug", case-insensitive)
@@ -213,6 +252,7 @@ and [template](http://golang.org/pkg/text/template/).
        - `times` *int* (25): maximum number of times to try to create a connection to the database; use -1 for infinite retries
        - `max_interval` *duration* (10s): maximum wait between connection retries
        - `reset_after` *duration* (*none*): time after which the restart count and the backoff are reset
+    - `secrets_path` *string* (./secrets.db): path to the database file containing the application's secrets
     - `timeout` *duration* (15s): timeout on the [database' lock](https://sqlite.org/c3ref/busy_timeout.html)
  - `discord`
     - `admin` *string* (*none*): Discord ID of the privileged user (use Discord's developer mode to get them);
@@ -281,12 +321,24 @@ and [template](http://golang.org/pkg/text/template/).
     - `dirty_reads` *bool* (true): allow reading inconsistent data from the database in exchange of better concurrency
     - `ip_header` *string* (*none*): HTTP header that contains the true IP, so that logs can be accurate (use if behind a reverse-proxy)
     - `listen` *string* (*none*): `hostname:port` or `ip:port` or `:port` (all interfaces)
-      specification for the webserver to listen to; leave out to disable
+      specification for the webserver to listen to (even if TLS is enabled); leave out to disable
     - `log_level` *string* (*parent `log_level`*): logging level for this component ("Fatal", "Error", "Info", "Debug", case-insensitive)
     - `max_limit` *integer* (1000): maximum number of items per page of paginated data
     - `nb_db_conn` *integer* (10): number of database connections open for the web server
     - `root_dir` *string* (*none*): root directory that is served at the root URL, with automatic directory index generation,
        and which serves `index.html` as the root of a directory if present
+    - `tls` *dictionary*: enable HTTPS with either ACME or a pair of files (certificate and private key)
+      - `acme` *array of string` (*none*): domains for which to automatically acquire and renew a
+        Let's Encrypt certificate; leave out or empty to disable,
+        and if non-empty, overrides `web.tls.cert` and `web.tls.key` and enables TLS
+      - `cert` *string* (*none*): path to a TLS certificate, with the intermediary certificate, to enable TLS;
+        requires `web.tls.key` to be set too
+      - `key` *string* (*none*): path to a TLS private key, to enable TLS; requires `web.tls.key` to be set too
+      - `helper` *dictionary*: optional HTTP server to help with HTTPS
+        - `listen` *string* (:80): port to listen to for redirecting to HTTPS and
+          for responding to ACME challenges over HTTP;
+        - `target` *string* (*none*): base URL (trailing slashes ignored) to redirect HTTP connections to;
+          required to enable the helper
 
 ## Sample configuration
 
@@ -297,8 +349,11 @@ Note how the last value of a dictionary must not be followed by a comma:
 		"timezone": "America/Chicago",
 
 		"database": {
+			"backup": {
+				"main": "/tmp/dab-main.bak"
+				"secrets": "/tmp/dab-secrets.bak"
+			},
 			"path":        "/var/lib/dab/db.sqlite3",
-			"backup_path": "/var/lib/dab/db.sqlite3.backup"
 		},
 
 		"reddit": {
@@ -321,19 +376,19 @@ Note how the last value of a dictionary must not be followed by a comma:
 
 		"web": {
 			"log_level": "info",
-			"listen": "localhost:3499"
+			"listen": "localhost:3499",
 		}
 
 	}
 
 ## Database identification
 
-The database is an SQLite file which contains in its header a specific application
-format and the version of DAB that last wrote into it.
+The databases opened by DAB are SQLite files which contain in their header a specific application
+format and the version of DAB that last wrote into them.
 
 You can use a file identification tool (like `file` on UNIX-like OSes) to get information
-about the database. It has the application ID `3499` (or `dab` in hexadecimal),
-and the version of the bot that last wrote into the database is encoded as an integer.
+about those databases. They have the application ID `3499` (or `dab` in hexadecimal),
+and the version of the bot that last wrote into them is encoded as an integer.
 You can check whether an SQLite file is a valid DAB database and decode
 its version with the following python (2 and 3) script:
 
@@ -341,20 +396,20 @@ its version with the following python (2 and 3) script:
 	import struct
 	db_path = sys.argv[1]
 	with open(db_path, "rb") as f:
-		 # https://www.sqlite.org/fileformat2.html#database_header
-		 if f.read(16) != b"SQLite format 3\x00":
-			  print("'{path}' is not an SQLite 3 file.".format(path=db_path))
-			  exit(1)
-		 f.seek(68) # application ID
-		 app_id = struct.unpack(">L", f.read(4))[0]
-		 if app_id != 0xdab:
-			  msg = "'{path}' has incorrect application ID 0x{id:x} (expected 0xdab)."
-			  print(msg.format(path=db_path, id=app_id))
-			  exit(1)
-		 f.seek(60) # user version
-		 v = bytearray(f.read(4))
-		 msg = "File last written by DAB version {major}.{minor}.{bugfix}."
-		 print(msg.format(major=v[1], minor=v[2], bugfix=v[3]))
+		# https://www.sqlite.org/fileformat2.html#database_header
+		if f.read(16) != b"SQLite format 3\x00":
+			print("'{path}' is not an SQLite 3 file.".format(path=db_path))
+			exit(1)
+		f.seek(68) # application ID
+		app_id = struct.unpack(">L", f.read(4))[0]
+		if app_id != 0xdab:
+			msg = "'{path}' has incorrect application ID 0x{id:x} (expected 0xdab)."
+			print(msg.format(path=db_path, id=app_id))
+			exit(1)
+		f.seek(60) # user version
+		v = bytearray(f.read(4))
+		msg = "File last written by DAB version {major}.{minor}.{bugfix}."
+		print(msg.format(major=v[1], minor=v[2], bugfix=v[3]))
 
 Save this script in a file, for example named `dab_db.py`, and run it on `dab.db` with `python dab_db.py dab.db`.
 
@@ -420,9 +475,9 @@ and wait for it to return normally or with an error (this was inspired by Trio's
 By extension, we call a task any function that can be turned into a proper task with a trivial wrapping function.
 They communicate together through channels that are passed either via a closure or via the data structure they are attached to.
 
-## Using the database
+## Using the databases
 
-The database is used with a non-standard driver that makes use of features specific to SQLite.
+The databases are used with a non-standard driver that makes use of features specific to SQLite.
 Its interface is wrapped in custom data structures to allow for context-based cancellation and less code repetition.
 See the [driver's documentation](https://godoc.org/github.com/bvinc/go-sqlite-lite/sqlite3) and the interface
 `SQLiteConn` to get an overview of what each connection can do.
@@ -438,7 +493,11 @@ and checks the data's integrity on every startup.
 Files that start with `sqlite` define the code that isn't really specific to the application.
 If you need to add new methods to do queries on the database, you probably only need to modify `storage_conn.go`.
 
-## Database schema
+## Database schemas
+
+### Main
+
+Contains most of the data, and can be made public.
 
  - `user_archive`: table of all registered reddit users, deleted or not
     - `name`: name of the user
@@ -468,9 +527,16 @@ If you need to add new methods to do queries on the database, you probably only 
     - `value`: any string value
     - `created`: UNIX timestamp of when the key/value pair was added
 
+### Secrets
+
+Data that must remain secret.
+
+ - `certs`: cache for ACME
+   - `key`: name of a binary blob
+   - `value`: binary blob
+
 ## TODO
 
- 1. document TLS system
  1. discord-based log-in
  1. links previous/next in the web reports, and reports index
  1. backup discord messages

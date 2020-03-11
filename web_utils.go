@@ -293,7 +293,7 @@ func (cc CertCache) InitializationQueries() []SQLQuery {
 	return []SQLQuery{
 		{SQL: `CREATE TABLE IF NOT EXISTS secrets.certs (
 			key TEXT PRIMARY KEY,
-			cert BLOB NOT NULL
+			value BLOB NOT NULL
 		) WITHOUT ROWID`},
 	}
 }
