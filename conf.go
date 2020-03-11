@@ -74,6 +74,7 @@ const Defaults string = `{
 	}
 }`
 
+// ListenFDsEnvVar is the name of the environment variable that indicates file descriptors to listen on.
 const ListenFDsEnvVar = "LISTEN_FDS"
 
 // StorageConf describes the configuration of the Storage layer.
@@ -183,11 +184,11 @@ type WebConf struct {
 // ListenFDs checks for an environment variable that allows to
 // pass file descriptors for the web server to listen to (used by systemd socket activation)
 func (wc WebConf) getListenFDs() (uint, error) {
-	raw_num := os.Getenv(ListenFDsEnvVar)
-	if raw_num == "" {
+	rawNum := os.Getenv(ListenFDsEnvVar)
+	if rawNum == "" {
 		return 0, nil
 	}
-	num, err := strconv.Atoi(raw_num)
+	num, err := strconv.Atoi(rawNum)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read a valid number in the environment variable %q: %v", ListenFDsEnvVar, err)
 	} else if num < 0 {

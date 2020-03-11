@@ -112,11 +112,11 @@ func (dab *DownArrowsBot) Run(ctx Ctx, args []string) error {
 	}
 
 	dab.logger.Infof("using database %s", dab.conf.Database.Path)
-	db_logger, err := NewStdLevelLogger("db", dab.logOut, conf.Database.LogLevel)
+	dbLogger, err := NewStdLevelLogger("db", dab.logOut, conf.Database.LogLevel)
 	if err != nil {
 		return fmt.Errorf("error when setting a logging level for the database: %v", err)
 	}
-	storage, conn, err := NewStorage(ctx, db_logger, dab.conf.Database.StorageConf)
+	storage, conn, err := NewStorage(ctx, dbLogger, dab.conf.Database.StorageConf)
 	if err != nil {
 		return err
 	}
@@ -147,11 +147,11 @@ func (dab *DownArrowsBot) Run(ctx Ctx, args []string) error {
 	dab.logger.Info(dab.components.ConfState)
 
 	if dab.components.ConfState.Web.Enabled {
-		web_logger, err := NewStdLevelLogger("web", dab.logOut, dab.conf.Web.LogLevel)
+		webLogger, err := NewStdLevelLogger("web", dab.logOut, dab.conf.Web.LogLevel)
 		if err != nil {
 			return fmt.Errorf("error when setting a logging level for the web server: %v", err)
 		}
-		dab.components.Web, err = NewWebServer(web_logger, dab.layers.Storage,
+		dab.components.Web, err = NewWebServer(webLogger, dab.layers.Storage,
 			dab.layers.Report, dab.layers.Compendium, dab.conf.Web.WebConf)
 		if err != nil {
 			return fmt.Errorf("error when creating the web server: %v", err)
@@ -169,12 +169,12 @@ func (dab *DownArrowsBot) Run(ctx Ctx, args []string) error {
 			return err
 		}
 
-		reddit_logger, err := NewStdLevelLogger("reddit", dab.logOut, dab.conf.Reddit.LogLevel)
+		redditLogger, err := NewStdLevelLogger("reddit", dab.logOut, dab.conf.Reddit.LogLevel)
 		if err != nil {
 			return fmt.Errorf("error when setting a logging level for the reddit components: %v", err)
 		}
-		dab.components.RedditScanner = NewRedditScanner(reddit_logger, dab.layers.Storage, redditAPI, dab.conf.Reddit.RedditScannerConf)
-		dab.components.RedditUsers = NewRedditUsers(reddit_logger, redditAPI, dab.conf.Reddit.RedditUsersConf)
+		dab.components.RedditScanner = NewRedditScanner(redditLogger, dab.layers.Storage, redditAPI, dab.conf.Reddit.RedditScannerConf)
+		dab.components.RedditUsers = NewRedditUsers(redditLogger, redditAPI, dab.conf.Reddit.RedditUsersConf)
 
 		retrier := NewRetrier(dab.conf.Reddit.Retry, func(r *Retrier, err error) {
 			dab.logger.Errorf("error in reddit component, restarting (%s): %v", r, err)
@@ -192,12 +192,12 @@ func (dab *DownArrowsBot) Run(ctx Ctx, args []string) error {
 	}
 
 	if dab.components.ConfState.Discord.Enabled {
-		discord_logger, err := NewStdLevelLogger("discord", dab.logOut, dab.conf.Discord.LogLevel)
+		discordLogger, err := NewStdLevelLogger("discord", dab.logOut, dab.conf.Discord.LogLevel)
 		if err != nil {
 			return err
 		}
 		// We're re-using the database's first connection here, don't share it with any other component.
-		dab.components.Discord, err = NewDiscordBot(discord_logger, conn, dab.layers.Storage.KV(),
+		dab.components.Discord, err = NewDiscordBot(discordLogger, conn, dab.layers.Storage.KV(),
 			dab.components.RedditUsers.Add, dab.conf.Discord.DiscordBotConf)
 		if err != nil {
 			return err

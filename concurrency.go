@@ -23,7 +23,7 @@ func SleepCtx(ctx Ctx, duration time.Duration) bool {
 	}
 }
 
-// Shortcut for the often-used context.Context
+// Ctx is a shortcut for the often-used context.Context
 type Ctx = context.Context
 
 // Task is a function that can be managed by a TaskGroup.
@@ -179,14 +179,14 @@ func NewRetrier(conf RetryConf, onError func(*Retrier, error)) *Retrier {
 // Implement the Stringer interface with human-readable information about the state of the retrier.
 func (r *Retrier) String() string {
 	times := ""
-	max_interval := ""
+	maxInterval := ""
 	if r.Times > -1 {
 		times = fmt.Sprintf("/%d", r.Times)
 	}
 	if r.MaxInterval > 0 {
-		max_interval = fmt.Sprintf("/%s", r.MaxInterval)
+		maxInterval = fmt.Sprintf("/%s", r.MaxInterval)
 	}
-	return fmt.Sprintf("%d%s retries with %s%s of backoff", r.Retries, times, r.Backoff, max_interval)
+	return fmt.Sprintf("%d%s retries with %s%s of backoff", r.Retries, times, r.Backoff, maxInterval)
 }
 
 // Set binds a Retrier to a Task and returns the Retrier so that the method can be chained.
