@@ -13,7 +13,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 var (
@@ -26,18 +25,16 @@ var matchTags = regexp.MustCompile("<([^>]*)>")
 // WebServer serves the stored data as HTML pages and a backup of the database.
 type WebServer struct {
 	WebConf
-	cert struct {
-		sync.Mutex
-		value *tls.Certificate
-	}
+	acme       *ACMEManager
 	compendium CompendiumFactory
-	conns      StorageConnPool
+	conns      SQLiteConnPool
 	logger     LevelLogger
-	redirector *Redirector
+	helper     *TLSHelper
 	reports    ReportFactory
 	SelfLink   string
 	server     *http.Server
 	storage    *Storage
+	tls        *tls.Config
 }
 
 // NewWebServer creates a new WebServer.
@@ -55,28 +52,17 @@ func NewWebServer(
 		logger:     logger,
 		reports:    reports,
 		storage:    storage,
+		tls: &tls.Config{
+			PreferServerCipherSuites: false,
+			MinVersion:               tls.VersionTLS12,
+		},
 	}
 
-	if wsrv.TLS.Enabled() {
-		if cert, err := tls.LoadX509KeyPair(wsrv.TLS.Cert, wsrv.TLS.Key); err != nil {
-			return nil, err
-		} else {
-			wsrv.cert.value = &cert
-		}
+	var err error
 
-		if wsrv.TLS.Redirector.Enabled() {
-			if rdr, err := NewRedirector(wsrv.logger, wsrv.TLS.Redirector); err != nil {
-				return nil, err
-			} else {
-				wsrv.redirector = rdr
-			}
-		}
-	}
-
-	if link, err := wsrv.getSelfLink(); err != nil {
+	wsrv.SelfLink, err = wsrv.getSelfLink()
+	if err != nil {
 		return nil, err
-	} else {
-		wsrv.SelfLink = link
 	}
 
 	mux := NewServeMux(wsrv.logger, wsrv.IPHeader)
@@ -113,12 +99,17 @@ func (wsrv *WebServer) Run(ctx Ctx) error {
 
 	tasks := NewTaskGroup(ctx)
 
+	if wsrv.TLS.Enabled() {
+		if err := wsrv.prepareTLS(wsrv.conns); err != nil {
+			return err
+		}
+		if wsrv.TLS.Helper.Enabled() {
+			tasks.SpawnCtx(wsrv.helper.Run)
+		}
+	}
+
 	tasks.SpawnCtx(func(_ Ctx) error { return wsrv.listen() })
 	tasks.SpawnCtx(HTTPServerShutdown(wsrv.server))
-
-	if wsrv.TLS.Enabled() && wsrv.TLS.Redirector.Enabled() {
-		tasks.SpawnCtx(wsrv.redirector.Run)
-	}
 
 	if interval := wsrv.DBOptimize.Value; interval != 0 {
 		tasks.SpawnCtx(func(ctx Ctx) error { return wsrv.conns.Analyze(ctx, interval) })
@@ -127,8 +118,36 @@ func (wsrv *WebServer) Run(ctx Ctx) error {
 	return tasks.Wait().ToError()
 }
 
-func (wsrv *WebServer) initDBPool(ctx Ctx) (StorageConnPool, error) {
-	pool, err := NewStorageConnPool(ctx, wsrv.NbDBConn, wsrv.getConn)
+func (wsrv *WebServer) prepareTLS(pool SQLiteConnPool) error {
+	var err error
+	if wsrv.TLS.ACMEEnabled() {
+		wsrv.acme, err = NewACMEManager(pool, wsrv.TLS.ACME...)
+		if err != nil {
+			return err
+		}
+		wsrv.tls.NextProtos = wsrv.acme.TLSNextProtos()
+		wsrv.tls.GetCertificate = wsrv.acme.GetCertificate
+	} else if wsrv.TLS.CertsEnabled() {
+		cert, err := tls.LoadX509KeyPair(wsrv.TLS.Cert, wsrv.TLS.Key)
+		if err != nil {
+			return err
+		}
+		wsrv.tls.Certificates = []tls.Certificate{cert}
+	}
+
+	if wsrv.TLS.Helper.Enabled() {
+		wsrv.helper, err = NewTLSHelper(wsrv.logger, wsrv.acme, wsrv.TLS.Helper)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (wsrv *WebServer) initDBPool(ctx Ctx) (SQLiteConnPool, error) {
+	pool, err := NewSQLiteConnPool(ctx, wsrv.NbDBConn, func(ctx Ctx) (SQLiteConn, error) {
+		return wsrv.getConn(ctx)
+	})
 	if wsrv.DirtyReads && err == nil {
 		wsrv.logger.Info("dirty reads of the database enabled")
 	}
@@ -165,13 +184,7 @@ func (wsrv *WebServer) listen() error {
 	defer listener.Close()
 
 	if wsrv.TLS.Enabled() {
-		tls_conf := &tls.Config{
-			GetCertificate: wsrv.getCertificate,
-			MinVersion:     tls.VersionTLS12,
-
-			PreferServerCipherSuites: false,
-		}
-		listener = tls.NewListener(listener, tls_conf)
+		listener = tls.NewListener(listener, wsrv.tls)
 		wsrv.logger.Infof("TLS enabled on %s", wsrv.Listen)
 		defer listener.Close()
 	}
@@ -179,12 +192,6 @@ func (wsrv *WebServer) listen() error {
 	wsrv.logger.Infof("listening on %s", wsrv.SelfLink)
 
 	return IgnoreHTTPServerCloseErr(wsrv.server.Serve(listener))
-}
-
-func (wsrv *WebServer) getCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
-	wsrv.cert.Lock()
-	defer wsrv.cert.Unlock()
-	return wsrv.cert.value, nil
 }
 
 // CSS serves the style sheets.
@@ -219,7 +226,7 @@ func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var report Report
-	err = wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
+	err = wsrv.withConn(r.Context(), func(conn StorageConn) error {
 		var err error
 		report, err = wsrv.reports.ReportWeek(conn, week, year)
 		return err
@@ -247,7 +254,7 @@ func (wsrv *WebServer) ReportStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var data ReportHeader
-	err = wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
+	err = wsrv.withConn(r.Context(), func(conn StorageConn) error {
 		var err error
 		data, err = wsrv.reports.StatsWeek(conn, week, year)
 		return err
@@ -275,7 +282,7 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var report Report
-	err = wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
+	err = wsrv.withConn(r.Context(), func(conn StorageConn) error {
 		var err error
 		report, err = wsrv.reports.ReportWeek(conn, week, year)
 		return err
@@ -311,7 +318,7 @@ func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
 // CompendiumIndex serves the compendium's index.
 func (wsrv *WebServer) CompendiumIndex(w http.ResponseWriter, r *http.Request) {
 	var compendium Compendium
-	err := wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
+	err := wsrv.withConn(r.Context(), func(conn StorageConn) error {
 		var err error
 		compendium, err = wsrv.compendium.Index(conn)
 		return err
@@ -341,7 +348,7 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 	username := args[0]
 	var stats CompendiumUser
 
-	err := wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
+	err := wsrv.withConn(r.Context(), func(conn StorageConn) error {
 		var err error
 		stats, err = wsrv.compendium.User(conn, username)
 		if err != nil {
@@ -384,7 +391,7 @@ func (wsrv *WebServer) CompendiumUserComments(w http.ResponseWriter, r *http.Req
 
 	var comments CompendiumUser
 
-	err = wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
+	err = wsrv.withConn(r.Context(), func(conn StorageConn) error {
 		var err error
 		comments, err = wsrv.compendium.UserComments(conn, username, page)
 		if err != nil {
@@ -418,7 +425,7 @@ func (wsrv *WebServer) CompendiumComments(w http.ResponseWriter, r *http.Request
 	}
 
 	var comments Compendium
-	err = wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
+	err = wsrv.withConn(r.Context(), func(conn StorageConn) error {
 		var err error
 		comments, err = wsrv.compendium.Comments(conn, page)
 		if err != nil {
@@ -442,7 +449,7 @@ func (wsrv *WebServer) CompendiumComments(w http.ResponseWriter, r *http.Request
 
 // Backup triggers a backup if needed, and serves it.
 func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
-	err := wsrv.conns.WithConn(r.Context(), func(conn StorageConn) error {
+	err := wsrv.withConn(r.Context(), func(conn StorageConn) error {
 		return wsrv.storage.Backup(r.Context(), conn)
 	})
 	if err != nil {
@@ -473,6 +480,10 @@ func (wsrv *WebServer) errMsg(w http.ResponseWriter, r *http.Request, msg string
 			code, msg, r.Method, r.URL, getIP(r, wsrv.IPHeader), r.Header.Get("User-Agent"))
 	})
 	http.Error(w, msg, code)
+}
+
+func (wsrv *WebServer) withConn(ctx Ctx, cb func(StorageConn) error) error {
+	return wsrv.conns.WithConn(ctx, func(conn SQLiteConn) error { return cb(conn.(StorageConn)) })
 }
 
 func (wsrv *WebServer) getSelfLink() (string, error) {

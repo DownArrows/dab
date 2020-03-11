@@ -1,6 +1,9 @@
 package main
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // ApplicationFileID is the identification integer written in the SQLite file specific to the application.
 const ApplicationFileID int = 0xdab
@@ -12,6 +15,7 @@ type Storage struct {
 	db           *SQLiteDatabase
 	kv           *KeyValueStore
 	logger       LevelLogger
+	secrets      string
 }
 
 // NewStorage returns a Storage instance after running initialization, checks, and migrations onto the target database file.
@@ -43,6 +47,7 @@ func NewStorage(ctx Ctx, logger LevelLogger, conf StorageConf) (*Storage, Storag
 		db:           db,
 		kv:           kv,
 		logger:       logger,
+		secrets:      conf.Secrets,
 	}
 
 	if err := s.initTables(conn); err != nil {
@@ -56,6 +61,8 @@ func (s *Storage) initTables(conn SQLiteConn) error {
 	var queries []SQLQuery
 	queries = append(queries, User{}.InitializationQueries()...)
 	queries = append(queries, Comment{}.InitializationQueries()...)
+	queries = append(queries, SQLQuery{SQL: fmt.Sprintf("ATTACH DATABASE %q AS secrets", s.secrets)})
+	queries = append(queries, CertCache{}.InitializationQueries()...)
 	if err := conn.MultiExec(queries); err != nil {
 		return err
 	}
@@ -111,46 +118,4 @@ func (s *Storage) WithConn(ctx Ctx, cb func(StorageConn) error) error {
 	}
 	defer conn.Close()
 	return cb(conn)
-}
-
-// StorageConnPool is a simple pool with a limited size.
-// Do not release more conns than the set size, there's no check,
-// and it will not behave properly relatively to cancellation.
-type StorageConnPool struct {
-	actual SQLiteConnPool
-}
-
-// NewStorageConnPool creates a new StorageConnPool with a global context.
-func NewStorageConnPool(ctx Ctx, size uint, cb func(Ctx) (StorageConn, error)) (StorageConnPool, error) {
-	pool, err := NewSQLiteConnPool(ctx, size, func(ctx Ctx) (SQLiteConn, error) { return cb(ctx) })
-	return StorageConnPool{actual: pool}, err
-}
-
-// Analyze wraps SQLiteConnPool.
-func (pool StorageConnPool) Analyze(ctx Ctx, interval time.Duration) error {
-	return pool.actual.Analyze(ctx, interval)
-}
-
-// Acquire wraps SQLiteConnPool.
-func (pool StorageConnPool) Acquire(ctx Ctx) (StorageConn, error) {
-	conn, err := pool.actual.Acquire(ctx)
-	if err != nil {
-		return StorageConn{}, err
-	}
-	return conn.(StorageConn), nil
-}
-
-// Release wraps SQLiteConnPool.
-func (pool StorageConnPool) Release(conn StorageConn) {
-	pool.actual.Release(conn)
-}
-
-// WithConn wraps SQLiteConnPool.
-func (pool StorageConnPool) WithConn(ctx Ctx, cb func(StorageConn) error) error {
-	return pool.actual.WithConn(ctx, func(conn SQLiteConn) error { return cb(conn.(StorageConn)) })
-}
-
-// Close wraps SQLiteConnPool.
-func (pool StorageConnPool) Close() error {
-	return pool.actual.Close()
 }

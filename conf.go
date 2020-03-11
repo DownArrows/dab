@@ -28,6 +28,7 @@ const Defaults string = `{
 			"max_interval": "10s",
 			"reset_after": "5m"
 		},
+		"secrets": "./secrets.db",
 		"timeout": "15s"
 	},
 
@@ -66,7 +67,7 @@ const Defaults string = `{
 		"max_limit": 1000,
 		"nb_db_conn": 10,
 		"tls": {
-			"redirector": {
+			"helper": {
 				"listen": ":80"
 			}
 		}
@@ -83,6 +84,7 @@ type StorageConf struct {
 	LogLevel        string    `json:"log_level"`
 	Path            string    `json:"path"`
 	Retry           RetryConf `json:"retry_connection"`
+	Secrets         string    `json:"secrets"`
 	Timeout         Duration  `json:"timeout"`
 }
 
@@ -175,10 +177,7 @@ type WebConf struct {
 	MaxLimit     uint     `json:"max_limit"`
 	NbDBConn     uint     `json:"nb_db_conn"`
 	RootDir      string   `json:"root_dir"`
-	TLS          struct {
-		TLSConf
-		Redirector RedirectorConf `json:"redirector"`
-	} `json:"tls"`
+	TLS          TLSConf  `json:"tls"`
 }
 
 // ListenFDs checks for an environment variable that allows to
@@ -193,7 +192,7 @@ func (wc WebConf) getListenFDs() (uint, error) {
 		return 0, fmt.Errorf("failed to read a valid number in the environment variable %q: %v", ListenFDsEnvVar, err)
 	} else if num < 0 {
 		return 0, fmt.Errorf("the environment variable %q must not be less than 0 (got %d)", ListenFDsEnvVar, num)
-	} else if wc.TLS.Enabled() && wc.TLS.Redirector.Enabled() {
+	} else if wc.TLS.Enabled() && wc.TLS.Helper.Enabled() {
 		if num != 2 {
 			cond := "if the web server has both TLS and the redirector enabled"
 			requirement := "socket activation through file descriptors must provide two and only two sockets"
@@ -209,31 +208,44 @@ func (wc WebConf) getListenFDs() (uint, error) {
 // TLSConf describes the configuration of TLS for the webserver,
 // and can check whether it's active or not.
 type TLSConf struct {
-	Cert string `json:"cert"`
-	Key  string `json:"key"`
+	ACME []string `json:"acme"`
+	Cert string   `json:"cert"`
+	Key  string   `json:"key"`
+
+	Helper TLSHelperConf `json:"helper"`
 }
 
-// Enabled checks whether TLS is supposed to be active.
+// Enabled checks whether TLS is enabled.
 func (tc TLSConf) Enabled() bool {
+	return tc.ACMEEnabled() || tc.CertsEnabled()
+}
+
+// ACMEEnabled checks whether TLS is enabled with ACME.
+func (tc TLSConf) ACMEEnabled() bool {
+	return tc.ACME != nil && len(tc.ACME) > 0
+}
+
+// CertsEnabled checks whether the certificate files for TLS are set.
+func (tc TLSConf) CertsEnabled() bool {
 	return tc.Cert != "" && tc.Key != ""
 }
 
-// PartiallyEnabled checks whether the TLS configuration is only partially filled-in,
-// which could indicate a mistake in the configuration file.
-func (tc TLSConf) PartiallyEnabled() bool {
+// CertsPartiallyEnabled checks whether the TLS certificate configuration is only
+// partially filled-in, which could indicate a mistake in the configuration file.
+func (tc TLSConf) CertsPartiallyEnabled() bool {
 	return !tc.Enabled() && (tc.Cert != "" || tc.Key != "")
 }
 
-// RedirectorConf describes the configuration of the redirection from HTTP to HTTPS.
-type RedirectorConf struct {
+// TLSHelperConf describes the configuration of the TLS helper.
+type TLSHelperConf struct {
 	Listen    string `json:"listen"`
 	ListenFDs uint   `json:"-"`
 	Target    string `json:"target"`
 	IPHeader  string `json:"-"`
 }
 
-// Enabled checks whether the redirector is supposed to be active.
-func (rc RedirectorConf) Enabled() bool {
+// Enabled checks whether the TLS helper is supposed to be active.
+func (rc TLSHelperConf) Enabled() bool {
 	return rc.Listen != "" && rc.Target != ""
 }
 
@@ -299,13 +311,12 @@ func NewConfiguration(path string) (Configuration, error) {
 	conf.Compendium.Timezone = conf.Timezone
 	conf.Discord.Timezone = conf.Timezone
 
-	if listen_fd_num, err := conf.Web.getListenFDs(); err != nil {
+	conf.Web.ListenFDs, err = conf.Web.getListenFDs()
+	if err != nil {
 		return conf, err
-	} else {
-		conf.Web.ListenFDs = listen_fd_num
 	}
-	conf.Web.TLS.Redirector.ListenFDs = conf.Web.ListenFDs
-	conf.Web.TLS.Redirector.IPHeader = conf.Web.IPHeader
+	conf.Web.TLS.Helper.ListenFDs = conf.Web.ListenFDs
+	conf.Web.TLS.Helper.IPHeader = conf.Web.IPHeader
 
 	conf.Compendium.NbTop = conf.Report.NbTop
 
@@ -349,6 +360,8 @@ func (conf Configuration) HasSaneValues() error {
 		return errors.New("backup path can't be the same as the database's path")
 	} else if val := conf.Database.CleanupInterval.Value; val != 0 && val < time.Minute {
 		return errors.New("interval between database cleanups can't be less than a minute")
+	} else if conf.Database.Secrets == "" {
+		return errors.New("path for the database of secrets must be set")
 	} else if conf.Reddit.FullScanInterval.Value < time.Hour {
 		return errors.New("interval for the full scan can't be less an hour")
 	} else if conf.Reddit.InactivityThreshold.Value < 24*time.Hour {
@@ -375,8 +388,8 @@ func (conf Configuration) HasSaneValues() error {
 func (conf Configuration) Warnings() []string {
 	var msgs []string
 
-	if conf.Web.TLS.PartiallyEnabled() {
-		msgs = append(msgs, "web.tls is only partially configured (missing certificate or key), TLS will not be enabled")
+	if conf.Web.TLS.ACME == nil && conf.Web.TLS.CertsPartiallyEnabled() {
+		msgs = append(msgs, "web.tls file certificate is only partially configured (missing certificate or key), TLS will not be enabled")
 	}
 
 	return msgs
