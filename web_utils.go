@@ -318,7 +318,11 @@ func (cc CertCache) Get(ctx Ctx, key string) ([]byte, error) {
 // Put implements autocert.Cache.
 func (cc CertCache) Put(ctx Ctx, key string, cert []byte) error {
 	return cc.pool.WithConn(ctx, func(conn SQLiteConn) error {
-		return conn.Exec("INSERT INTO certs VALUES (?, ?)", key, cert)
+		return conn.Exec(`
+			INSERT INTO certs VALUES (?, ?)
+			ON CONFLICT(key) DO UPDATE SET
+				value=excluded.value
+		`, key, cert)
 	})
 }
 
