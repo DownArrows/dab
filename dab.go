@@ -86,7 +86,7 @@ func (dab *DownArrowsBot) Run(ctx Ctx, args []string) error {
 	dab.conf = conf
 	dab.components.ConfState = conf.Components()
 
-	if err := dab.conf.HasSaneValues(); err != nil {
+	if err := dab.conf.HasSaneValues().ToError(); err != nil {
 		return err
 	}
 

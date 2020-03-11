@@ -350,39 +350,54 @@ func NewConfiguration(path string) (Configuration, error) {
 	return conf, nil
 }
 
-// HasSaneValues protect against values that are very likely to be mistakes
-// TODO return a MultiError instead of a single, possibly incomplete, one.
-func (conf Configuration) HasSaneValues() error {
+// HasSaneValues protect against values that are very likely to be mistakes.
+func (conf Configuration) HasSaneValues() *ErrorGroup {
+	errs := NewErrorGroup()
+
 	if conf.HidePrefix == "" {
-		return errors.New("prefix for hidden users can't be an empty string")
-	} else if conf.Database.BackupMaxAge.Value < time.Hour {
-		return errors.New("backup max age before renewal can't be less than an hour")
-	} else if conf.Database.Path == conf.Database.BackupPath {
-		return errors.New("backup path can't be the same as the database's path")
-	} else if val := conf.Database.CleanupInterval.Value; val != 0 && val < time.Minute {
-		return errors.New("interval between database cleanups can't be less than a minute")
-	} else if conf.Database.Secrets == "" {
-		return errors.New("path for the database of secrets must be set")
-	} else if conf.Reddit.FullScanInterval.Value < time.Hour {
-		return errors.New("interval for the full scan can't be less an hour")
-	} else if conf.Reddit.InactivityThreshold.Value < 24*time.Hour {
-		return errors.New("inactivity threshold can't be less than a day")
-	} else if conf.Reddit.MaxAge.Value < 24*time.Hour {
-		return errors.New("max comment age for further scanning can't be less than a day")
-	} else if conf.Reddit.HighScoreThreshold > -1 {
-		return errors.New("high-score threshold can't be positive")
-	} else if val := conf.Reddit.ResurrectionsInterval.Value; val != 0 && val < time.Minute {
-		return errors.New("interval between batches of checks of resurrections of users can't be less than a minute if non-zero")
-	} else if conf.Report.Leeway.Value < 0 { // Deprecated
-		return errors.New("reports' leeway can't be negative")
-	} else if conf.Report.CutOff > 0 {
-		return errors.New("reports' cut-off can't be higher than 0")
-	} else if conf.Web.DBOptimize.Value < 5*time.Minute {
-		return errors.New("the duration of the optimization of the web server's connections to the database can't be less than 5 minutes")
-	} else if conf.Web.NbDBConn == 0 {
-		return errors.New("the number of database connections from the web server can't be 0")
+		errs.Add(errors.New("prefix for hidden users can't be an empty string"))
 	}
-	return nil
+	if conf.Database.BackupMaxAge.Value < time.Hour {
+		errs.Add(errors.New("backup max age before renewal can't be less than an hour"))
+	}
+	if conf.Database.Path == conf.Database.BackupPath {
+		errs.Add(errors.New("backup path can't be the same as the database's path"))
+	}
+	if val := conf.Database.CleanupInterval.Value; val != 0 && val < time.Minute {
+		errs.Add(errors.New("interval between database cleanups can't be less than a minute"))
+	}
+	if conf.Database.Secrets == "" {
+		errs.Add(errors.New("path for the database of secrets must be set"))
+	}
+	if conf.Reddit.FullScanInterval.Value < time.Hour {
+		errs.Add(errors.New("interval for the full scan can't be less an hour"))
+	}
+	if conf.Reddit.InactivityThreshold.Value < 24*time.Hour {
+		errs.Add(errors.New("inactivity threshold can't be less than a day"))
+	}
+	if conf.Reddit.MaxAge.Value < 24*time.Hour {
+		errs.Add(errors.New("max comment age for further scanning can't be less than a day"))
+	}
+	if conf.Reddit.HighScoreThreshold > -1 {
+		errs.Add(errors.New("high-score threshold can't be positive"))
+	}
+	if val := conf.Reddit.ResurrectionsInterval.Value; val != 0 && val < time.Minute {
+		errs.Add(errors.New("interval between batches of checks of resurrections of users can't be less than a minute if non-zero"))
+	}
+	if conf.Report.Leeway.Value < 0 { // Deprecated
+		errs.Add(errors.New("reports' leeway can't be negative"))
+	}
+	if conf.Report.CutOff > 0 {
+		errs.Add(errors.New("reports' cut-off can't be higher than 0"))
+	}
+	if conf.Web.DBOptimize.Value < 5*time.Minute {
+		errs.Add(errors.New("the duration of the optimization of the web server's connections to the database can't be less than 5 minutes"))
+	}
+	if conf.Web.NbDBConn == 0 {
+		errs.Add(errors.New("the number of database connections from the web server can't be 0"))
+	}
+
+	return errs
 }
 
 // Warnings gets warnings about the configuration.
