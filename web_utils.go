@@ -239,11 +239,12 @@ func (th *TLSHelper) listen() error {
 }
 
 func (th *TLSHelper) redirect(w http.ResponseWriter, r *http.Request) {
+	target := th.Target+r.URL.RequestURI()
 	th.logger.Infod(func() interface{} {
-		return fmt.Sprintf("ignoring %s %s from %s with user agent %q and force redirect to https",
-			r.Method, r.URL, getIP(r, th.IPHeader), r.Header.Get("User-Agent"))
+		return fmt.Sprintf("redirecting %s %s from %s with user agent %q to %q",
+			r.Method, r.URL, getIP(r, th.IPHeader), r.Header.Get("User-Agent"), target)
 	})
-	http.Redirect(w, r, th.Target, http.StatusSeeOther)
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 // ACMEManager manages automatic TLS certificates.

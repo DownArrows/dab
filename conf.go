@@ -340,6 +340,7 @@ func NewConfiguration(path string) (Configuration, error) {
 	}
 	conf.Web.TLS.Helper.ListenFDs = conf.Web.ListenFDs
 	conf.Web.TLS.Helper.IPHeader = conf.Web.IPHeader
+	conf.Web.TLS.Helper.Target = strings.TrimSuffix(conf.Web.TLS.Helper.Target, "/")
 
 	conf.Compendium.NbTop = conf.Report.NbTop
 
