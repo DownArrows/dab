@@ -4,6 +4,7 @@ dab.conf.json
 static/
 dab.db
 dab.db.*
+secrets.*
 Makefile
 GNUmakefile
 *.sh

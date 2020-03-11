@@ -303,7 +303,7 @@ func (db *SQLiteDatabase) Backup(ctx Ctx, srcConn SQLiteConn, opts SQLiteBackupO
 	db.backups.Lock()
 	defer db.backups.Unlock()
 
-	db.logger.Debugf("opening connection at %q for backup from %s", opts.DestPath, db)
+	db.logger.Debugf("opening connection at %q for backup of database %q from %s", opts.DestPath, opts.SrcName, db)
 	destOpts := db.getConnDefaultOptions()
 	destOpts.Path = opts.DestPath
 	destConn, err := NewBaseSQLiteConn(ctx, db.logger, destOpts)
@@ -318,14 +318,14 @@ func (db *SQLiteDatabase) Backup(ctx Ctx, srcConn SQLiteConn, opts SQLiteBackupO
 	}
 	defer backup.Close()
 
-	db.logger.Debugf("with %s, backup connection %p and %p from %q to %q established",
+	db.logger.Debugf("with %s, backup connection %+v and %+v from %q to %q established",
 		db, srcConn, destConn, db.Path, opts.DestPath)
 
 	for {
 		// Surprisingly, this is the best way to avoid getting a "database locked" error,
 		// instead of saving a few pages at a time.
 		// This is probably due to SQLite's deadlock detetection in its notify API.
-		db.logger.Debugf("with %s, backup connection %p and %p from %q to %q trying to backup all pages",
+		db.logger.Debugf("with %s, backup connection %+v and %+v from %q to %q trying to backup all pages",
 			db, srcConn, destConn, db.Path, opts.DestPath)
 		err = backup.Step(-1) // -1 saves all remaining pages.
 		if err != nil {
@@ -334,7 +334,8 @@ func (db *SQLiteDatabase) Backup(ctx Ctx, srcConn SQLiteConn, opts SQLiteBackupO
 	}
 
 	if err != io.EOF {
-		db.logger.Debugf("error with backing up with connections %p and %p from %q to %q: %v", err)
+		db.logger.Debugf("error in %s with backing up with connections %+v and %+v from %q to %q: %v",
+			db, srcConn, destConn, db.Path, opts.DestPath, err)
 		os.Remove(opts.DestPath)
 		return err
 	}

@@ -1,21 +1,17 @@
 package main
 
-import (
-	"fmt"
-	"time"
-)
+import "fmt"
 
 // ApplicationFileID is the identification integer written in the SQLite file specific to the application.
 const ApplicationFileID int = 0xdab
 
 // Storage is a collection of methods to write, update, and retrieve all persistent data used throughout the application.
 type Storage struct {
-	backupPath   string
-	backupMaxAge time.Duration
-	db           *SQLiteDatabase
-	kv           *KeyValueStore
-	logger       LevelLogger
-	secrets      string
+	StorageConf
+	db     *SQLiteDatabase
+	kv     *KeyValueStore
+	logger LevelLogger
+	attach string
 }
 
 // NewStorage returns a Storage instance after running initialization, checks, and migrations onto the target database file.
@@ -42,13 +38,12 @@ func NewStorage(ctx Ctx, logger LevelLogger, conf StorageConf) (*Storage, Storag
 	}
 
 	s := &Storage{
-		backupMaxAge: conf.BackupMaxAge.Value,
-		backupPath:   conf.BackupPath,
-		db:           db,
-		kv:           kv,
-		logger:       logger,
-		secrets:      conf.Secrets,
+		StorageConf: conf,
+		db:          db,
+		kv:          kv,
+		logger:      logger,
 	}
+	s.attach = fmt.Sprintf("ATTACH DATABASE %q AS secrets", s.SecretsPath)
 
 	if err := s.initTables(conn); err != nil {
 		return nil, conn, err
@@ -61,7 +56,7 @@ func (s *Storage) initTables(conn SQLiteConn) error {
 	var queries []SQLQuery
 	queries = append(queries, User{}.InitializationQueries()...)
 	queries = append(queries, Comment{}.InitializationQueries()...)
-	queries = append(queries, SQLQuery{SQL: fmt.Sprintf("ATTACH DATABASE %q AS secrets", s.secrets)})
+	queries = append(queries, SQLQuery{SQL: s.attach})
 	queries = append(queries, CertCache{}.InitializationQueries()...)
 	if err := conn.MultiExec(queries); err != nil {
 		return err
@@ -74,40 +69,51 @@ func (s *Storage) KV() *KeyValueStore {
 	return s.kv
 }
 
-// PeriodicCleanupIsEnabled tells if the setting for PeriodCleanup allow to run it.
-func (s *Storage) PeriodicCleanupIsEnabled() bool {
-	return s.db.CleanupInterval > 0
-}
-
 // PeriodicCleanup is a Task that periodically cleans up and optimizes the underlying database.
 func (s *Storage) PeriodicCleanup(ctx Ctx) error {
 	return s.db.PeriodicCleanup(ctx)
 }
 
-// BackupPath returns the set path for backups.
-func (s *Storage) BackupPath() string {
-	return s.backupPath
+// BackupMain performs a backup of the main database.
+func (s *Storage) BackupMain(ctx Ctx, conn StorageConn) error {
+	return s.backup(ctx, conn, s.Backup.Main, "main")
 }
 
-// Backup performs a backup on the destination returned by BackupPath.
-func (s *Storage) Backup(ctx Ctx, conn StorageConn) error {
-	if older, err := FileOlderThan(s.BackupPath(), s.backupMaxAge); err != nil {
+// BackupSecrets performs a backup of the database of secrets.
+func (s *Storage) BackupSecrets(ctx Ctx, conn StorageConn) error {
+	return s.backup(ctx, conn, s.Backup.Secrets, "secrets")
+}
+
+func (s *Storage) backup(ctx Ctx, conn StorageConn, path, name string) error {
+	if older, err := FileOlderThan(path, s.Backup.MaxAge.Value); err != nil {
 		return err
 	} else if !older {
-		s.logger.Debugf("in Storage %p on %s, database backup was not older than %v, nothing was done", s, s.backupMaxAge)
+		s.logger.Debugd(func() interface{} {
+			tmpl := "in Storage %p on %s, backup of database %q to %q was not older than %v, nothing was done"
+			return fmt.Sprintf(tmpl, s, s.Path, name, path, s.Backup.MaxAge.Value)
+		})
 		return nil
 	}
 	return s.db.Backup(ctx, conn, SQLiteBackupOptions{
 		DestName: "main",
-		DestPath: s.BackupPath(),
-		SrcName:  "main",
+		DestPath: path,
+		SrcName:  name,
 	})
 }
 
 // GetConn creates new connections to the associated database.
 func (s *Storage) GetConn(ctx Ctx) (StorageConn, error) {
-	conn, err := s.db.GetConn(ctx)
-	return StorageConn{actual: conn}, err
+	var err error
+	sc := StorageConn{}
+	sc.actual, err = s.db.GetConn(ctx)
+	if err != nil {
+		return sc, err
+	}
+	err = sc.Exec(s.attach)
+	if err != nil {
+		return sc, err
+	}
+	return sc, err
 }
 
 // WithConn manages a connection's lifecycle.

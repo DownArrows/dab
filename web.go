@@ -77,7 +77,11 @@ func NewWebServer(
 	mux.HandleFunc("/compendium/user/", wsrv.CompendiumUser)
 	mux.HandleFunc("/compendium/comments", wsrv.CompendiumComments)
 	mux.HandleFunc("/compendium/comments/user/", wsrv.CompendiumUserComments)
-	mux.HandleFunc("/backup", wsrv.Backup)
+	mux.HandleFunc("/backup/secrets", wsrv.BackupSecrets)
+	mux.HandleFunc("/backup/main", wsrv.BackupMain)
+	mux.HandleFunc("/backup", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/backup/main", http.StatusMovedPermanently)
+	})
 	if conf.RootDir != "" {
 		wsrv.logger.Infof("serving directory %q", wsrv.RootDir)
 		mux.Handle("/", http.FileServer(http.Dir(wsrv.RootDir)))
@@ -447,17 +451,28 @@ func (wsrv *WebServer) CompendiumComments(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// Backup triggers a backup if needed, and serves it.
-func (wsrv *WebServer) Backup(w http.ResponseWriter, r *http.Request) {
+// BackupMain triggers a backup of the main database if needed, and serves it.
+func (wsrv *WebServer) BackupMain(w http.ResponseWriter, r *http.Request) {
 	err := wsrv.withConn(r.Context(), func(conn StorageConn) error {
-		return wsrv.storage.Backup(r.Context(), conn)
+		return wsrv.storage.BackupMain(r.Context(), conn)
 	})
 	if err != nil {
 		wsrv.err(w, r, err, http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-sqlite3")
-	http.ServeFile(w, r, wsrv.storage.BackupPath())
+	http.ServeFile(w, r, wsrv.storage.Backup.Main)
+}
+
+// BackupSecrets triggers a backup of the secrets database if needed, but does not serve it.
+func (wsrv *WebServer) BackupSecrets(w http.ResponseWriter, r *http.Request) {
+	err := wsrv.withConn(r.Context(), func(conn StorageConn) error {
+		return wsrv.storage.BackupSecrets(r.Context(), conn)
+	})
+	if err != nil {
+		wsrv.err(w, r, err, http.StatusInternalServerError)
+		return
+	}
 }
 
 func (wsrv *WebServer) err(w http.ResponseWriter, r *http.Request, err error, code int) {

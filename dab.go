@@ -159,7 +159,7 @@ func (dab *DownArrowsBot) Run(ctx Ctx, args []string) error {
 		tasks.SpawnCtx(dab.components.Web.Run)
 	}
 
-	if dab.layers.Storage.PeriodicCleanupIsEnabled() {
+	if !dab.conf.Database.CleanupInterval.IsZero() {
 		tasks.SpawnCtx(dab.layers.Storage.PeriodicCleanup)
 	}
 

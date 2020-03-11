@@ -19,8 +19,10 @@ const Defaults string = `{
 	"timezone": "UTC",
 
 	"database": {
-		"backup_max_age": "24h",
-		"backup_path": "./dab.db.backup",
+		"backup": {
+			"max_age": "24h",
+			"main": "./dab.db.backup"
+		},
 		"cleanup_interval": "30m",
 		"path": "./dab.db",
 		"retry_connection": {
@@ -28,7 +30,6 @@ const Defaults string = `{
 			"max_interval": "10s",
 			"reset_after": "5m"
 		},
-		"secrets": "./secrets.db",
 		"timeout": "15s"
 	},
 
@@ -79,13 +80,18 @@ const ListenFDsEnvVar = "LISTEN_FDS"
 
 // StorageConf describes the configuration of the Storage layer.
 type StorageConf struct {
+	Backup struct {
+		MaxAge  Duration `json:"max_age"`
+		Main    string   `json:"main"`
+		Secrets string   `json:"secrets"`
+	} `json:"backup"`
 	BackupMaxAge    Duration  `json:"backup_max_age"`
 	BackupPath      string    `json:"backup_path"`
 	CleanupInterval Duration  `json:"cleanup_interval"`
 	LogLevel        string    `json:"log_level"`
 	Path            string    `json:"path"`
 	Retry           RetryConf `json:"retry_connection"`
-	Secrets         string    `json:"secrets"`
+	SecretsPath     string    `json:"secrets_path"`
 	Timeout         Duration  `json:"timeout"`
 }
 
@@ -312,6 +318,21 @@ func NewConfiguration(path string) (Configuration, error) {
 	conf.Compendium.Timezone = conf.Timezone
 	conf.Discord.Timezone = conf.Timezone
 
+	// Compatibility with a deprecated option
+	if conf.Database.Backup.MaxAge.IsZero() {
+		conf.Database.Backup.MaxAge = conf.Database.BackupMaxAge
+	}
+	// Compatibility with a deprecated option
+	if conf.Database.Backup.Main == "" {
+		conf.Database.Backup.Main = conf.Database.BackupPath
+	}
+	if conf.Database.Backup.Secrets == "" {
+		conf.Database.Backup.Secrets = ReplaceFileName("secrets", conf.Database.Backup.Main)
+	}
+	if conf.Database.SecretsPath == "" {
+		conf.Database.SecretsPath = ReplaceFileName("secrets", conf.Database.Path)
+	}
+
 	conf.Web.ListenFDs, err = conf.Web.getListenFDs()
 	if err != nil {
 		return conf, err
@@ -357,7 +378,7 @@ func (conf Configuration) HasSaneValues() *ErrorGroup {
 	if conf.HidePrefix == "" {
 		errs.Add(errors.New("prefix for hidden users can't be an empty string"))
 	}
-	if conf.Database.BackupMaxAge.Value < time.Hour {
+	if conf.Database.Backup.MaxAge.Value < time.Hour {
 		errs.Add(errors.New("backup max age before renewal can't be less than an hour"))
 	}
 	if conf.Database.Path == conf.Database.BackupPath {
@@ -365,9 +386,6 @@ func (conf Configuration) HasSaneValues() *ErrorGroup {
 	}
 	if val := conf.Database.CleanupInterval.Value; val != 0 && val < time.Minute {
 		errs.Add(errors.New("interval between database cleanups can't be less than a minute"))
-	}
-	if conf.Database.Secrets == "" {
-		errs.Add(errors.New("path for the database of secrets must be set"))
 	}
 	if conf.Reddit.FullScanInterval.Value < time.Hour {
 		errs.Add(errors.New("interval for the full scan can't be less an hour"))
@@ -443,6 +461,15 @@ func (conf Configuration) Deprecations() []string {
 	if conf.Reddit.UnsuspensionInterval.Value != 0 {
 		msgs = append(msgs, "reddit.unsuspension_interval is deprecated, use reddit.resurrections_interval instead")
 	}
+
+	if !conf.Database.BackupMaxAge.IsZero() {
+		msgs = append(msgs, "database.backup_max_age is deprecated, use database.backup.max_age instead")
+	}
+
+	if conf.Database.BackupPath != "" {
+		msgs = append(msgs, "database.backup_path is deprecated, use database.backup.main instead")
+	}
+
 	return msgs
 }
 
@@ -529,6 +556,11 @@ func (d *Duration) UnmarshalJSON(raw []byte) error {
 	}
 	d.Value, err = time.ParseDuration(value)
 	return err
+}
+
+// IsZero tests whether the Duration value is zero.
+func (d *Duration) IsZero() bool {
+	return d.Value == 0
 }
 
 // Timezone is needed to decode JSON strings to *time.Location.
