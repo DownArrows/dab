@@ -470,13 +470,13 @@ If you need to add new methods to do queries on the database, you probably only 
 
 ## TODO
 
- 1. post reports on a subreddit and keep them up to date for a little while
- 1. database corrections from DTB's
+ 1. document TLS system
+ 1. discord-based log-in
  1. links previous/next in the web reports, and reports index
  1. backup discord messages
- 1. ability to use multiple reddit accounts and proxies
+ 1. database corrections from DTB's
  1. get data from pushshift.io
  1. replace blackfriday with snudown
- 1. https support and auto renewal of certificates with letsencrypt
+ 1. ability to use multiple reddit accounts and proxies
  1. wiki with discord authentication
  1. cleanup the config file
