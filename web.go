@@ -461,6 +461,7 @@ func (wsrv *WebServer) BackupMain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-sqlite3")
+	w.Header().Set("Content-Disposition", "attachment; filename=\"dab.sqlite3\"")
 	http.ServeFile(w, r, wsrv.storage.Backup.Main)
 }
 
