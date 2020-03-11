@@ -239,7 +239,7 @@ func (th *TLSHelper) listen() error {
 }
 
 func (th *TLSHelper) redirect(w http.ResponseWriter, r *http.Request) {
-	target := th.Target+r.URL.RequestURI()
+	target := th.Target + r.URL.RequestURI()
 	th.logger.Infod(func() interface{} {
 		return fmt.Sprintf("redirecting %s %s from %s with user agent %q to %q",
 			r.Method, r.URL, getIP(r, th.IPHeader), r.Header.Get("User-Agent"), target)
