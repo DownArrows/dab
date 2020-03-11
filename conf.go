@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -20,8 +21,9 @@ const Defaults string = `{
 
 	"database": {
 		"backup": {
+			"main": "./dab.db.backup",
 			"max_age": "24h",
-			"main": "./dab.db.backup"
+			"secrets": "./dab.secrets.backup"
 		},
 		"cleanup_interval": "30m",
 		"path": "./dab.db",
@@ -81,8 +83,8 @@ const ListenFDsEnvVar = "LISTEN_FDS"
 // StorageConf describes the configuration of the Storage layer.
 type StorageConf struct {
 	Backup struct {
-		MaxAge  Duration `json:"max_age"`
 		Main    string   `json:"main"`
+		MaxAge  Duration `json:"max_age"`
 		Secrets string   `json:"secrets"`
 	} `json:"backup"`
 	BackupMaxAge    Duration  `json:"backup_max_age"`
@@ -326,11 +328,10 @@ func NewConfiguration(path string) (Configuration, error) {
 	if conf.Database.Backup.Main == "" {
 		conf.Database.Backup.Main = conf.Database.BackupPath
 	}
-	if conf.Database.Backup.Secrets == "" {
-		conf.Database.Backup.Secrets = ReplaceFileName("secrets", conf.Database.Backup.Main)
-	}
 	if conf.Database.SecretsPath == "" {
-		conf.Database.SecretsPath = ReplaceFileName("secrets", conf.Database.Path)
+		base := conf.Database.Path
+		ext := filepath.Ext(base)
+		conf.Database.SecretsPath = filepath.Join(filepath.Dir(base), "secrets") + ext
 	}
 
 	conf.Web.ListenFDs, err = conf.Web.getListenFDs()
@@ -383,6 +384,9 @@ func (conf Configuration) HasSaneValues() *ErrorGroup {
 	}
 	if conf.Database.Path == conf.Database.BackupPath {
 		errs.Add(errors.New("backup path can't be the same as the database's path"))
+	}
+	if conf.Database.Backup.Secrets == "" {
+		errs.Add(errors.New("the backup path for secrets needs to be set"))
 	}
 	if val := conf.Database.CleanupInterval.Value; val != 0 && val < time.Minute {
 		errs.Add(errors.New("interval between database cleanups can't be less than a minute"))

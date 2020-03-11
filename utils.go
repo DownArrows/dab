@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"time"
 )
@@ -24,12 +23,6 @@ func FileOlderThan(path string, maxAge time.Duration) (bool, error) {
 
 	timeDiff := time.Now().Sub(stat.ModTime())
 	return (timeDiff > maxAge), nil
-}
-
-// ReplaceFileName replaces the filename in a path, preserving the extension.
-func ReplaceFileName(name, base string) string {
-	ext := filepath.Ext(base)
-	return filepath.Join(filepath.Dir(base), name) + ext
 }
 
 // SemVer is a data structure for semantic versioning.
