@@ -166,7 +166,8 @@ func (conn StorageConn) SaveCommentsUpdateUser(comments []Comment, user User, ma
 			INSERT INTO comments VALUES (?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				score=excluded.score,
-				body=excluded.body`)
+				body=excluded.body
+			WHERE score != excluded.score OR body != excluded.body`)
 		if err != nil {
 			return err
 		}
