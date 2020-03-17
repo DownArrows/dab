@@ -88,5 +88,5 @@ deploy: dab
 #	rsync -z --progress $^ $(HOST):$(ROOT_DIR)
 
 clean:
-	rm -f dab dab-v*.tar.xz dab.db dab.db-shm dab.db-wal README.html dab.db.backup
+	rm -f dab dab-v*.tar.xz dab.db dab.db-shm dab.db-wal README.html dab.db.backup secrets.db
 .PHONY: clean
