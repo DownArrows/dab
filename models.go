@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"html"
 	"math"
@@ -34,11 +35,10 @@ func (c Comment) InitializationQueries() []SQLQuery {
 			FOREIGN KEY (author) REFERENCES user_archive(name)
 		) WITHOUT ROWID`},
 		{SQL: "CREATE INDEX IF NOT EXISTS comments_idx ON comments (author, score ASC, sub, created DESC)"},
-		{SQL: fmt.Sprintf(`CREATE TRIGGER IF NOT EXISTS purge_user BEFORE DELETE ON user_archive
+		{SQL: `CREATE TRIGGER IF NOT EXISTS purge_user BEFORE DELETE ON user_archive
 			BEGIN
 				DELETE FROM comments WHERE author = OLD.name COLLATE NOCASE;
-				DELETE FROM key_value WHERE key = %q || OLD.name COLLATE NOCASE;
-			END`, DiscordPrefixWhoRegistered)},
+			END`},
 	}
 }
 
@@ -131,9 +131,10 @@ type User struct {
 	BatchSize uint      // Last number of comments requested from Reddit when scanning this user
 	Deleted   bool      // True if considered deleted (aka unregistered) by the application
 	Hidden    bool      // True makes the application track the user without inclusion in easily reachable pages
-	Inactive  bool      // True if the application considers this user inactive; useful to optimize scanning speed
+	Inactive  bool      // True if the application considers this user inactive; useful to optimize scanning speed
 	LastScan  time.Time // Date when this user was last scanned
 	New       bool      // True if this user hasn't been fully scanned yet
+	Notes     string    // Notes about this user
 	Position  string    // Last position ID returned by Reddit during a scan (used to request successive batches of comments)
 }
 
@@ -152,14 +153,20 @@ func (u User) InitializationQueries() []SQLQuery {
 			inactive BOOLEAN DEFAULT FALSE NOT NULL,
 			last_scan INTEGER DEFAULT FALSE NOT NULL,
 			new BOOLEAN DEFAULT TRUE NOT NULL,
+			notes TEXT DEFAULT "" NOT NULL,
 			position TEXT DEFAULT "" NOT NULL
 		) WITHOUT ROWID`},
 		// Yes, this index has a lot of columns, but it's the only way to get a covering index in queries for that table.
 		{SQL: `CREATE INDEX IF NOT EXISTS user_archive_idx ON user_archive
-			(name, created ASC, not_found, suspended, added ASC, batch_size, deleted, hidden, inactive, last_scan DESC, new, position)`},
-		{SQL: `CREATE VIEW IF NOT EXISTS
-			users(name, created, not_found, suspended, added, batch_size, deleted, hidden, inactive, last_scan, new, position)
-		AS SELECT * FROM user_archive WHERE deleted IS FALSE`},
+			(name, created ASC, not_found, suspended, added ASC, batch_size,
+			deleted, hidden, inactive, last_scan DESC, new, notes, position)`},
+		{SQL: `CREATE VIEW IF NOT EXISTS users
+				(name, created, not_found, suspended, added, batch_size,
+				deleted, hidden, inactive, last_scan, new, notes, position)
+			AS SELECT
+				name, created, not_found, suspended, added, batch_size,
+				deleted, hidden, inactive, last_scan, new, notes, position
+			FROM user_archive WHERE deleted IS FALSE`},
 	}
 }
 
@@ -182,6 +189,7 @@ func (u *User) FromDB(stmt *SQLiteStmt) error {
 	var err error
 	var timestamp int64
 	var boolean int
+	var txt string
 
 	if u.Name, _, err = stmt.ColumnText(0); err != nil {
 		return err
@@ -238,16 +246,76 @@ func (u *User) FromDB(stmt *SQLiteStmt) error {
 	}
 	u.New = (boolean == 1)
 
-	u.Position, _, err = stmt.ColumnText(11)
+	if txt, _, err = stmt.ColumnText(11); err != nil {
+		return err
+	}
+	u.Notes = txt
+
+	u.Position, _, err = stmt.ColumnText(12)
 
 	return err
+}
+
+// UserNotes describes notes about a user that can be serialized as JSON.
+type UserNotes struct {
+	Registration struct {
+		From struct {
+			ID   string `json:"id"`
+			Type string `json:"type"`
+		} `json:"from"`
+	} `json:"registration"`
+}
+
+// ToJSON makes conversion to JSON easier.
+func (un UserNotes) ToJSON() (string, error) {
+	data, err := json.Marshal(un)
+	return string(data), err
+}
+
+// UserNotesFromJSON creates a UserNotes struct from raw JSON.
+func UserNotesFromJSON(raw string) (UserNotes, error) {
+	notes := UserNotes{}
+	err := json.Unmarshal([]byte(raw), &notes)
+	return notes, err
 }
 
 // UserQuery describes a query to register or read a User.
 type UserQuery struct {
 	User   User
-	Exists bool
 	Error  error
+	Exists bool
+	Force  bool
+}
+
+// Absorb returns a query that merges the current query, assumed to be from a
+// function that performs something related to users, and an "original" query
+// that contains the original information about what is to be performed, so
+// that the result contains all relevant information for the caller.
+func (query UserQuery) Absorb(orig UserQuery) UserQuery {
+	query.Force = orig.Force
+	if query.User.Name == "" {
+		query.User = orig.User
+	} else {
+		query.User.Notes = orig.User.Notes
+		query.User.Hidden = orig.User.Hidden
+	}
+	return query
+}
+
+// ErrorExists adds an error if the user exists.
+func (query UserQuery) ErrorExists() UserQuery {
+	if query.Exists {
+		query.Error = fmt.Errorf("user %q already exists", query.User.Name)
+	}
+	return query
+}
+
+// ErrorNotExists adds an error if the user doesn't exist.
+func (query UserQuery) ErrorNotExists() UserQuery {
+	if !query.Exists {
+		query.Error = fmt.Errorf("user %q doesn't exist", query.User.Name)
+	}
+	return query
 }
 
 // StatsRead tells which optional fields should be read from an SQL statement when populating a Stats data structure.

@@ -28,8 +28,8 @@ func TestCRUDUsers(t *testing.T) {
 
 	t.Run("add", func(t *testing.T) {
 		for _, user := range users {
-			if err := conn.AddUser(user.Name, false, user.Created); err != nil {
-				t.Fatal(err)
+			if query := conn.AddUser(UserQuery{User: user}); query.Error != nil {
+				t.Fatal(query.Error)
 			}
 		}
 	})
@@ -46,6 +46,9 @@ func TestCRUDUsers(t *testing.T) {
 		}
 		if user.Created != users[0].Created {
 			t.Errorf("user should have been created at %v instead of %v", users[0].Created, user.Created)
+		}
+		if user.Notes != users[0].Notes {
+			t.Errorf("user should have attached notes %q instead of %q", users[0].Notes, user.Notes)
 		}
 	})
 
@@ -100,15 +103,19 @@ func TestCRUDComments(t *testing.T) {
 	users := []User{{
 		Name:    "User1",
 		Created: time.Now().Round(time.Second).Add(-6 * time.Hour),
+		Notes:   "test1",
 	}, {
 		Name:    "User2",
 		Created: time.Now().Round(time.Second).Add(-5 * time.Hour),
+		Notes:   "test2",
 	}, {
 		Name:    "User3",
 		Created: time.Now().Round(time.Second).Add(-4 * time.Hour),
+		Notes:   "test3",
 	}, {
 		Name:    "InactiveUser",
 		Created: time.Now().Round(time.Second).Add(-7 * time.Hour),
+		Notes:   "test4",
 	}}
 
 	usersMap := make(map[string]User)
@@ -198,8 +205,8 @@ func TestCRUDComments(t *testing.T) {
 	t.Run("save users", func(t *testing.T) {
 		t.Helper()
 		for _, user := range users {
-			if err := conn.AddUser(user.Name, false, user.Created); err != nil {
-				t.Fatal(err)
+			if query := conn.AddUser(UserQuery{User: user}); query.Error != nil {
+				t.Fatal(query.Error)
 			}
 		}
 	})

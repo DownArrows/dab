@@ -35,9 +35,8 @@ const (
 
 // Knowledge about Discord
 const (
-	DiscordMessageLengthLimit  = 2000
-	DiscordDefaultRoleColor    = 0
-	DiscordPrefixWhoRegistered = "register-from-discord_"
+	DiscordMessageLengthLimit = 2000
+	DiscordDefaultRoleColor   = 0
 )
 
 const (
@@ -680,15 +679,29 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 	}
 	return bot.editUsers("register", func(name string) error {
 		return bot.conn.WithTx(func() error {
-			hidden := strings.HasPrefix(name, bot.hidePrefix)
-			name = TrimUsername(strings.TrimPrefix(name, bot.hidePrefix))
-			reply := bot.addUser(bot.tasks.Context, bot.conn, name, hidden, false)
+			notes := UserNotes{}
+			notes.Registration.From.ID = "discord"
+			notes.Registration.From.Type = msg.Author.ID
+			notesJSON, err := notes.ToJSON()
+			if err != nil {
+				return err
+			}
+
+			query := UserQuery{
+				User: User{
+					Name:   TrimUsername(strings.TrimPrefix(name, bot.hidePrefix)),
+					Hidden: strings.HasPrefix(name, bot.hidePrefix),
+					Notes:  notesJSON,
+				},
+			}
+
+			reply := bot.addUser(bot.tasks.Context, bot.conn, query)
 			if reply.Error != nil {
 				return reply.Error
 			} else if !reply.Exists {
 				return errors.New("not found")
 			}
-			return bot.kv.Save(bot.conn, DiscordPrefixWhoRegistered+reply.User.Name, msg.Author.ID)
+			return nil
 		})
 	})(msg)
 }
@@ -748,15 +761,14 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 		})
 	}
 
-	whoKey := DiscordPrefixWhoRegistered + user.Name
-	if from := bot.kv.Get(whoKey); len(from) == 1 {
+	if notes, err := UserNotesFromJSON(user.Notes); err != nil {
+		bot.logger.Errorf("in notes field of user %q, malformed JSON data %q: %v", user.Name, user.Notes, err)
+	} else if notes.Registration.From.Type == "discord" {
 		embed.AddField(DiscordEmbedField{
 			Name:   "Registered by",
-			Value:  fmt.Sprintf("<@%s>", from[0]),
+			Value:  fmt.Sprintf("<@%s>", notes.Registration.From.ID),
 			Inline: true,
 		})
-	} else if len(from) > 1 {
-		bot.logger.Fatalf("potential bug, only one value should be associated with %q, found %d: %v", whoKey, len(from), from)
 	}
 
 	return bot.channelEmbedSend(msg.ChannelID, embed)

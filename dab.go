@@ -304,14 +304,28 @@ func (dab *DownArrowsBot) userAdd(ctx Ctx, conn StorageConn) error {
 
 	usernames := userAddSeparators.Split(dab.runtimeConf.UserAdd, -1)
 	for _, username := range usernames {
-		hidden := strings.HasPrefix(username, dab.conf.HidePrefix)
-		username = strings.TrimPrefix(username, dab.conf.HidePrefix)
-		if res := ru.Add(ctx, conn, username, hidden, true); res.Error != nil {
-			dab.logger.Errorf("error when trying to register %q: %v", username, res.Error)
-		} else if !res.Exists {
-			dab.logger.Errorf("user %q not found on Reddit", username)
+
+		notes := UserNotes{}
+		notes.Registration.From.ID = "admin"
+		notes.Registration.From.Type = "cli"
+		notesJSON, err := notes.ToJSON()
+		if err != nil {
+			return err
+		}
+
+		query := UserQuery{
+			User: User{
+				Name:   strings.TrimPrefix(username, dab.conf.HidePrefix),
+				Hidden: strings.HasPrefix(username, dab.conf.HidePrefix),
+				Notes:  notesJSON,
+			},
+			Force: true,
+		}
+
+		if query = ru.Add(ctx, conn, query).ErrorNotExists(); query.Error != nil {
+			dab.logger.Errorf("error when trying to register %q: %v", username, query.Error)
 		} else {
-			dab.logger.Infof("successfully registered user %q", res.User.Name)
+			dab.logger.Infof("successfully registered user %q", query.User.Name)
 		}
 	}
 	return nil

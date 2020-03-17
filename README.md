@@ -511,6 +511,7 @@ Contains most of the data, and can be made public.
     - `inactive`: TRUE if considered inactive
     - `last_scan`: UNIX timestamp of the last time this user was scanned
     - `new`: TRUE until all reachable pages of comments of that user have been saved
+    - `notes`: text field containing arbitrary JSON data about this user
     - `position`: reddit-specific ID of the position in the pages of comments of that user
  - `users`: view of the `user_archive` table without deleted users,
  - `comments`: table of comments from registered users

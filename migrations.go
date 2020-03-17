@@ -77,7 +77,7 @@ var StorageMigrations = []SQLiteMigration{
 		To:   SemVer{1, 22, 2},
 		Exec: func(conn SQLiteConn) error {
 			return conn.Exec(`UPDATE key_value
-				SET key = "register-from-discord_" || TRIM(key, "register-from-discord")
+				SET key = "register-from-discord_" || REPLACE(key, "register-from-discord", "")
 				WHERE key LIKE "register-from-discord%"`)
 		},
 	}, {
@@ -85,8 +85,55 @@ var StorageMigrations = []SQLiteMigration{
 		To:   SemVer{1, 22, 3},
 		Exec: func(conn SQLiteConn) error {
 			return conn.Exec(`UPDATE key_value
-				SET key = "register-from-discord_" || TRIM(key, "register-from-discord-")
+				SET key = "register-from-discord_" || REPLACE(key, "register-from-discord-", "")
 				WHERE key LIKE "register-from-discord-%"`)
+		},
+	}, {
+		From: SemVer{1, 25, 0},
+		To:   SemVer{1, 26, 0},
+		Exec: func(conn SQLiteConn) error {
+			discordPrefix := "register-from-discord_"
+			if err := conn.Exec("PRAGMA foreign_keys = OFF"); err != nil {
+				return err
+			}
+			return conn.MultiExecWithTx([]SQLQuery{
+				{SQL: "DROP VIEW users"},
+				{SQL: "DROP INDEX user_archive_idx"},
+				{SQL: `CREATE TABLE IF NOT EXISTS new_user_archive (
+					name TEXT PRIMARY KEY,
+					created INTEGER NOT NULL,
+					not_found BOOLEAN DEFAULT FALSE NOT NULL,
+					suspended BOOLEAN DEFAULT FALSE NOT NULL,
+					added INTEGER NOT NULL,
+					batch_size INTEGER DEFAULT ` + strconv.Itoa(MaxRedditListingLength) + ` NOT NULL,
+					deleted BOOLEAN DEFAULT FALSE NOT NULL,
+					hidden BOOLEAN NOT NULL,
+					inactive BOOLEAN DEFAULT FALSE NOT NULL,
+					last_scan INTEGER DEFAULT FALSE NOT NULL,
+					new BOOLEAN DEFAULT TRUE NOT NULL,
+					notes TEXT,
+					position TEXT DEFAULT "" NOT NULL
+				) WITHOUT ROWID`},
+				{SQL: `INSERT INTO new_user_archive
+					WITH notes AS
+						(SELECT
+							REPLACE(key, ?, "") AS name,
+							json_object("registration",
+								json_object("from",
+									json_object("id", value, "type", "discord")
+								)) AS notes
+						FROM key_value
+						WHERE key LIKE (? || "%"))
+					SELECT
+						user_archive.name, created, not_found, suspended, added, batch_size,
+						deleted, hidden, inactive, last_scan, new, notes.notes, position
+					FROM user_archive LEFT JOIN notes
+					ON user_archive.name = notes.name`, Args: []interface{}{discordPrefix, discordPrefix}},
+				{SQL: "DROP TABLE user_archive"},
+				{SQL: "ALTER TABLE new_user_archive RENAME TO user_archive"},
+				{SQL: "PRAGMA foreign_keys = ON"},
+				{SQL: "DELETE FROM key_value WHERE key LIKE (? || '%')", Args: []interface{}{discordPrefix}},
+			})
 		},
 	},
 }

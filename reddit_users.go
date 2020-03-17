@@ -6,7 +6,7 @@ import (
 )
 
 // AddRedditUser is a function for when the only thing needed is to add users by checking through Reddit first.
-type AddRedditUser func(Ctx, StorageConn, string, bool, bool) UserQuery
+type AddRedditUser func(Ctx, StorageConn, UserQuery) UserQuery
 
 // RedditUsers is a data structure to manage Reddit users by interacting with both the database and Reddit.
 type RedditUsers struct {
@@ -33,32 +33,24 @@ func NewRedditUsers(logger LevelLogger, api *RedditAPI, conf RedditUsersConf) *R
 // Add registers the a user, sets it to "hidden" or not,
 // and with the argument forceSuspended can add the user even if it was found to be suspended.
 // Case-insensitive.
-func (ru *RedditUsers) Add(ctx Ctx, conn StorageConn, username string, hidden, forceSuspended bool) UserQuery {
-	query := UserQuery{User: User{Name: username}}
-
-	query = conn.GetUser(username)
+func (ru *RedditUsers) Add(ctx Ctx, conn StorageConn, query UserQuery) UserQuery {
+	ru.logger.Debugf("received add user query %+v", query)
+	query = conn.GetUser(query.User.Name).Absorb(query).ErrorExists()
 	if query.Error != nil {
 		return query
-	} else if query.Exists {
-		query.Error = fmt.Errorf("user %q already exists", username)
+	}
+
+	query = ru.api.AboutUser(ctx, query.User.Name).Absorb(query).ErrorNotExists()
+	if query.Error != nil {
 		return query
 	}
 
-	query = ru.api.AboutUser(ctx, username)
-	if query.Error != nil || !query.Exists {
+	if query.User.Suspended && !query.Force {
+		query.Error = fmt.Errorf("user %q can't be added, forced mode not enabled", query.User.Name)
 		return query
 	}
 
-	if query.User.Suspended {
-		if !forceSuspended {
-			query.Error = fmt.Errorf("user %q can't be added, forced mode not enabled", query.User.Name)
-			return query
-		}
-	}
-
-	if err := conn.AddUser(query.User.Name, hidden, query.User.Created); err != nil {
-		query.Error = err
-	}
+	query = conn.AddUser(query)
 
 	if query.User.Suspended {
 		if err := conn.SuspendUser(query.User.Name); err != nil {

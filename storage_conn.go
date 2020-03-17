@@ -81,9 +81,14 @@ func (conn StorageConn) UpdateInactiveStatus(maxAge time.Duration) error {
 }
 
 // AddUser adds a User to the database. It doesn't check with Reddit, that is the responsibility of RedditUsers.
-func (conn StorageConn) AddUser(username string, hidden bool, created time.Time) error {
-	sql := "INSERT INTO user_archive(name, hidden, created, added) VALUES (?, ?, ?, ?)"
-	return conn.Exec(sql, username, hidden, created.Unix(), time.Now().Unix())
+func (conn StorageConn) AddUser(query UserQuery) UserQuery {
+	if query.User.Added.IsZero() {
+		query.User.Added = time.Now()
+	}
+	user := query.User
+	sql := "INSERT INTO user_archive(name, hidden, created, added, notes) VALUES (?, ?, ?, ?, ?)"
+	query.Error = conn.Exec(sql, user.Name, user.Hidden, user.Created.Unix(), user.Added.Unix(), user.Notes)
+	return query
 }
 
 // DelUser deletes a User that has the case-insensitive username.
