@@ -8,44 +8,51 @@ const ApplicationFileID int = 0xdab
 // Storage is a collection of methods to write, update, and retrieve all persistent data used throughout the application.
 type Storage struct {
 	StorageConf
-	db     *SQLiteDatabase
-	kv     *KeyValueStore
-	logger LevelLogger
-	attach string
+	KV        *KeyValueStore
+	SecretsKV *KeyValueStore
+	db        *SQLiteDatabase
+	logger    LevelLogger
+	attach    []SQLQuery
 }
 
 // NewStorage returns a Storage instance after running initialization, checks, and migrations onto the target database file.
 // It returns the connection it needed to run the checks; if you are using a temporary database, keep it open until shut down.
 func NewStorage(ctx Ctx, logger LevelLogger, conf StorageConf) (*Storage, StorageConn, error) {
-	conn := StorageConn{}
-	db, baseConn, err := NewSQLiteDatabase(ctx, logger, SQLiteDatabaseOptions{
+	var err error
+	var conn StorageConn
+
+	s := &Storage{
+		StorageConf: conf,
+		attach: []SQLQuery{
+			{SQL: fmt.Sprintf("ATTACH DATABASE %q AS secrets", conf.SecretsPath)},
+		},
+		logger: logger,
+	}
+
+	s.db, conn.actual, err = NewSQLiteDatabase(ctx, logger, SQLiteDatabaseOptions{
 		AppID:           ApplicationFileID,
-		CleanupInterval: conf.CleanupInterval.Value,
+		CleanupInterval: s.CleanupInterval.Value,
 		Migrations:      StorageMigrations,
-		Path:            conf.Path,
-		Retry:           conf.Retry,
-		Timeout:         conf.Timeout.Value,
+		Path:            s.Path,
+		Retry:           s.Retry,
+		Timeout:         s.Timeout.Value,
 		Version:         Version,
 	})
 	if err != nil {
 		return nil, conn, err
 	}
-	conn.actual = baseConn
 
-	kv, err := NewKeyValueStore(conn, "key_value")
+	if err = s.initTables(conn); err != nil {
+		return nil, conn, err
+	}
+
+	s.KV, err = NewKeyValueStore(conn, "key_value")
 	if err != nil {
 		return nil, conn, err
 	}
 
-	s := &Storage{
-		StorageConf: conf,
-		db:          db,
-		kv:          kv,
-		logger:      logger,
-	}
-	s.attach = fmt.Sprintf("ATTACH DATABASE %q AS secrets", s.SecretsPath)
-
-	if err := s.initTables(conn); err != nil {
+	s.SecretsKV, err = NewKeyValueStore(conn, "secrets.key_value")
+	if err != nil {
 		return nil, conn, err
 	}
 
@@ -54,19 +61,14 @@ func NewStorage(ctx Ctx, logger LevelLogger, conf StorageConf) (*Storage, Storag
 
 func (s *Storage) initTables(conn SQLiteConn) error {
 	var queries []SQLQuery
+	queries = append(queries, s.attach...)
 	queries = append(queries, User{}.InitializationQueries()...)
 	queries = append(queries, Comment{}.InitializationQueries()...)
-	queries = append(queries, SQLQuery{SQL: s.attach})
 	queries = append(queries, CertCache{}.InitializationQueries()...)
 	if err := conn.MultiExec(queries); err != nil {
 		return err
 	}
 	return nil
-}
-
-// KV returns a key-value store.
-func (s *Storage) KV() *KeyValueStore {
-	return s.kv
 }
 
 // PeriodicCleanup is a Task that periodically cleans up and optimizes the underlying database.
@@ -109,7 +111,7 @@ func (s *Storage) GetConn(ctx Ctx) (StorageConn, error) {
 	if err != nil {
 		return sc, err
 	}
-	err = sc.Exec(s.attach)
+	err = sc.MultiExec(s.attach)
 	if err != nil {
 		return sc, err
 	}

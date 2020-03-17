@@ -232,14 +232,14 @@ func (rs *RedditScanner) alertIfHighScore(conn StorageConn, comments []Comment) 
 	var highscores []Comment
 	for _, comment := range comments {
 		if comment.Score < rs.highScoreThreshold {
-			if !rs.storage.KV().Has("highscores", comment.ID) {
+			if !rs.storage.KV.Has("highscores", comment.ID) {
 				highscoresID = append(highscoresID, comment.ID)
 				highscores = append(highscores, comment)
 			}
 		}
 	}
 
-	err := conn.WithTx(func() error { return rs.storage.KV().SaveMany(conn, "highscores", highscoresID) })
+	err := conn.WithTx(func() error { return rs.storage.KV.SaveMany(conn, "highscores", highscoresID) })
 	if err != nil {
 		return err
 	}

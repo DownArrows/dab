@@ -197,7 +197,7 @@ func (dab *DownArrowsBot) Run(ctx Ctx, args []string) error {
 			return err
 		}
 		// We're re-using the database's first connection here, don't share it with any other component.
-		dab.components.Discord, err = NewDiscordBot(discordLogger, conn, dab.layers.Storage.KV(),
+		dab.components.Discord, err = NewDiscordBot(discordLogger, conn, dab.layers.Storage.KV,
 			dab.components.RedditUsers.Add, dab.conf.Discord.DiscordBotConf)
 		if err != nil {
 			return err
