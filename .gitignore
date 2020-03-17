@@ -10,3 +10,5 @@ GNUmakefile
 *.sh
 .*.sentinel
 .*.swp
+*-shm
+*-wal
