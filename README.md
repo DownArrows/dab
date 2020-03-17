@@ -328,12 +328,12 @@ and [template](http://golang.org/pkg/text/template/).
     - `root_dir` *string* (*none*): root directory that is served at the root URL, with automatic directory index generation,
        and which serves `index.html` as the root of a directory if present
     - `tls` *dictionary*: enable HTTPS with either ACME or a pair of files (certificate and private key)
-      - `acme` *array of string` (*none*): domains for which to automatically acquire and renew a
+      - `acme` *array of string* (*none*): domains for which to automatically acquire and renew a
         Let's Encrypt certificate; leave out or empty to disable,
         and if non-empty, overrides `web.tls.cert` and `web.tls.key` and enables TLS
       - `cert` *string* (*none*): path to a TLS certificate, with the intermediary certificate, to enable TLS;
         requires `web.tls.key` to be set too
-      - `key` *string* (*none*): path to a TLS private key, to enable TLS; requires `web.tls.key` to be set too
+      - `key` *string* (*none*): path to a TLS private key, to enable TLS; requires `web.tls.cert` to be set too
       - `helper` *dictionary*: optional HTTP server to help with HTTPS
         - `listen` *string* (:80): port to listen to for redirecting to HTTPS and
           for responding to ACME challenges over HTTP;
