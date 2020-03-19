@@ -196,8 +196,7 @@ func (dab *DownArrowsBot) Run(ctx Ctx, args []string) error {
 		if err != nil {
 			return err
 		}
-		// We're re-using the database's first connection here, don't share it with any other component.
-		dab.components.Discord, err = NewDiscordBot(discordLogger, conn, dab.layers.Storage.KV,
+		dab.components.Discord, err = NewDiscordBot(discordLogger, storage,
 			dab.components.RedditUsers.Add, dab.conf.Discord.DiscordBotConf)
 		if err != nil {
 			return err
@@ -219,9 +218,7 @@ func (dab *DownArrowsBot) Run(ctx Ctx, args []string) error {
 
 		if dab.components.RedditUsers.ResurrectionsWatcherEnabled {
 			tasks.SpawnCtx(func(ctx Ctx) error {
-				return dab.layers.Storage.WithConn(ctx, func(conn StorageConn) error {
-					return dab.components.RedditUsers.ResurrectionsWatcher(ctx, conn)
-				})
+				return dab.components.RedditUsers.ResurrectionsWatcher(ctx, conn) // we re-use the first created conn here
 			})
 			tasks.Spawn(func() { dab.components.Discord.SignalResurrections(dab.components.RedditUsers.OpenResurrections()) })
 		}

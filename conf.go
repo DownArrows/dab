@@ -180,13 +180,18 @@ type WebConf struct {
 	DBOptimize   Duration `json:"db_optimize"`
 	DefaultLimit uint     `json:"default_limit"`
 	DirtyReads   bool     `json:"dirty_reads"`
-	IPHeader     string   `json:"ip_header"`
-	Listen       string   `json:"listen"`
-	ListenFDs    uint     `json:"-"`
-	MaxLimit     uint     `json:"max_limit"`
-	NbDBConn     uint     `json:"nb_db_conn"`
-	RootDir      string   `json:"root_dir"`
-	TLS          TLSConf  `json:"tls"`
+	Discord      struct {
+		ClientID     string `json:"-"`
+		ClientSecret string `json:"-"`
+	}
+	IPHeader  string         `json:"ip_header"`
+	Listen    string         `json:"listen"`
+	ListenFDs uint           `json:"-"`
+	MaxLimit  uint           `json:"max_limit"`
+	NbDBConn  uint           `json:"nb_db_conn"`
+	RootDir   string         `json:"root_dir"`
+	Sessions  WebSessionConf `json:"sessions"`
+	TLS       TLSConf        `json:"tls"`
 }
 
 // ListenFDs checks for an environment variable that allows to
@@ -258,6 +263,14 @@ func (rc TLSHelperConf) Enabled() bool {
 	return rc.Listen != "" && rc.Target != ""
 }
 
+// WebSessionConf configures the expiration times of web sessions.
+type WebSessionConf struct {
+	MaxAge       Duration `json:"max_age"`
+	UpdateAfter  Duration `json:"update_after"`
+	MaxUpdateAge Duration `json:"max_update_age"`
+	MaxCSRFAge   Duration `json:"max_csrf_age"`
+}
+
 // Configuration holds the configuration for the whole application.
 type Configuration struct {
 	HidePrefix string   `json:"hide_prefix"`
@@ -286,6 +299,8 @@ type Configuration struct {
 	Discord struct {
 		DiscordBotConf
 		Admin              string    `json:"admin"` // Deprecated
+		ClientID           string    `json:"client_id"`
+		ClientSecret       string    `json:"client_secret"`
 		HighScoreThreshold int64     `json:"highscore_threshold"`
 		LogLevel           string    `json:"log_level"`
 		Retry              RetryConf `json:"retry_connection"`
@@ -341,6 +356,8 @@ func NewConfiguration(path string) (Configuration, error) {
 	conf.Web.TLS.Helper.ListenFDs = conf.Web.ListenFDs
 	conf.Web.TLS.Helper.IPHeader = conf.Web.IPHeader
 	conf.Web.TLS.Helper.Target = strings.TrimSuffix(conf.Web.TLS.Helper.Target, "/")
+	conf.Web.Discord.ClientID = conf.Discord.ClientID
+	conf.Web.Discord.ClientSecret = conf.Discord.ClientSecret
 
 	conf.Compendium.NbTop = conf.Report.NbTop
 

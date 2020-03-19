@@ -19,7 +19,7 @@ type SQLiteConn interface {
 	Path() string
 	// Close idempotently closes the connection.
 	Close() error
-	// Changes returns the number of rows that have been changed by the last queries.
+	// Changes returns the number of rows that have been changed by the last query.
 	Changes() int
 	// LastAnalyze returns the date at which Analyze was last run.
 	LastAnalyze() time.Time

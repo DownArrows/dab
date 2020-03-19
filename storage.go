@@ -8,11 +8,9 @@ const ApplicationFileID int = 0xdab
 // Storage is a collection of methods to write, update, and retrieve all persistent data used throughout the application.
 type Storage struct {
 	StorageConf
-	KV        *KeyValueStore
-	SecretsKV *KeyValueStore
-	db        *SQLiteDatabase
-	logger    LevelLogger
-	attach    []SQLQuery
+	db     *SQLiteDatabase
+	logger LevelLogger
+	attach []SQLQuery
 }
 
 // NewStorage returns a Storage instance after running initialization, checks, and migrations onto the target database file.
@@ -46,16 +44,6 @@ func NewStorage(ctx Ctx, logger LevelLogger, conf StorageConf) (*Storage, Storag
 		return nil, conn, err
 	}
 
-	s.KV, err = NewKeyValueStore(conn, "key_value")
-	if err != nil {
-		return nil, conn, err
-	}
-
-	s.SecretsKV, err = NewKeyValueStore(conn, "secrets.key_value")
-	if err != nil {
-		return nil, conn, err
-	}
-
 	return s, conn, nil
 }
 
@@ -65,6 +53,7 @@ func (s *Storage) initTables(conn SQLiteConn) error {
 	queries = append(queries, User{}.InitializationQueries()...)
 	queries = append(queries, Comment{}.InitializationQueries()...)
 	queries = append(queries, CertCache{}.InitializationQueries()...)
+	queries = append(queries, WebSession{}.InitializationQueries()...)
 	if err := conn.MultiExec(queries); err != nil {
 		return err
 	}

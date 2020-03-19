@@ -228,24 +228,21 @@ func (rs *RedditScanner) alertIfHighScore(conn StorageConn, comments []Comment) 
 		return nil
 	}
 
-	var highscoresID []string
-	var highscores []Comment
+	// TODO cache has been removed, add a method to StorageConn instead
+
+	highscoresID := NewSet(nil)
 	for _, comment := range comments {
 		if comment.Score < rs.highScoreThreshold {
-			if !rs.storage.KV.Has("highscores", comment.ID) {
-				highscoresID = append(highscoresID, comment.ID)
-				highscores = append(highscores, comment)
-			}
+			highscoresID.Add(comment.ID)
 		}
 	}
 
-	err := conn.WithTx(func() error { return rs.storage.KV.SaveMany(conn, "highscores", highscoresID) })
-	if err != nil {
-		return err
-	}
+	//	highscoresID = NewSet(rs.cache.SaveMany("highscores", highscoresID.ToSlice(), time.Now()))
 
-	for _, comment := range highscores {
-		rs.highScores <- comment
+	for _, comment := range comments {
+		if highscoresID.Has(comment.ID) {
+			rs.highScores <- comment
+		}
 	}
 
 	return nil

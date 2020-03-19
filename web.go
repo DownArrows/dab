@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/russross/blackfriday/v2"
+	"golang.org/x/oauth2"
 	"html/template"
 	"net"
 	"net/http"
@@ -15,6 +16,8 @@ import (
 	"strings"
 )
 
+// TODO sessions cleanup & inject authorization on all pages
+
 var (
 	markdownExtensions = blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis
 	markdownOptions    = blackfriday.WithExtensions(blackfriday.Extensions(markdownExtensions))
@@ -24,15 +27,17 @@ var matchTags = regexp.MustCompile("<([^>]*)>")
 
 // WebServer serves the stored data as HTML pages and a backup of the database.
 type WebServer struct {
+	SelfLink string
 	WebConf
 	acme       *ACMEManager
 	compendium CompendiumFactory
 	conns      SQLiteConnPool
-	logger     LevelLogger
 	helper     *TLSHelper
+	logger     LevelLogger
+	oAuthConf  *oauth2.Config
 	reports    ReportFactory
-	SelfLink   string
 	server     *http.Server
+	sessions   WebSessionFactory
 	storage    *Storage
 	tls        *tls.Config
 }
@@ -49,12 +54,22 @@ func NewWebServer(
 	wsrv := &WebServer{
 		WebConf:    conf,
 		compendium: compendium,
+		sessions:   NewWebSessionFactory("session", conf.Sessions),
 		logger:     logger,
 		reports:    reports,
 		storage:    storage,
 		tls: &tls.Config{
 			PreferServerCipherSuites: false,
 			MinVersion:               tls.VersionTLS12,
+		},
+		oAuthConf: &oauth2.Config{
+			ClientID:     conf.Discord.ClientID,
+			ClientSecret: conf.Discord.ClientSecret,
+			Endpoint: oauth2.Endpoint{
+				AuthURL:  "https://discordapp.com/api/oauth2/authorize",
+				TokenURL: "https://discordapp.com/api/oauth2/token",
+			},
+			Scopes: []string{"identify"},
 		},
 	}
 
@@ -146,6 +161,10 @@ func (wsrv *WebServer) prepareTLS(pool SQLiteConnPool) error {
 		}
 	}
 	return nil
+}
+
+func (wsrv *WebServer) loginEnabled() bool {
+	return wsrv.Discord.ClientID != "" && wsrv.Discord.ClientSecret != ""
 }
 
 func (wsrv *WebServer) initDBPool(ctx Ctx) (SQLiteConnPool, error) {
@@ -474,6 +493,63 @@ func (wsrv *WebServer) BackupSecrets(w http.ResponseWriter, r *http.Request) {
 		wsrv.err(w, r, err, http.StatusInternalServerError)
 		return
 	}
+}
+
+func (wsrv *WebServer) authorize(conn StorageConn, w http.ResponseWriter, r *http.Request) *HTTPError {
+	var session *WebSession
+	var hErr *HTTPError
+
+	if session, hErr = wsrv.sessions.FromRequest(conn, w, r); hErr != nil {
+		return hErr
+	} else if session == nil {
+		if session, hErr = wsrv.sessions.New(conn, w); hErr != nil {
+			return hErr
+		}
+	}
+
+	if expired, hErr := session.Expire(conn, w); hErr != nil {
+		return hErr
+	} else if expired {
+		if session, hErr = wsrv.sessions.New(conn, w); hErr != nil {
+			return hErr
+		}
+	}
+
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		return NewHTTPErrorf(http.StatusBadRequest, "could not parse the query part of the URL %q: %v", r.URL, err)
+	}
+
+	conf := wsrv.oAuthConf
+
+	csrf := query.Get("state")
+	code := query.Get("code")
+
+	if code == "" || csrf == "" {
+		if hErr = session.NewCSRF(conn, w); hErr != nil {
+			return hErr
+		}
+		conf.RedirectURL = r.URL.String()
+		// TODO maybe hash the CSRF token?
+		http.Redirect(w, r, conf.AuthCodeURL(session.CSRF, oauth2.AccessTypeOnline), http.StatusSeeOther)
+		return nil
+	}
+
+	if session.CSRF != csrf {
+		return NewHTTPErrorf(http.StatusForbidden, "invalid CSRF token %q", csrf)
+	}
+
+	oAuthToken, err := conf.Exchange(r.Context(), code, oauth2.AccessTypeOnline)
+	if err != nil {
+		return NewHTTPErrorf(http.StatusServiceUnavailable, "failed to get an oAuth2 token with Discord: %v", err)
+	}
+
+	id, hErr := DiscordOAuthGetID(conf.Client(r.Context(), oAuthToken))
+	if hErr != nil {
+		return hErr
+	}
+
+	return session.SetID(conn, w, id)
 }
 
 func (wsrv *WebServer) err(w http.ResponseWriter, r *http.Request, err error, code int) {

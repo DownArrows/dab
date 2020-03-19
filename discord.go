@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"text/template"
 	"time"
 )
@@ -81,11 +80,12 @@ func NewDiscordMessage(dgMsg *discordgo.MessageCreate) DiscordMessage {
 	}
 }
 
-// DiscordMember usefully subsumes discordgo.Member and discordgo.User
+// DiscordMember usefully subsumes discordgo.Member and discordgo.User,
+// and can be used to partially decode JSON from Discord representing a user.
 type DiscordMember struct {
-	ID            string
-	Name          string
-	Discriminator string
+	ID            string `json:"id"`
+	Name          string `json:"username"`
+	Discriminator string `json:"discriminator"`
 }
 
 // FQN returns the fully qualified name of a user, with its discriminator.
@@ -186,14 +186,12 @@ type DiscordWelcomeData struct {
 
 // DiscordBot is a component that interacts with Discord.
 type DiscordBot struct {
-	sync.Mutex
-
 	// dependencies
 	addUser AddRedditUser
 	client  *discordgo.Session
 	conn    StorageConn // a single one is enough, it's not heavily used
-	kv      *KeyValueStore
 	logger  LevelLogger
+	storage *Storage
 	tasks   *TaskGroup
 
 	// state information
@@ -217,8 +215,7 @@ type DiscordBot struct {
 // NewDiscordBot returns a new DiscordBot.
 func NewDiscordBot(
 	logger LevelLogger,
-	conn StorageConn,
-	kv *KeyValueStore,
+	storage *Storage,
 	addUser AddRedditUser,
 	conf DiscordBotConf,
 ) (*DiscordBot, error) {
@@ -238,18 +235,11 @@ func NewDiscordBot(
 		return nil, err
 	}
 
-	if conf.DirtyReads {
-		if err := conn.ReadUncommitted(true); err != nil {
-			return nil, err
-		}
-	}
-
 	bot := &DiscordBot{
 		addUser: addUser,
 		client:  session,
-		conn:    conn,
-		kv:      kv,
 		logger:  logger,
+		storage: storage,
 
 		channelsID:     conf.DiscordBotChannelsID,
 		hidePrefix:     conf.HidePrefix,
@@ -275,14 +265,31 @@ func NewDiscordBot(
 		bot.tasks.SpawnCtx(func(_ Ctx) error { return bot.onReady(r) })
 	})
 
+	session.AddHandler(func(_ *discordgo.Session, deletion *discordgo.GuildMemberRemove) {
+		bot.tasks.SpawnCtx(func(ctx Ctx) error {
+			return bot.withConn(func(conn StorageConn) error {
+				return conn.DelAuthorizedID(deletion.Member.User.ID)
+			})
+		})
+	})
+
 	return bot, nil
 }
 
 // Run runs and blocks until the bot stops.
 func (bot *DiscordBot) Run(ctx Ctx) error {
-	bot.Lock()
+	var err error
+
 	bot.tasks = NewTaskGroup(ctx)
-	bot.Unlock()
+	bot.conn, err = bot.storage.GetConn(ctx)
+	if err != nil {
+		return err
+	}
+	defer bot.conn.Close()
+	if err := bot.conn.ReadUncommitted(true); err != nil {
+		return err
+	}
+
 	bot.tasks.SpawnCtx(func(_ Ctx) error { return bot.client.Open() })
 	bot.tasks.SpawnCtx(func(ctx Ctx) error {
 		for SleepCtx(ctx, discordStatusInterval) {
@@ -295,6 +302,12 @@ func (bot *DiscordBot) Run(ctx Ctx) error {
 		return bot.client.Close()
 	})
 	return bot.tasks.Wait().ToError()
+}
+
+func (bot *DiscordBot) withConn(cb func(StorageConn) error) error {
+	bot.conn.Lock()
+	defer bot.conn.Unlock()
+	return cb(bot.conn)
 }
 
 func (bot *DiscordBot) isDMChannel(channelID string) (bool, error) {
@@ -393,10 +406,28 @@ func (bot *DiscordBot) onReady(r *discordgo.Ready) error {
 
 	bot.setStatus()
 
-	return nil
+	// save IDs authorized to connect to the web interface
+	guild, err = bot.client.Guild(bot.guildID)
+	if err != nil {
+		return err
+	}
+	var ids []string
+	for _, member := range guild.Members {
+		ids = append(ids, member.User.ID)
+	}
+	return bot.withConn(func(conn StorageConn) error {
+		return conn.AddAuthorizedIDs(ids)
+	})
 }
 
 func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) error {
+	err := bot.withConn(func(conn StorageConn) error {
+		return conn.AddAuthorizedIDs([]string{member.User.ID})
+	})
+	if err != nil {
+		return err
+	}
+
 	var msg strings.Builder
 	data := DiscordWelcomeData{
 		BotID:      bot.ID,
@@ -407,6 +438,7 @@ func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) error {
 			Discriminator: member.User.Discriminator,
 		},
 	}
+
 	bot.logger.Debugf("welcoming user %s", data.Member.FQN())
 	if err := bot.welcome.Execute(&msg, data); err != nil {
 		return err
@@ -658,9 +690,9 @@ func (bot *DiscordBot) editUsers(actionName string, action func(string) error) f
 		for _, name := range names {
 			name = TrimUsername(name)
 
-			bot.conn.Lock()
-			err := action(name)
-			bot.conn.Unlock()
+			err := bot.withConn(func(_ StorageConn) error {
+				return action(name)
+			})
 
 			if err != nil {
 				status.AddField(DiscordEmbedField{Name: name, Value: fmt.Sprintf("%s %s", EmojiCrossMark, err)})
@@ -708,12 +740,14 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 
 func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 	username := TrimUsername(msg.Content)
+	var query UserQuery
 
-	bot.conn.Lock()
-	query := bot.conn.GetUser(username)
-	bot.conn.Unlock()
-	if query.Error != nil {
+	err := bot.withConn(func(conn StorageConn) error {
+		query = conn.GetUser(username)
 		return query.Error
+	})
+	if err != nil {
+		return err
 	}
 
 	if !query.Exists {
@@ -780,23 +814,28 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 	}
 
 	username := TrimUsername(msg.Args[0])
+	var query UserQuery
 
-	bot.conn.Lock()
-	userQuery := bot.conn.GetUser(username)
-	bot.conn.Unlock()
+	err := bot.withConn(func(conn StorageConn) error {
+		query = conn.GetUser(username)
+		return query.Error
+	})
 
-	if userQuery.Error != nil {
-		return userQuery.Error
-	} else if !userQuery.Exists {
+	if err != nil {
+		return err
+	} else if !query.Exists {
 		reply := fmt.Sprintf("user %s not found.", username)
 		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, reply)
 	}
 
-	user := userQuery.User
+	user := query.User
+	var total int64
+	var negative int64
 
-	bot.conn.Lock()
-	total, negative, err := bot.conn.GetKarma(user.Name)
-	bot.conn.Unlock()
+	err = bot.withConn(func(conn StorageConn) error {
+		total, negative, err = conn.GetKarma(user.Name)
+		return err
+	})
 	if err != nil {
 		return err
 	}

@@ -92,7 +92,6 @@ var StorageMigrations = []SQLiteMigration{
 		From: SemVer{1, 25, 0},
 		To:   SemVer{1, 26, 0},
 		Exec: func(conn SQLiteConn) error {
-			discordPrefix := "register-from-discord_"
 			if err := conn.Exec("PRAGMA foreign_keys = OFF"); err != nil {
 				return err
 			}
@@ -117,22 +116,23 @@ var StorageMigrations = []SQLiteMigration{
 				{SQL: `INSERT INTO new_user_archive
 					WITH notes AS
 						(SELECT
-							REPLACE(key, ?, "") AS name,
+							REPLACE(key, "register-from-discord_", "") AS name,
 							json_object("registration",
 								json_object("from",
 									json_object("id", value, "type", "discord")
 								)) AS notes
 						FROM key_value
-						WHERE key LIKE (? || "%"))
+						WHERE key LIKE "register-from-discord_%")
 					SELECT
 						user_archive.name, created, not_found, suspended, added, batch_size,
 						deleted, hidden, inactive, last_scan, new, notes.notes, position
 					FROM user_archive LEFT JOIN notes
-					ON user_archive.name = notes.name`, Args: []interface{}{discordPrefix, discordPrefix}},
+					ON user_archive.name = notes.name`},
 				{SQL: "DROP TABLE user_archive"},
 				{SQL: "ALTER TABLE new_user_archive RENAME TO user_archive"},
 				{SQL: "PRAGMA foreign_keys = ON"},
-				{SQL: "DELETE FROM key_value WHERE key LIKE (? || '%')", Args: []interface{}{discordPrefix}},
+				// TODO migrate highscores
+				{SQL: "DROP TABLE key_value"},
 			})
 		},
 	},

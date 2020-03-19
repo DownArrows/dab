@@ -3,13 +3,28 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"os"
 	"sort"
 	"time"
 )
 
+// Any is a shorter alias for interface{}
+// TODO replace all instances of interface{} with that alias
+type Any = interface{}
+
 // ErrSentinel is an error used to signal that there's been an error but has been dealt with out of band.
+// TODO delete after migrating to *HTTPError
 var ErrSentinel = errors.New("sentinel error, you SHOULD NOT be seeing that")
+
+// NewRandomToken makes a secure random string token.
+func NewRandomToken() (string, error) {
+	token, err := uuid.NewRandom()
+	if err != nil {
+		return "", fmt.Errorf("error when generating a random token: %v", err)
+	}
+	return token.String(), nil
+}
 
 // FileOlderThan tells if the file at path is older than maxAge.
 func FileOlderThan(path string, maxAge time.Duration) (bool, error) {
@@ -118,4 +133,36 @@ func SliceHasString(slice []string, str string) bool {
 		}
 	}
 	return false
+}
+
+// Set implements a set of strings.
+type Set map[string]struct{}
+
+// NewSet makes a Set from a slice.
+func NewSet(slice []string) Set {
+	set := make(map[string]struct{})
+	for _, el := range slice {
+		set[el] = struct{}{}
+	}
+	return set
+}
+
+// Has returns whether the given string is in the set.
+func (set Set) Has(el string) bool {
+	_, ok := set[el]
+	return ok
+}
+
+// Add adds an element to the set.
+func (set Set) Add(el string) {
+	set[el] = struct{}{}
+}
+
+// ToSlice returns a slice with the same elements as the set.
+func (set Set) ToSlice() []string {
+	var slice []string
+	for el := range set {
+		slice = append(slice, el)
+	}
+	return slice
 }

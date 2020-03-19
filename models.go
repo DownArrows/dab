@@ -35,6 +35,7 @@ func (c Comment) InitializationQueries() []SQLQuery {
 			FOREIGN KEY (author) REFERENCES user_archive(name)
 		) WITHOUT ROWID`},
 		{SQL: "CREATE INDEX IF NOT EXISTS comments_idx ON comments (author, score ASC, sub, created DESC)"},
+		// TODO replace with foreign key propagation
 		{SQL: `CREATE TRIGGER IF NOT EXISTS purge_user BEFORE DELETE ON user_archive
 			BEGIN
 				DELETE FROM comments WHERE author = OLD.name COLLATE NOCASE;

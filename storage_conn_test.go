@@ -12,7 +12,7 @@ func TestCRUDUsers(t *testing.T) {
 	path := ":memory:"
 	ctx := context.Background()
 
-	_, conn, err := NewStorage(ctx, NewTestLevelLogger(t), StorageConf{Path: path})
+	_, conn, err := NewStorage(ctx, NewTestLevelLogger(t), StorageConf{Path: path, SecretsPath: path})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestCRUDComments(t *testing.T) {
 	path := ":memory:"
 	ctx := context.Background()
 
-	_, conn, err := NewStorage(ctx, NewTestLevelLogger(t), StorageConf{Path: path})
+	_, conn, err := NewStorage(ctx, NewTestLevelLogger(t), StorageConf{Path: path, SecretsPath: path})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -147,6 +147,98 @@ func (conn StorageConn) simpleEditUser(sql, username string) error {
 }
 
 /********
+ Sessions
+*********/
+
+// AddAuthorizedIDs adds multiple IDs that are authorized to log into the web application.
+func (conn StorageConn) AddAuthorizedIDs(ids []string) error {
+	return conn.WithTx(func() error {
+		stmt, err := conn.Prepare("INSERT INTO secrets.authorized(id) VALUES (?)")
+		if err != nil {
+			return err
+		}
+		defer stmt.Close()
+
+		for _, id := range ids {
+			if err := stmt.Exec(id); err != nil {
+				return err
+			}
+			if err := stmt.ClearBindings(); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// DelAuthorizedID removes an ID authorized to log into the web application.
+func (conn StorageConn) DelAuthorizedID(id string) error {
+	return conn.Exec("DELETE FROM secrets.authorized WHERE id = ?", id)
+}
+
+// AddSession registers a web session.
+func (conn StorageConn) AddSession(token string, date time.Time) error {
+	timestamp := date.Unix()
+	return conn.Exec("INSERT INTO secrets.sessions(token, created, updated) VALUES (?, ?, ?)", token, timestamp, timestamp)
+}
+
+// GetSession retrieves a web session.
+func (conn StorageConn) GetSession(token string) (*WebSession, error) {
+	session := &WebSession{}
+	if err := conn.Select("SELECT * FROM secrets.sessions WHERE token = ?", session.FromDB, token); err != nil {
+		return nil, err
+	}
+	if session.Token == "" {
+		return nil, nil
+	}
+	return session, nil
+}
+
+// CleanupSessions removes old web sessions and old anti-CSRF tokens.
+func (conn StorageConn) CleanupSessions(wsf WebSessionFactory) error {
+	now := time.Now()
+	return conn.MultiExec([]SQLQuery{{
+		SQL: "UPDATE secrets.sessions SET csrf = NULL, csrf_date = NULL WHERE csrf_date < ?",
+		Args: []Any{
+			now.Add(-wsf.MaxCSRFAge).Unix()},
+	}, {
+		SQL: "DELETE FROM secrets.sessions WHERE updated < ? OR created < ?",
+		Args: []Any{
+			now.Add(-wsf.MaxAge).Unix(),
+			now.Add(-wsf.MaxUpdateAge).Unix()},
+	}})
+}
+
+// UpdateSession updates the last use time of a web session and indicates if the session exists.
+func (conn StorageConn) UpdateSession(token string, date time.Time) (exists bool, err error) {
+	err = conn.Exec("UPDATE secrets.sessions SET updated = ? WHERE token = ?", date.Unix(), token)
+	return (conn.Changes() > 0), err
+}
+
+// SetIDSession tries to register the ID of a web session, and returns if the session exists and if the ID is authorized.
+func (conn StorageConn) SetIDSession(token, id string) (exists bool, authorized bool, err error) {
+	err = conn.Exec("UPDATE secrets.sessions SET id = ? WHERE token = ?", id, token)
+	if err != nil {
+		if IsSQLiteForeignKeyError(err) {
+			return false, false, nil
+		}
+		return false, false, err
+	}
+	return (conn.Changes() > 0), true, nil
+}
+
+// SetCSRFSession registers the CSRF token of a web session, and indicates if the session exists.
+func (conn StorageConn) SetCSRFSession(token, csrf string, date time.Time) (exists bool, err error) {
+	err = conn.Exec("UPDATE secrets.sessions SET csrf = ?, csrf_date = ? WHERE token = ?", csrf, date.Unix(), token)
+	return (conn.Changes() > 0), err
+}
+
+// DelSession deletes a  web session.
+func (conn StorageConn) DelSession(token string) error {
+	return conn.Exec("DELETE FROM secrets.sessions WHERE token = ?", token)
+}
+
+/********
  Comments
 *********/
 

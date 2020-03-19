@@ -16,6 +16,15 @@ const (
 	SQLiteDefaultTimeout     = 5 * time.Second
 )
 
+// IsSQLiteForeignKeyError indicates whether the given error is an error about a missing foreign key.
+func IsSQLiteForeignKeyError(err error) bool {
+	errSQLite, ok := err.(*sqlite.Error)
+	if !ok {
+		return false
+	}
+	return errSQLite.Code() == sqlite.CONSTRAINT_FOREIGNKEY
+}
+
 // SQLQuery describes multiple SQL queries and their arguments.
 type SQLQuery struct {
 	SQL  string

@@ -4,8 +4,11 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/tls"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"golang.org/x/crypto/acme/autocert"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -24,6 +27,41 @@ const (
 	// if activation based on file descriptor is enabled.
 	WebServerListenFDHelper = 4
 )
+
+// HTTPError represents an error relevant to an HTTP request/response.
+type HTTPError struct {
+	code int
+	err  error
+}
+
+// NewHTTPError creates a new HTTPError from a code and an error.
+func NewHTTPError(code int, err error) *HTTPError {
+	return &HTTPError{code: code, err: err}
+}
+
+// NewHTTPErrorf creates a new HTTPError from a code, a template message, and arguments.
+func NewHTTPErrorf(code int, tmpl string, args ...interface{}) *HTTPError {
+	return &HTTPError{
+		code: code,
+		err:  fmt.Errorf(tmpl, args...),
+	}
+}
+
+// Code returns the HTTP code of the error.
+func (he *HTTPError) Code() int {
+	return he.code
+}
+
+// Error implements the error interface.
+func (he *HTTPError) Error() string {
+	msg := he.err.Error()
+	return fmt.Sprintf("%d %s%s.", he.code, strings.ToUpper(msg[0:1]), msg[1:])
+}
+
+// Unwrap returns the underlying error.
+func (he *HTTPError) Unwrap() error {
+	return he.err
+}
 
 // IgnoreHTTPServerCloseErr filters out the uninformative http.ErrServerClosed.
 func IgnoreHTTPServerCloseErr(err error) error {
@@ -66,6 +104,13 @@ func URLFromHostPort(hostport string) (*url.URL, error) {
 		host = "0.0.0.0"
 	}
 	return &url.URL{Host: net.JoinHostPort(host, port)}, nil
+}
+
+// DeleteCookie sets an arbitrary cookie for deletion onto the given response writer.
+func DeleteCookie(w http.ResponseWriter, cookie *http.Cookie) {
+	delCookie := *cookie
+	delCookie.MaxAge = -1
+	http.SetCookie(w, &delCookie)
 }
 
 // ResponseWriter is a wrapper for http.ResponseWriter with basic GZip compression support.
@@ -129,6 +174,19 @@ func NewServeMux(logger LevelLogger, ipHeader string) *ServeMux {
 	}
 }
 
+// HandleAuto wraps and registers a function that may return an *HTTPError.
+func (mux *ServeMux) HandleAuto(pattern string, handler func(http.ResponseWriter, *http.Request) *HTTPError) {
+	mux.actual.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		if err := handler(w, r); err != nil {
+			if IsCancellation(err.Unwrap()) {
+				err = NewHTTPError(http.StatusServiceUnavailable, errors.New("server shutting down"))
+			}
+			mux.logErr(r, err)
+			http.Error(w, err.Error(), err.Code())
+		}
+	})
+}
+
 // HandleFunc wrapper.
 func (mux *ServeMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
 	mux.actual.HandleFunc(pattern, handler)
@@ -143,21 +201,28 @@ func (mux *ServeMux) Handle(pattern string, handler http.Handler) {
 func (mux *ServeMux) ServeHTTP(baseWriter http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if err := recover(); err != nil {
-			mux.logger.Errord(func() error {
-				return fmt.Errorf("error in response to %s %s for %s: %v",
-					r.Method, r.URL, getIP(r, mux.IPHeader), err)
-			})
+			mux.logErr(r, fmt.Errorf("%v", err))
 		}
 	}()
+
 	mux.logger.Infod(func() interface{} {
 		return fmt.Sprintf("serve %s %s for %s with user agent %q",
 			r.Method, r.URL, getIP(r, mux.IPHeader), r.Header.Get("User-Agent"))
 	})
+
 	w := NewResponseWriter(baseWriter, r)
 	mux.actual.ServeHTTP(w, r)
+
 	if err := w.Close(); err != nil {
-		panic(err)
+		mux.logErr(r, err)
 	}
+}
+
+func (mux *ServeMux) logErr(r *http.Request, err error) {
+	mux.logger.Errord(func() error {
+		return fmt.Errorf("error in response to %s %s for %s with user agent %q: %v",
+			r.Method, r.URL, getIP(r, mux.IPHeader), r.Header.Get("User-Agent"), err)
+	})
 }
 
 func getIP(r *http.Request, header string) string {
@@ -285,7 +350,7 @@ func (am *ACMEManager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certific
 
 // CertCache is a cache for autocert.Manager.
 type CertCache struct {
-	pool SQLiteConnPool
+	pool SQLiteConnPool // TODO replace with a function that takes a callback that takes a database connection
 }
 
 // InitializationQueries returns SQL queries to store certificates that assume a "secret" database exists.
@@ -331,4 +396,34 @@ func (cc CertCache) Delete(ctx Ctx, key string) error {
 	return cc.pool.WithConn(ctx, func(conn SQLiteConn) error {
 		return conn.Exec("DELETE FROM certs WHERE key = ?", key)
 	})
+}
+
+// DiscordOAuthGetID gets the ID of a user logging in with Discord from a web interface.
+// Assumes a pre-configured client is passed.
+func DiscordOAuthGetID(client *http.Client) (string, *HTTPError) {
+	res, err := client.Get("/users/@me")
+	if err != nil {
+		return "", NewHTTPErrorf(http.StatusServiceUnavailable, "failed to get your ID from Discord: %v", err)
+	}
+
+	data, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		return "", NewHTTPErrorf(http.StatusBadGateway, "failed to read response body of request to Discord: %v", err)
+	}
+
+	if res.StatusCode != 200 {
+		return "", NewHTTPErrorf(http.StatusBadGateway, "invalid response status from Discord: %d %s", res.StatusCode, res.Status)
+	}
+
+	var member DiscordMember
+	if err := json.Unmarshal(data, &member); err != nil {
+		return "", NewHTTPErrorf(http.StatusBadGateway, "failed to parse user information from Discord: %v", err)
+	}
+
+	if member.ID == "" {
+		return "", NewHTTPErrorf(http.StatusBadGateway, "invalid response from Discord, found an empty ID: %+v", member)
+	}
+
+	return member.ID, nil
 }
