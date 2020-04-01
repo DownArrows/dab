@@ -122,7 +122,8 @@ var StorageMigrations = []SQLiteMigration{
 									json_object("id", value, "type", "discord")
 								)) AS notes
 						FROM key_value
-						WHERE key LIKE "register-from-discord_%")
+						WHERE key LIKE "register-from-discord_%"
+						GROUP BY name ORDER BY created) -- remove duplicates caused by race conditions
 					SELECT
 						user_archive.name, created, not_found, suspended, added, batch_size,
 						deleted, hidden, inactive, last_scan, new, notes.notes, position
@@ -133,6 +134,7 @@ var StorageMigrations = []SQLiteMigration{
 				{SQL: "PRAGMA foreign_keys = ON"},
 				// TODO migrate highscores
 				{SQL: "DROP TABLE key_value"},
+				{SQL: "DROP TRIGGER IF EXISTS purge_user"}, // migrated to foreign key cascade
 			})
 		},
 	},
