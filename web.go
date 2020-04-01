@@ -529,6 +529,11 @@ func (wsrv *WebServer) authorize(conn StorageConn, w http.ResponseWriter, r *htt
 		}
 	}
 
+	// Any non-empty ID is valid and authorized.
+	if session.ID != "" {
+		return nil
+	}
+
 	query, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
 		return NewHTTPErrorf(http.StatusBadRequest, "could not parse the query part of the URL %q: %v", r.URL, err)
