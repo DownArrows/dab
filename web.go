@@ -13,7 +13,6 @@ import (
 	"os"
 	"regexp"
 	"strconv"
-	"strings"
 )
 
 // TODO sessions cleanup & inject authorization on all pages
@@ -81,19 +80,19 @@ func NewWebServer(
 	}
 
 	mux := NewServeMux(wsrv.logger, wsrv.IPHeader)
-	mux.HandleFunc("/css/", wsrv.immutableCache(wsrv.CSS))
-	mux.HandleFunc("/reports", wsrv.ReportIndex)
-	mux.HandleFunc("/reports/", wsrv.Report)
-	mux.HandleFunc("/reports/current", wsrv.ReportCurrent)
-	mux.HandleFunc("/reports/lastweek", wsrv.ReportLatest)
-	mux.HandleFunc("/reports/source/", wsrv.ReportSource)
-	mux.HandleFunc("/reports/stats/", wsrv.ReportStats)
-	mux.HandleFunc("/compendium", wsrv.CompendiumIndex)
-	mux.HandleFunc("/compendium/user/", wsrv.CompendiumUser)
-	mux.HandleFunc("/compendium/comments", wsrv.CompendiumComments)
-	mux.HandleFunc("/compendium/comments/user/", wsrv.CompendiumUserComments)
-	mux.HandleFunc("/backup/secrets", wsrv.BackupSecrets)
-	mux.HandleFunc("/backup/main", wsrv.BackupMain)
+	mux.HandleAuto("/css/", wsrv.immutableCache(wsrv.CSS))
+	mux.HandleAuto("/reports", wsrv.ReportIndex)
+	mux.HandleAuto("/reports/", wsrv.Report)
+	mux.HandleAuto("/reports/current", wsrv.ReportCurrent)
+	mux.HandleAuto("/reports/lastweek", wsrv.ReportLatest)
+	mux.HandleAuto("/reports/source/", wsrv.ReportSource)
+	mux.HandleAuto("/reports/stats/", wsrv.ReportStats)
+	mux.HandleAuto("/compendium", wsrv.CompendiumIndex)
+	mux.HandleAuto("/compendium/user/", wsrv.CompendiumUser)
+	mux.HandleAuto("/compendium/comments", wsrv.CompendiumComments)
+	mux.HandleAuto("/compendium/comments/user/", wsrv.CompendiumUserComments)
+	mux.HandleAuto("/backup/secrets", wsrv.BackupSecrets)
+	mux.HandleAuto("/backup/main", wsrv.BackupMain)
 	mux.HandleFunc("/backup", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/backup/main", http.StatusMovedPermanently)
 	})
@@ -105,6 +104,26 @@ func NewWebServer(
 	wsrv.server = &http.Server{Addr: conf.Listen, Handler: mux}
 
 	return wsrv, nil
+}
+
+/************
+ Init helpers
+ ************/
+
+func (wsrv *WebServer) getSelfLink() (string, error) {
+	if wsrv.ListenFDs > 0 {
+		return fmt.Sprintf("file descriptor %d", WebServerListenFD), nil
+	}
+	address, err := URLFromHostPort(wsrv.Listen)
+	if err != nil {
+		return "", err
+	}
+	if wsrv.TLS.Enabled() {
+		address.Scheme = "https"
+	} else {
+		address.Scheme = "http"
+	}
+	return address.String(), nil
 }
 
 // Run runs the web server and blocks until it is cancelled or returns an error.
@@ -136,6 +155,10 @@ func (wsrv *WebServer) Run(ctx Ctx) error {
 
 	return tasks.Wait().ToError()
 }
+
+/***********
+ Run helpers
+ ***********/
 
 func (wsrv *WebServer) prepareTLS(pool SQLiteConnPool) error {
 	var err error
@@ -217,8 +240,12 @@ func (wsrv *WebServer) listen() error {
 	return IgnoreHTTPServerCloseErr(wsrv.server.Serve(listener))
 }
 
+/****************
+ Request handlers
+ ****************/
+
 // CSS serves the style sheets.
-func (wsrv *WebServer) CSS(w http.ResponseWriter, r *http.Request) {
+func (wsrv *WebServer) CSS(w http.ResponseWriter, r *http.Request) *HTTPError {
 	var css string
 	switch r.URL.Path {
 	case "/css/main":
@@ -228,24 +255,24 @@ func (wsrv *WebServer) CSS(w http.ResponseWriter, r *http.Request) {
 	case "/css/compendium":
 		css = CSSCompendium
 	default:
-		wsrv.errMsg(w, r, fmt.Sprintf("Stylesheet %q doesn't exist.", r.URL.Path), http.StatusNotFound)
-		return
+		return NewHTTPErrorf(http.StatusNotFound, "stylesheet %q doesn't exist", r.URL.Path)
 	}
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	w.Write([]byte(css))
+	return nil
 }
 
 // ReportIndex serves the reports' index (unimplemented).
-func (wsrv *WebServer) ReportIndex(w http.ResponseWriter, r *http.Request) {
+func (wsrv *WebServer) ReportIndex(w http.ResponseWriter, r *http.Request) *HTTPError {
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+	return nil
 }
 
 // ReportSource serves the reports in markdown format according to the year and week in the URL.
-func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
+func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) *HTTPError {
 	week, year, err := weekAndYear(NormalizeTrailing(HTTPRequestSubPath("/reports/source/", r)))
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusBadRequest)
-		return
+		return NewHTTPError(http.StatusBadRequest, err)
 	}
 
 	var report Report
@@ -255,25 +282,23 @@ func (wsrv *WebServer) ReportSource(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusInternalServerError)
-		return
+		return NewHTTPError(http.StatusInternalServerError, err)
 	} else if report.Len() == 0 {
-		wsrv.errMsg(w, r, fmt.Sprintf("Empty report for %d/%d.", year, week), http.StatusNotFound)
-		return
+		return NewHTTPErrorf(http.StatusNotFound, "empty report for %d/%d", year, week)
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	if err := MarkdownReport.Execute(w, report); err != nil {
 		panic(err)
 	}
+	return nil
 }
 
 // ReportStats serves an HTML document of the statistics for the year and week in the URL.
-func (wsrv *WebServer) ReportStats(w http.ResponseWriter, r *http.Request) {
+func (wsrv *WebServer) ReportStats(w http.ResponseWriter, r *http.Request) *HTTPError {
 	week, year, err := weekAndYear(NormalizeTrailing(HTTPRequestSubPath("/reports/stats/", r)))
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusBadRequest)
-		return
+		return NewHTTPError(http.StatusBadRequest, err)
 	}
 
 	var data ReportHeader
@@ -283,25 +308,23 @@ func (wsrv *WebServer) ReportStats(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusInternalServerError)
-		return
+		return NewHTTPError(http.StatusInternalServerError, err)
 	} else if data.Len == 0 {
-		wsrv.errMsg(w, r, fmt.Sprintf("No statistics for %d/%d.", year, week), http.StatusNotFound)
-		return
+		return NewHTTPErrorf(http.StatusNotFound, "no statistics for %d/%d", year, week)
 	}
 
 	w.Header().Set("Content-Type", "text/html")
 	if err := HTMLTemplates.ExecuteTemplate(w, "ReportStats", data); err != nil {
 		panic(err)
 	}
+	return nil
 }
 
 // Report serves the HTML reports according to the year and week in the URL.
-func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
+func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) *HTTPError {
 	week, year, err := weekAndYear(NormalizeTrailing(HTTPRequestSubPath("/reports/", r)))
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusBadRequest)
-		return
+		return NewHTTPError(http.StatusBadRequest, err)
 	}
 
 	var report Report
@@ -311,11 +334,9 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusInternalServerError)
-		return
+		return NewHTTPError(http.StatusInternalServerError, err)
 	} else if report.Len() == 0 {
-		wsrv.errMsg(w, r, fmt.Sprintf("Empty report for %d/%d.", year, week), http.StatusNotFound)
-		return
+		return NewHTTPErrorf(http.StatusNotFound, "empty report for %d/%d", year, week)
 	}
 
 	report.CommentBodyConverter = wsrv.commentBodyConverter
@@ -324,22 +345,23 @@ func (wsrv *WebServer) Report(w http.ResponseWriter, r *http.Request) {
 	if err := HTMLTemplates.ExecuteTemplate(w, "Report", report); err != nil {
 		panic(err)
 	}
+	return nil
 }
 
 // ReportCurrent redirects to the report for the current week.
-func (wsrv *WebServer) ReportCurrent(w http.ResponseWriter, r *http.Request) {
+func (wsrv *WebServer) ReportCurrent(w http.ResponseWriter, r *http.Request) *HTTPError {
 	week, year := wsrv.reports.CurrentWeekCoordinates()
-	redirectToReport(week, year, w, r)
+	return redirectToReport(week, year, w, r)
 }
 
 // ReportLatest redirects to the report for the previous week.
-func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) {
+func (wsrv *WebServer) ReportLatest(w http.ResponseWriter, r *http.Request) *HTTPError {
 	week, year := wsrv.reports.LastWeekCoordinates()
-	redirectToReport(week, year, w, r)
+	return redirectToReport(week, year, w, r)
 }
 
 // CompendiumIndex serves the compendium's index.
-func (wsrv *WebServer) CompendiumIndex(w http.ResponseWriter, r *http.Request) {
+func (wsrv *WebServer) CompendiumIndex(w http.ResponseWriter, r *http.Request) *HTTPError {
 	var compendium Compendium
 	err := wsrv.withConn(r.Context(), func(conn StorageConn) error {
 		var err error
@@ -347,8 +369,7 @@ func (wsrv *WebServer) CompendiumIndex(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusInternalServerError)
-		return
+		return NewHTTPError(http.StatusInternalServerError, err)
 	}
 
 	compendium.CommentBodyConverter = wsrv.commentBodyConverter
@@ -357,15 +378,15 @@ func (wsrv *WebServer) CompendiumIndex(w http.ResponseWriter, r *http.Request) {
 	if err := HTMLTemplates.ExecuteTemplate(w, "Compendium", compendium); err != nil {
 		panic(err)
 	}
+	return nil
 }
 
 // CompendiumUser serves the compendium page for a single user, whose name is taken from the URL (case-insensitive).
-func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
+func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) *HTTPError {
 	args := NormalizeTrailing(HTTPRequestSubPath("/compendium/user/", r))
 	if len(args) != 1 {
-		msg := "invalid URL, use \"/compendium/user/username\" to view the page about \"username\""
-		wsrv.errMsg(w, r, msg, http.StatusBadRequest)
-		return
+		msg := "invalid URL %s, use \"/compendium/user/username\" to view the page about \"username\""
+		return NewHTTPErrorf(http.StatusBadRequest, msg, r.URL)
 	}
 
 	username := args[0]
@@ -375,17 +396,14 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 		var err error
 		stats, err = wsrv.compendium.User(conn, username)
 		if err != nil {
-			wsrv.err(w, r, err, http.StatusInternalServerError)
-			return ErrSentinel
+			return NewHTTPError(http.StatusInternalServerError, err)
 		} else if !stats.Exists() {
-			wsrv.errMsg(w, r, fmt.Sprintf("User %q doesn't exist.", username), http.StatusNotFound)
-			return ErrSentinel
+			return NewHTTPErrorf(http.StatusNotFound, "user %q doesn't exist", username)
 		}
 		return nil
 	})
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusServiceUnavailable)
-		return
+		return NewHTTPError(http.StatusServiceUnavailable, err)
 	}
 
 	stats.CommentBodyConverter = wsrv.commentBodyConverter
@@ -394,22 +412,22 @@ func (wsrv *WebServer) CompendiumUser(w http.ResponseWriter, r *http.Request) {
 	if err := HTMLTemplates.ExecuteTemplate(w, "CompendiumUser", stats); err != nil {
 		panic(err)
 	}
+
+	return nil
 }
 
 // CompendiumUserComments serves the comments of a user.
-func (wsrv *WebServer) CompendiumUserComments(w http.ResponseWriter, r *http.Request) {
+func (wsrv *WebServer) CompendiumUserComments(w http.ResponseWriter, r *http.Request) *HTTPError {
 	args := NormalizeTrailing(HTTPRequestSubPath("/compendium/comments/user/", r))
 	if len(args) != 1 {
-		msg := "invalid URL, use \"/compendium/comments/user/username\" to view the comments of \"username\""
-		wsrv.errMsg(w, r, msg, http.StatusBadRequest)
-		return
+		msg := "invalid URL %s, use \"/compendium/comments/user/username\" to view the comments of \"username\""
+		return NewHTTPErrorf(http.StatusBadRequest, msg, r.URL)
 	}
 	username := args[0]
 
 	page, err := wsrv.pagination(r.URL.Query())
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusBadRequest)
-		return
+		return NewHTTPError(http.StatusBadRequest, err)
 	}
 
 	var comments CompendiumUser
@@ -418,17 +436,14 @@ func (wsrv *WebServer) CompendiumUserComments(w http.ResponseWriter, r *http.Req
 		var err error
 		comments, err = wsrv.compendium.UserComments(conn, username, page)
 		if err != nil {
-			wsrv.err(w, r, err, http.StatusInternalServerError)
-			return ErrSentinel
+			return NewHTTPError(http.StatusInternalServerError, err)
 		} else if !comments.Exists() {
-			wsrv.errMsg(w, r, fmt.Sprintf("User %q doesn't exist.", username), http.StatusNotFound)
-			return ErrSentinel
+			return NewHTTPErrorf(http.StatusNotFound, "user %q doesn't exist", username)
 		}
 		return nil
 	})
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusServiceUnavailable)
-		return
+		return NewHTTPError(http.StatusServiceUnavailable, err)
 	}
 
 	comments.CommentBodyConverter = wsrv.commentBodyConverter
@@ -437,14 +452,14 @@ func (wsrv *WebServer) CompendiumUserComments(w http.ResponseWriter, r *http.Req
 	if err := HTMLTemplates.ExecuteTemplate(w, "CompendiumUserComments", comments); err != nil {
 		panic(err)
 	}
+	return nil
 }
 
 // CompendiumComments serves the paginated HTML document of all known comments from non-hidden users.
-func (wsrv *WebServer) CompendiumComments(w http.ResponseWriter, r *http.Request) {
+func (wsrv *WebServer) CompendiumComments(w http.ResponseWriter, r *http.Request) *HTTPError {
 	page, err := wsrv.pagination(r.URL.Query())
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusBadRequest)
-		return
+		return NewHTTPError(http.StatusBadRequest, err)
 	}
 
 	var comments Compendium
@@ -452,14 +467,12 @@ func (wsrv *WebServer) CompendiumComments(w http.ResponseWriter, r *http.Request
 		var err error
 		comments, err = wsrv.compendium.Comments(conn, page)
 		if err != nil {
-			wsrv.err(w, r, err, http.StatusInternalServerError)
-			return ErrSentinel
+			return NewHTTPError(http.StatusInternalServerError, err)
 		}
 		return nil
 	})
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusServiceUnavailable)
-		return
+		return NewHTTPError(http.StatusServiceUnavailable, err)
 	}
 
 	comments.CommentBodyConverter = wsrv.commentBodyConverter
@@ -468,31 +481,32 @@ func (wsrv *WebServer) CompendiumComments(w http.ResponseWriter, r *http.Request
 	if err := HTMLTemplates.ExecuteTemplate(w, "CompendiumComments", comments); err != nil {
 		panic(err)
 	}
+	return nil
 }
 
 // BackupMain triggers a backup of the main database if needed, and serves it.
-func (wsrv *WebServer) BackupMain(w http.ResponseWriter, r *http.Request) {
+func (wsrv *WebServer) BackupMain(w http.ResponseWriter, r *http.Request) *HTTPError {
 	err := wsrv.withConn(r.Context(), func(conn StorageConn) error {
 		return wsrv.storage.BackupMain(r.Context(), conn)
 	})
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusInternalServerError)
-		return
+		return NewHTTPError(http.StatusInternalServerError, err)
 	}
 	w.Header().Set("Content-Type", "application/x-sqlite3")
 	w.Header().Set("Content-Disposition", "attachment; filename=\"dab.sqlite3\"")
 	http.ServeFile(w, r, wsrv.storage.Backup.Main)
+	return nil
 }
 
 // BackupSecrets triggers a backup of the secrets database if needed, but does not serve it.
-func (wsrv *WebServer) BackupSecrets(w http.ResponseWriter, r *http.Request) {
+func (wsrv *WebServer) BackupSecrets(w http.ResponseWriter, r *http.Request) *HTTPError {
 	err := wsrv.withConn(r.Context(), func(conn StorageConn) error {
 		return wsrv.storage.BackupSecrets(r.Context(), conn)
 	})
 	if err != nil {
-		wsrv.err(w, r, err, http.StatusInternalServerError)
-		return
+		return NewHTTPError(http.StatusInternalServerError, err)
 	}
+	return nil
 }
 
 func (wsrv *WebServer) authorize(conn StorageConn, w http.ResponseWriter, r *http.Request) *HTTPError {
@@ -552,46 +566,12 @@ func (wsrv *WebServer) authorize(conn StorageConn, w http.ResponseWriter, r *htt
 	return session.SetID(conn, w, id)
 }
 
-func (wsrv *WebServer) err(w http.ResponseWriter, r *http.Request, err error, code int) {
-	var msg string
-	if err == ErrSentinel {
-		return
-	} else if IsCancellation(err) {
-		msg = "Server shutting down."
-		code = http.StatusServiceUnavailable
-	} else {
-		str := fmt.Sprint(err)
-		msg = fmt.Sprintf("%s%s.", strings.ToUpper(str[0:1]), str[1:])
-	}
-	wsrv.errMsg(w, r, msg, code)
-}
-
-func (wsrv *WebServer) errMsg(w http.ResponseWriter, r *http.Request, msg string, code int) {
-	wsrv.logger.Errord(func() error {
-		return fmt.Errorf("error %d %q in response to %s %s for %s with user agent %q",
-			code, msg, r.Method, r.URL, getIP(r, wsrv.IPHeader), r.Header.Get("User-Agent"))
-	})
-	http.Error(w, msg, code)
-}
+/*************************
+ Request handlers' helpers
+ *************************/
 
 func (wsrv *WebServer) withConn(ctx Ctx, cb func(StorageConn) error) error {
 	return wsrv.conns.WithConn(ctx, func(conn SQLiteConn) error { return cb(conn.(StorageConn)) })
-}
-
-func (wsrv *WebServer) getSelfLink() (string, error) {
-	if wsrv.ListenFDs > 0 {
-		return fmt.Sprintf("file descriptor %d", WebServerListenFD), nil
-	}
-	address, err := URLFromHostPort(wsrv.Listen)
-	if err != nil {
-		return "", err
-	}
-	if wsrv.TLS.Enabled() {
-		address.Scheme = "https"
-	} else {
-		address.Scheme = "http"
-	}
-	return address.String(), nil
 }
 
 func (wsrv *WebServer) commentBodyConverter(src CommentView) (interface{}, error) {
@@ -602,29 +582,29 @@ func (wsrv *WebServer) commentBodyConverter(src CommentView) (interface{}, error
 	return template.HTML(html), nil
 }
 
-func redirectToReport(week uint8, year int, w http.ResponseWriter, r *http.Request) {
+func redirectToReport(week uint8, year int, w http.ResponseWriter, r *http.Request) *HTTPError {
 	http.Redirect(w, r, fmt.Sprintf("/reports/%d/%d", year, week), http.StatusTemporaryRedirect)
+	return nil
 }
 
-func (wsrv *WebServer) immutableCache(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (wsrv *WebServer) immutableCache(handler HTTPAutoHandler) HTTPAutoHandler {
+	return func(w http.ResponseWriter, r *http.Request) *HTTPError {
 		requestedVersion := r.URL.Query().Get("version")
-		// leave the empty version as a special case for easy linking from a custom HTML file without the need to constantly update it
+		// leave the empty version as a special case to easily link the object from a custom HTML file without having to constantly update it.
 		if requestedVersion != "" {
 			if requestedVersion != Version.String() {
-				msg := fmt.Sprintf("Current version is %q, file for version %q is unavailable.", Version, requestedVersion)
-				wsrv.errMsg(w, r, msg, http.StatusNotFound)
-				return
+				msg := "current version is %q, file for version %q is unavailable"
+				return NewHTTPErrorf(http.StatusNotFound, msg, Version, requestedVersion)
 			}
 
 			if r.Header.Get("If-Modified-Since") != "" {
 				w.WriteHeader(http.StatusNotModified)
-				return
+				return nil
 			}
 			w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", HTTPCacheMaxAge))
 		}
 
-		handler(w, r)
+		return handler(w, r)
 	}
 }
 

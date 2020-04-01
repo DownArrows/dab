@@ -28,6 +28,9 @@ const (
 	WebServerListenFDHelper = 4
 )
 
+// HTTPAutoHandler is a shortcut for the type of HTTP handlers that may return an *HTTPError.
+type HTTPAutoHandler func(http.ResponseWriter, *http.Request) *HTTPError
+
 // HTTPError represents an error relevant to an HTTP request/response.
 type HTTPError struct {
 	code int
@@ -175,7 +178,7 @@ func NewServeMux(logger LevelLogger, ipHeader string) *ServeMux {
 }
 
 // HandleAuto wraps and registers a function that may return an *HTTPError.
-func (mux *ServeMux) HandleAuto(pattern string, handler func(http.ResponseWriter, *http.Request) *HTTPError) {
+func (mux *ServeMux) HandleAuto(pattern string, handler HTTPAutoHandler) {
 	mux.actual.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		if err := handler(w, r); err != nil {
 			if IsCancellation(err.Unwrap()) {
@@ -211,11 +214,12 @@ func (mux *ServeMux) ServeHTTP(baseWriter http.ResponseWriter, r *http.Request) 
 	})
 
 	w := NewResponseWriter(baseWriter, r)
+	defer func() {
+		if err := w.Close(); err != nil {
+			mux.logErr(r, err)
+		}
+	}()
 	mux.actual.ServeHTTP(w, r)
-
-	if err := w.Close(); err != nil {
-		mux.logErr(r, err)
-	}
 }
 
 func (mux *ServeMux) logErr(r *http.Request, err error) {

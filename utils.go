@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"os"
@@ -12,10 +11,6 @@ import (
 // Any is a shorter alias for interface{}
 // TODO replace all instances of interface{} with that alias
 type Any = interface{}
-
-// ErrSentinel is an error used to signal that there's been an error but has been dealt with out of band.
-// TODO delete after migrating to *HTTPError
-var ErrSentinel = errors.New("sentinel error, you SHOULD NOT be seeing that")
 
 // NewRandomToken makes a secure random string token.
 func NewRandomToken() (string, error) {
