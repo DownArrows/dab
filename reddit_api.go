@@ -96,7 +96,7 @@ type RedditAPI struct {
 // Before use, run the Connect method.
 func NewRedditAPI(ctx Ctx, auth RedditAuth, userAgent *template.Template) (*RedditAPI, error) {
 	var ua strings.Builder
-	data := map[string]interface{}{
+	data := map[string]Any{
 		"Version": Version,
 		"OS":      runtime.GOOS,
 	}

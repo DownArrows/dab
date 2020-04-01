@@ -75,7 +75,7 @@ func TestSQLiteConn(t *testing.T) {
 	t.Run("multi exec", func(t *testing.T) {
 		queries := []SQLQuery{
 			{SQL: "CREATE TABLE test2(num INTEGER NOT NULL, txt TEXT NOT NULL)"},
-			{SQL: "INSERT INTO test2 VALUES(?, ?)", Args: []interface{}{12, "test"}},
+			{SQL: "INSERT INTO test2 VALUES(?, ?)", Args: []Any{12, "test"}},
 			{SQL: "DROP TABLE test2"},
 		}
 		if err := conn.MultiExec(queries); err != nil {

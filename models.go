@@ -39,8 +39,8 @@ func (c Comment) InitializationQueries() []SQLQuery {
 }
 
 // ToDB returns arguments in the correct order to register a Comment.
-func (c Comment) ToDB() []interface{} {
-	return []interface{}{c.ID, c.Author, c.Score, c.Permalink, c.Sub, c.Created.Unix(), c.Body}
+func (c Comment) ToDB() []Any {
+	return []Any{c.ID, c.Author, c.Score, c.Permalink, c.Sub, c.Created.Unix(), c.Body}
 }
 
 // FromDB reads a comment from a database.
@@ -94,7 +94,7 @@ func (c Comment) ToView(n uint64, timezone *time.Location, cbc CommentBodyConver
 }
 
 // CommentBodyConverter is a function that converts a comment's body to a suitable format for use in a template (eg. HTML).
-type CommentBodyConverter func(CommentView) (interface{}, error)
+type CommentBodyConverter func(CommentView) (Any, error)
 
 // CommentView is a data structure describing a Comment such as it is suitable for use in a template.
 type CommentView struct {
@@ -109,7 +109,7 @@ func (cv CommentView) BodyLines() []string {
 }
 
 // BodyConvert returns the converted comment; if the converter isn't set, it returns the raw Comment.Body.
-func (cv CommentView) BodyConvert() (interface{}, error) {
+func (cv CommentView) BodyConvert() (Any, error) {
 	if cv.BodyConverter != nil {
 		return cv.BodyConverter(cv)
 	}
@@ -167,8 +167,8 @@ func (u User) InitializationQueries() []SQLQuery {
 }
 
 // ToDB returns well-ordered arguments to save a User.
-func (u User) ToDB() []interface{} {
-	return []interface{}{u.Name, u.Created.Unix(), u.NotFound, u.Suspended, u.Added.Unix(),
+func (u User) ToDB() []Any {
+	return []Any{u.Name, u.Created.Unix(), u.NotFound, u.Suspended, u.Added.Unix(),
 		int(u.BatchSize), u.Hidden, u.Inactive, u.LastScan.Unix(), u.New, u.Position}
 }
 

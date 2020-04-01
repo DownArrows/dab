@@ -28,17 +28,17 @@ func makeLevelLoggerPriorities() map[string]int {
 // LevelLogger is a logger that has several levels of severity, -f methods for easy
 // templating of the messages, and -d methods for deferred evaluation of the messages.
 type LevelLogger interface {
-	Debug(interface{})
-	Debugd(func() interface{})
-	Debugf(string, ...interface{})
+	Debug(Any)
+	Debugd(func() Any)
+	Debugf(string, ...Any)
 	Error(error)
 	Errord(func() error)
-	Errorf(string, ...interface{})
+	Errorf(string, ...Any)
 	Fatal(error)
-	Fatalf(string, ...interface{})
-	Info(interface{})
-	Infod(func() interface{})
-	Infof(string, ...interface{})
+	Fatalf(string, ...Any)
+	Info(Any)
+	Infod(func() Any)
+	Infof(string, ...Any)
 }
 
 // StdLevelLogger is the standard implementation of a LevelLogger that writes to a given io.Writer.
@@ -60,27 +60,27 @@ func NewStdLevelLogger(name string, out io.Writer, level string) (*StdLevelLogge
 }
 
 // Debug writes a debug message.
-func (ll *StdLevelLogger) Debug(msg interface{}) {
+func (ll *StdLevelLogger) Debug(msg Any) {
 	if ll.include("Debug") {
 		ll.logDebug(msg)
 	}
 }
 
 // Debugf writes a debug message with a template.
-func (ll *StdLevelLogger) Debugf(template string, opts ...interface{}) {
+func (ll *StdLevelLogger) Debugf(template string, opts ...Any) {
 	if ll.include("Debug") {
 		ll.logDebug(fmt.Sprintf(template, opts...))
 	}
 }
 
 // Debugd writes a deferred debug message.
-func (ll *StdLevelLogger) Debugd(cb func() interface{}) {
+func (ll *StdLevelLogger) Debugd(cb func() Any) {
 	if ll.include("Debug") {
 		ll.logDebug(cb())
 	}
 }
 
-func (ll *StdLevelLogger) logDebug(msg interface{}) {
+func (ll *StdLevelLogger) logDebug(msg Any) {
 	file, line := locateInSource(3)
 	ll.log("Debug", fmt.Sprintf("%s:%d: %s", file, line, msg))
 }
@@ -91,7 +91,7 @@ func (ll *StdLevelLogger) Error(err error) {
 }
 
 // Errorf logs an error with a template.
-func (ll *StdLevelLogger) Errorf(template string, opts ...interface{}) {
+func (ll *StdLevelLogger) Errorf(template string, opts ...Any) {
 	ll.logLevel("Error", fmt.Sprintf(template, opts...))
 }
 
@@ -109,23 +109,23 @@ func (ll *StdLevelLogger) Fatal(err error) {
 }
 
 // Fatalf logs an error with a template and stops the application.
-func (ll *StdLevelLogger) Fatalf(template string, opts ...interface{}) {
+func (ll *StdLevelLogger) Fatalf(template string, opts ...Any) {
 	ll.logLevel("Fatal", fmt.Sprintf(template, opts...))
 	os.Exit(1)
 }
 
 // Info writes an info-level message.
-func (ll *StdLevelLogger) Info(msg interface{}) {
+func (ll *StdLevelLogger) Info(msg Any) {
 	ll.logLevel("Info", msg)
 }
 
 // Infof writes an info-level message with a template.
-func (ll *StdLevelLogger) Infof(template string, opts ...interface{}) {
+func (ll *StdLevelLogger) Infof(template string, opts ...Any) {
 	ll.logLevel("Info", fmt.Sprintf(template, opts...))
 }
 
 // Infod writes a deferred info-level message.
-func (ll *StdLevelLogger) Infod(cb func() interface{}) {
+func (ll *StdLevelLogger) Infod(cb func() Any) {
 	if ll.include("Info") {
 		ll.log("Info", cb())
 	}
@@ -139,13 +139,13 @@ func (ll *StdLevelLogger) include(level string) bool {
 	return ll.level >= priority
 }
 
-func (ll *StdLevelLogger) logLevel(level string, msg interface{}) {
+func (ll *StdLevelLogger) logLevel(level string, msg Any) {
 	if ll.include(level) {
 		ll.log(level, msg)
 	}
 }
 
-func (ll *StdLevelLogger) log(level string, msg interface{}) {
+func (ll *StdLevelLogger) log(level string, msg Any) {
 	if _, err := fmt.Fprintf(ll.out, "%s%s: %s\n", ll.tag, level, msg); err != nil {
 		panic(err)
 	}

@@ -79,7 +79,7 @@ func (s *Storage) backup(ctx Ctx, conn StorageConn, path, name string) error {
 	if older, err := FileOlderThan(path, s.Backup.MaxAge.Value); err != nil {
 		return err
 	} else if !older {
-		s.logger.Debugd(func() interface{} {
+		s.logger.Debugd(func() Any {
 			tmpl := "in Storage %p on %s, backup of database %q to %q was not older than %v, nothing was done"
 			return fmt.Sprintf(tmpl, s, s.Path, name, path, s.Backup.MaxAge.Value)
 		})

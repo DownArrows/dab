@@ -30,12 +30,12 @@ type SQLiteConn interface {
 	// otherwise it is "main". Similarly for destName, it is the target name of the database inside the destination file.
 	Backup(srcName string, destConn SQLiteConn, destName string) (*SQLiteBackup, error)
 	// Prepare prepares an SQL statement and binds some arguments (none to all).
-	Prepare(string, ...interface{}) (*SQLiteStmt, error)
+	Prepare(string, ...Any) (*SQLiteStmt, error)
 	// Select runs an SQL statement witih the given arguments and lets a callback read the statement
 	// to get its result until all rows in the response are read, and closes the statement.
-	Select(string, func(*SQLiteStmt) error, ...interface{}) error
+	Select(string, func(*SQLiteStmt) error, ...Any) error
 	// Exec execute the SQL statement with the given arguments, managing the entirety of the underlying statement's lifecycle.
-	Exec(string, ...interface{}) error
+	Exec(string, ...Any) error
 	// MultiExec execute multiple SQL statements with their arguments.
 	MultiExec([]SQLQuery) error
 	// WithTx runs a callback while managing a transaction's entire lifecycle.
@@ -186,7 +186,7 @@ func (sc *BaseSQLiteConn) Backup(srcName string, conn SQLiteConn, destName strin
 }
 
 // Prepare implements SQLiteConn.
-func (sc *BaseSQLiteConn) Prepare(sql string, args ...interface{}) (*SQLiteStmt, error) {
+func (sc *BaseSQLiteConn) Prepare(sql string, args ...Any) (*SQLiteStmt, error) {
 	var sqltStmt *sqlite.Stmt
 	err := sc.retry(func() error {
 		var err error
@@ -210,7 +210,7 @@ func (sc *BaseSQLiteConn) String() string {
 }
 
 // Select implements SQLiteConn.
-func (sc *BaseSQLiteConn) Select(sql string, cb func(*SQLiteStmt) error, args ...interface{}) error {
+func (sc *BaseSQLiteConn) Select(sql string, cb func(*SQLiteStmt) error, args ...Any) error {
 	return sc.retry(func() error {
 		sc.logger.Debugf("row scan from SQL statement |%v| with arguments %v for %s", sql, args, sc)
 		stmt, err := sc.Prepare(sql, args...)
@@ -223,7 +223,7 @@ func (sc *BaseSQLiteConn) Select(sql string, cb func(*SQLiteStmt) error, args ..
 }
 
 // Exec implements SQLiteConn.
-func (sc *BaseSQLiteConn) Exec(sql string, args ...interface{}) error {
+func (sc *BaseSQLiteConn) Exec(sql string, args ...Any) error {
 	return sc.retry(func() error {
 		sc.logger.Debugf("executing SQL statement |%v| with arguments %v for %s", sql, args, sc)
 		return sc.conn.Exec(sql, args...)
@@ -398,7 +398,7 @@ func (stmt *SQLiteStmt) Step() (bool, error) {
 }
 
 // Exec execute the statements with the given supplementary arguments (wrapper with retry).
-func (stmt *SQLiteStmt) Exec(args ...interface{}) error {
+func (stmt *SQLiteStmt) Exec(args ...Any) error {
 	return stmt.retry(func() error { return stmt.stmt.Exec(args...) })
 }
 

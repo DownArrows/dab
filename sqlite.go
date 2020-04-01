@@ -28,7 +28,7 @@ func IsSQLiteForeignKeyError(err error) bool {
 // SQLQuery describes multiple SQL queries and their arguments.
 type SQLQuery struct {
 	SQL  string
-	Args []interface{}
+	Args []Any
 }
 
 // SQLiteMigration describes a migration from a SemVer to another.

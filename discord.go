@@ -219,8 +219,8 @@ func NewDiscordBot(
 	addUser AddRedditUser,
 	conf DiscordBotConf,
 ) (*DiscordBot, error) {
-	discordgo.Logger = func(msgL, caller int, format string, dgArgs ...interface{}) {
-		args := []interface{}{msgL, caller}
+	discordgo.Logger = func(msgL, caller int, format string, dgArgs ...Any) {
+		args := []Any{msgL, caller}
 		args = append(args, dgArgs...)
 		logger.Debugf("discordgo library (log level %d, goroutine %d): "+format, args...)
 	}
@@ -665,13 +665,13 @@ func (bot *DiscordBot) getCommandsDescriptors() []DiscordCommand {
 	}}
 }
 
-func (bot *DiscordBot) simpleReply(str string, args ...interface{}) func(DiscordMessage) error {
+func (bot *DiscordBot) simpleReply(str string, args ...Any) func(DiscordMessage) error {
 	return func(msg DiscordMessage) error {
 		return bot.channelMessageSend(msg.ChannelID, fmt.Sprintf(str, args...))
 	}
 }
 
-func (bot *DiscordBot) simpleError(str string, args ...interface{}) func(DiscordMessage) error {
+func (bot *DiscordBot) simpleError(str string, args ...Any) func(DiscordMessage) error {
 	return func(msg DiscordMessage) error {
 		return bot.channelErrorSend(msg.ChannelID, msg.Author.ID, fmt.Sprintf(str, args...))
 	}

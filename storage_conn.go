@@ -375,7 +375,7 @@ func (conn StorageConn) UserComments(username string, page Pagination) ([]Commen
 	return conn.comments(sql, username, int(page.Limit), int(page.Offset))
 }
 
-func (conn StorageConn) comments(sql string, args ...interface{}) ([]Comment, error) {
+func (conn StorageConn) comments(sql string, args ...Any) ([]Comment, error) {
 	var comments []Comment
 	cb := func(stmt *SQLiteStmt) error {
 		comment := &Comment{}
@@ -472,7 +472,7 @@ func (conn StorageConn) CompendiumUserPerSub(username string) (StatsCollection, 
 		ORDER BY karma ASC`, username)
 }
 
-func (conn StorageConn) compendiumSelectStats(sql string, args ...interface{}) (StatsCollection, StatsCollection, error) {
+func (conn StorageConn) compendiumSelectStats(sql string, args ...Any) (StatsCollection, StatsCollection, error) {
 	var all StatsCollection
 	var negative StatsCollection
 
@@ -500,7 +500,7 @@ func (conn StorageConn) compendiumSelectStats(sql string, args ...interface{}) (
 	return all, negative, err
 }
 
-func (conn StorageConn) selectStats(statsRead StatsRead, sql string, args ...interface{}) (StatsCollection, error) {
+func (conn StorageConn) selectStats(statsRead StatsRead, sql string, args ...Any) (StatsCollection, error) {
 	var data StatsCollection
 	cb := func(stmt *SQLiteStmt) error {
 		stats := &Stats{}
@@ -569,17 +569,17 @@ func (conn StorageConn) Backup(srcName string, destConn SQLiteConn, destName str
 }
 
 // Prepare implements SQLiteConn.
-func (conn StorageConn) Prepare(sql string, args ...interface{}) (*SQLiteStmt, error) {
+func (conn StorageConn) Prepare(sql string, args ...Any) (*SQLiteStmt, error) {
 	return conn.actual.Prepare(sql, args...)
 }
 
 // Select implements SQLiteConn.
-func (conn StorageConn) Select(sql string, cb func(*SQLiteStmt) error, args ...interface{}) error {
+func (conn StorageConn) Select(sql string, cb func(*SQLiteStmt) error, args ...Any) error {
 	return conn.actual.Select(sql, cb, args...)
 }
 
 // Exec implements SQLiteConn.
-func (conn StorageConn) Exec(sql string, args ...interface{}) error {
+func (conn StorageConn) Exec(sql string, args ...Any) error {
 	return conn.actual.Exec(sql, args...)
 }
 

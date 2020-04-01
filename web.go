@@ -566,7 +566,7 @@ func (wsrv *WebServer) withConn(ctx Ctx, cb func(StorageConn) error) error {
 	return wsrv.conns.WithConn(ctx, func(conn SQLiteConn) error { return cb(conn.(StorageConn)) })
 }
 
-func (wsrv *WebServer) commentBodyConverter(src CommentView) (interface{}, error) {
+func (wsrv *WebServer) commentBodyConverter(src CommentView) (Any, error) {
 	// We replace < and > with look-alikes because blackfriday's HTML renderer is poorly configurable,
 	// and writing a replacement would be a timesink considering the original isn't very straightforward.
 	body := matchTags.ReplaceAllString(src.Body, "\u2329$1\u232a")

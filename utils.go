@@ -8,8 +8,7 @@ import (
 	"time"
 )
 
-// Any is a shorter alias for interface{}
-// TODO replace all instances of interface{} with that alias
+// Any is a shorter alias for interface{}.
 type Any = interface{}
 
 // NewRandomToken makes a secure random string token.

@@ -43,7 +43,7 @@ func NewHTTPError(code int, err error) *HTTPError {
 }
 
 // NewHTTPErrorf creates a new HTTPError from a code, a template message, and arguments.
-func NewHTTPErrorf(code int, tmpl string, args ...interface{}) *HTTPError {
+func NewHTTPErrorf(code int, tmpl string, args ...Any) *HTTPError {
 	return &HTTPError{
 		code: code,
 		err:  fmt.Errorf(tmpl, args...),
@@ -208,7 +208,7 @@ func (mux *ServeMux) ServeHTTP(baseWriter http.ResponseWriter, r *http.Request) 
 		}
 	}()
 
-	mux.logger.Infod(func() interface{} {
+	mux.logger.Infod(func() Any {
 		return fmt.Sprintf("serve %s %s for %s with user agent %q",
 			r.Method, r.URL, getIP(r, mux.IPHeader), r.Header.Get("User-Agent"))
 	})
@@ -309,7 +309,7 @@ func (th *TLSHelper) listen() error {
 
 func (th *TLSHelper) redirect(w http.ResponseWriter, r *http.Request) {
 	target := th.Target + r.URL.RequestURI()
-	th.logger.Infod(func() interface{} {
+	th.logger.Infod(func() Any {
 		return fmt.Sprintf("redirecting %s %s from %s with user agent %q to %q",
 			r.Method, r.URL, getIP(r, th.IPHeader), r.Header.Get("User-Agent"), target)
 	})

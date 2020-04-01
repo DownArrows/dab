@@ -13,15 +13,15 @@ func NewTestLevelLogger(t *testing.T) LevelLogger {
 	return TestLevelLogger{t: t}
 }
 
-func (tl TestLevelLogger) Debug(msg interface{}) {
+func (tl TestLevelLogger) Debug(msg Any) {
 	tl.t.Log(msg)
 }
 
-func (tl TestLevelLogger) Debugf(template string, msg ...interface{}) {
+func (tl TestLevelLogger) Debugf(template string, msg ...Any) {
 	tl.t.Logf(template, msg...)
 }
 
-func (tl TestLevelLogger) Debugd(cb func() interface{}) {
+func (tl TestLevelLogger) Debugd(cb func() Any) {
 	tl.t.Log(cb())
 }
 
@@ -29,7 +29,7 @@ func (tl TestLevelLogger) Error(err error) {
 	tl.t.Error(err)
 }
 
-func (tl TestLevelLogger) Errorf(template string, msg ...interface{}) {
+func (tl TestLevelLogger) Errorf(template string, msg ...Any) {
 	tl.t.Errorf(template, msg...)
 }
 
@@ -41,18 +41,18 @@ func (tl TestLevelLogger) Fatal(err error) {
 	tl.t.Fatal(err)
 }
 
-func (tl TestLevelLogger) Fatalf(template string, msg ...interface{}) {
+func (tl TestLevelLogger) Fatalf(template string, msg ...Any) {
 	tl.t.Fatalf(template, msg...)
 }
 
-func (tl TestLevelLogger) Info(msg interface{}) {
+func (tl TestLevelLogger) Info(msg Any) {
 	tl.t.Log(msg)
 }
 
-func (tl TestLevelLogger) Infof(template string, msg ...interface{}) {
+func (tl TestLevelLogger) Infof(template string, msg ...Any) {
 	tl.t.Logf(template, msg...)
 }
 
-func (tl TestLevelLogger) Infod(cb func() interface{}) {
+func (tl TestLevelLogger) Infod(cb func() Any) {
 	tl.t.Log(cb())
 }
