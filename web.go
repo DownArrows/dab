@@ -74,6 +74,28 @@ func NewWebServer(
 
 	var err error
 
+	if wsrv.TLS.ACMEEnabled() {
+		wsrv.acme, err = NewACMEManager(wsrv.withConn, wsrv.TLS.ACME...)
+		if err != nil {
+			return nil, err
+		}
+		wsrv.tls.NextProtos = wsrv.acme.TLSNextProtos()
+		wsrv.tls.GetCertificate = wsrv.acme.GetCertificate
+	} else if wsrv.TLS.CertsEnabled() {
+		cert, err := tls.LoadX509KeyPair(wsrv.TLS.Cert, wsrv.TLS.Key)
+		if err != nil {
+			return nil, err
+		}
+		wsrv.tls.Certificates = []tls.Certificate{cert}
+	}
+
+	if wsrv.TLS.Helper.Enabled() {
+		wsrv.helper, err = NewTLSHelper(wsrv.logger, wsrv.acme, wsrv.TLS.Helper)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	wsrv.SelfLink, err = wsrv.getSelfLink()
 	if err != nil {
 		return nil, err
@@ -106,9 +128,38 @@ func NewWebServer(
 	return wsrv, nil
 }
 
+// Run runs the web server and blocks until it is cancelled or returns an error.
+func (wsrv *WebServer) Run(ctx Ctx) error {
+	pool, err := wsrv.initDBPool(ctx)
+	if err != nil {
+		return err
+	}
+	wsrv.conns = pool
+	defer wsrv.conns.Close()
+
+	tasks := NewTaskGroup(ctx)
+
+	if wsrv.TLS.Enabled() && wsrv.TLS.Helper.Enabled() {
+		tasks.SpawnCtx(wsrv.helper.Run)
+	}
+
+	tasks.SpawnCtx(func(_ Ctx) error { return wsrv.listen() })
+	tasks.SpawnCtx(HTTPServerShutdown(wsrv.server))
+
+	if interval := wsrv.DBOptimize.Value; interval != 0 {
+		tasks.SpawnCtx(func(ctx Ctx) error { return wsrv.conns.Analyze(ctx, interval) })
+	}
+
+	return tasks.Wait().ToError()
+}
+
 /************
  Init helpers
  ************/
+
+func (wsrv *WebServer) loginEnabled() bool {
+	return wsrv.Discord.ClientID != "" && wsrv.Discord.ClientSecret != ""
+}
 
 func (wsrv *WebServer) getSelfLink() (string, error) {
 	if wsrv.ListenFDs > 0 {
@@ -124,70 +175,6 @@ func (wsrv *WebServer) getSelfLink() (string, error) {
 		address.Scheme = "http"
 	}
 	return address.String(), nil
-}
-
-// Run runs the web server and blocks until it is cancelled or returns an error.
-func (wsrv *WebServer) Run(ctx Ctx) error {
-	pool, err := wsrv.initDBPool(ctx)
-	if err != nil {
-		return err
-	}
-	wsrv.conns = pool
-	defer wsrv.conns.Close()
-
-	tasks := NewTaskGroup(ctx)
-
-	if wsrv.TLS.Enabled() {
-		if err := wsrv.prepareTLS(wsrv.conns); err != nil {
-			return err
-		}
-		if wsrv.TLS.Helper.Enabled() {
-			tasks.SpawnCtx(wsrv.helper.Run)
-		}
-	}
-
-	tasks.SpawnCtx(func(_ Ctx) error { return wsrv.listen() })
-	tasks.SpawnCtx(HTTPServerShutdown(wsrv.server))
-
-	if interval := wsrv.DBOptimize.Value; interval != 0 {
-		tasks.SpawnCtx(func(ctx Ctx) error { return wsrv.conns.Analyze(ctx, interval) })
-	}
-
-	return tasks.Wait().ToError()
-}
-
-/***********
- Run helpers
- ***********/
-
-func (wsrv *WebServer) prepareTLS(pool SQLiteConnPool) error {
-	var err error
-	if wsrv.TLS.ACMEEnabled() {
-		wsrv.acme, err = NewACMEManager(pool, wsrv.TLS.ACME...)
-		if err != nil {
-			return err
-		}
-		wsrv.tls.NextProtos = wsrv.acme.TLSNextProtos()
-		wsrv.tls.GetCertificate = wsrv.acme.GetCertificate
-	} else if wsrv.TLS.CertsEnabled() {
-		cert, err := tls.LoadX509KeyPair(wsrv.TLS.Cert, wsrv.TLS.Key)
-		if err != nil {
-			return err
-		}
-		wsrv.tls.Certificates = []tls.Certificate{cert}
-	}
-
-	if wsrv.TLS.Helper.Enabled() {
-		wsrv.helper, err = NewTLSHelper(wsrv.logger, wsrv.acme, wsrv.TLS.Helper)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (wsrv *WebServer) loginEnabled() bool {
-	return wsrv.Discord.ClientID != "" && wsrv.Discord.ClientSecret != ""
 }
 
 func (wsrv *WebServer) initDBPool(ctx Ctx) (SQLiteConnPool, error) {

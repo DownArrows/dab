@@ -324,9 +324,9 @@ type ACMEManager struct {
 }
 
 // NewACMEManager creates a new ACMEManager using a cache from a database.
-func NewACMEManager(pool SQLiteConnPool, hosts ...string) (*ACMEManager, error) {
+func NewACMEManager(withConn func(Ctx, func(StorageConn) error) error, hosts ...string) (*ACMEManager, error) {
 	mngr := &autocert.Manager{
-		Cache:      &CertCache{pool: pool},
+		Cache:      &CertCache{WithConn: withConn},
 		Prompt:     autocert.AcceptTOS,
 		HostPolicy: autocert.HostWhitelist(hosts...),
 	}
@@ -354,7 +354,7 @@ func (am *ACMEManager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certific
 
 // CertCache is a cache for autocert.Manager.
 type CertCache struct {
-	pool SQLiteConnPool // TODO replace with a function that takes a callback that takes a database connection
+	WithConn func(Ctx, func(StorageConn) error) error
 }
 
 // InitializationQueries returns SQL queries to store certificates that assume a "secret" database exists.
@@ -369,16 +369,15 @@ func (cc CertCache) InitializationQueries() []SQLQuery {
 
 // Get implements autocert.Cache.
 func (cc CertCache) Get(ctx Ctx, key string) ([]byte, error) {
-	var err error
 	var cert []byte
-	query := "SELECT cert FROM certs WHERE key = ?"
-	err = cc.pool.WithConn(ctx, func(conn SQLiteConn) error {
-		return conn.Select(query, func(stmt *SQLiteStmt) error {
-			cert, _, err = stmt.ColumnBlob(0)
-			return err
-		}, key)
+	var err error
+	err = cc.WithConn(ctx, func(conn StorageConn) error {
+		cert, err = conn.GetCertificate(key)
+		return err
 	})
-	if cert == nil {
+	if err != nil {
+		return nil, err
+	} else if cert == nil {
 		return nil, autocert.ErrCacheMiss
 	}
 	return cert, nil
@@ -386,19 +385,15 @@ func (cc CertCache) Get(ctx Ctx, key string) ([]byte, error) {
 
 // Put implements autocert.Cache.
 func (cc CertCache) Put(ctx Ctx, key string, cert []byte) error {
-	return cc.pool.WithConn(ctx, func(conn SQLiteConn) error {
-		return conn.Exec(`
-			INSERT INTO certs VALUES (?, ?)
-			ON CONFLICT(key) DO UPDATE SET
-				value=excluded.value
-		`, key, cert)
+	return cc.WithConn(ctx, func(conn StorageConn) error {
+		return conn.AddCertificate(key, cert)
 	})
 }
 
 // Delete implements autocert.Cache.
 func (cc CertCache) Delete(ctx Ctx, key string) error {
-	return cc.pool.WithConn(ctx, func(conn SQLiteConn) error {
-		return conn.Exec("DELETE FROM certs WHERE key = ?", key)
+	return cc.WithConn(ctx, func(conn StorageConn) error {
+		return conn.DelCertificate(key)
 	})
 }
 

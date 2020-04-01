@@ -13,7 +13,7 @@ type StorageConn struct {
 }
 
 /*****
-Users
+ Users
 ******/
 
 // Read
@@ -236,6 +236,32 @@ func (conn StorageConn) SetCSRFSession(token, csrf string, date time.Time) (exis
 // DelSession deletes a  web session.
 func (conn StorageConn) DelSession(token string) error {
 	return conn.Exec("DELETE FROM secrets.sessions WHERE token = ?", token)
+}
+
+/************
+ Certificates
+ ************/
+
+// GetCertificate retrieves a certificate corresponding to the given key.
+func (conn StorageConn) GetCertificate(key string) ([]byte, error) {
+	var cert []byte
+	var err error
+	err = conn.Select("SELECT cert FROM certs WHERE key = ?", func(stmt *SQLiteStmt) error {
+		cert, _, err = stmt.ColumnBlob(0)
+		return err
+	}, key)
+	return cert, err
+}
+
+// AddCertificate registers a certificate with the given key.
+func (conn StorageConn) AddCertificate(key string, cert []byte) error {
+	return conn.Exec(`INSERT INTO certs VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, cert)
+}
+
+// DelCertificate deletes the certificate with the given key.
+func (conn StorageConn) DelCertificate(key string) error {
+	return conn.Exec("DELETE FROM certs WHERE key = ?", key)
 }
 
 /********
