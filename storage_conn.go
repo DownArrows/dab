@@ -240,8 +240,8 @@ func (conn StorageConn) DelSession(token string) error {
 }
 
 /************
- Certificates
- ************/
+Certificates
+************/
 
 // GetCertificate retrieves a certificate corresponding to the given key.
 func (conn StorageConn) GetCertificate(key string) ([]byte, error) {

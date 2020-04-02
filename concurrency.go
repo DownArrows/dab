@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -20,6 +21,24 @@ func SleepCtx(ctx Ctx, duration time.Duration) bool {
 		return true
 	case <-ctx.Done():
 		return false
+	}
+}
+
+// PeriodicTask runs a task periodically with jitter between a negative and positive percentage of the interval.
+func PeriodicTask(interval time.Duration, jitterPercent uint8, task Task) Task {
+	max := int64(jitterPercent) + 1
+	return func(ctx Ctx) error {
+		percent := time.Duration(rand.Int63n(max)) / 100
+		if RandBool() {
+			percent = -percent
+		}
+		jitter := percent * interval
+		for SleepCtx(ctx, interval+jitter) {
+			if err := task(ctx); err != nil {
+				return err
+			}
+		}
+		return ctx.Err()
 	}
 }
 

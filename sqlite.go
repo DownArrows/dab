@@ -389,17 +389,25 @@ func NewSQLiteConnPool(ctx Ctx, size uint, get func(Ctx) (SQLiteConn, error)) (S
 	return pool, nil
 }
 
-// Analyze runs evenly spaced Analyze on each connection of the pool so that each is analyzed once per the set interval.
-func (pool SQLiteConnPool) Analyze(ctx Ctx, interval time.Duration) error {
-	for SleepCtx(ctx, interval/time.Duration(pool.size)) {
-		pool.WithConn(ctx, func(conn SQLiteConn) error {
-			if time.Now().Sub(conn.LastAnalyze()) < interval {
-				return nil
+// Size returns the total number of connections initially put in the pool.
+func (pool SQLiteConnPool) Size() uint {
+	return pool.size
+}
+
+// AnalyzeOne finds a connection for which Analyze hasn't been run since maxAge, and runs it.
+func (pool SQLiteConnPool) AnalyzeOne(ctx Ctx, maxAge time.Duration) error {
+	var done bool
+	var err error
+	for !done {
+		err = pool.WithConn(ctx, func(conn SQLiteConn) error {
+			if time.Now().Sub(conn.LastAnalyze()) > maxAge {
+				done = true
+				return conn.Analyze()
 			}
-			return conn.Analyze()
+			return nil
 		})
 	}
-	return ctx.Err()
+	return err
 }
 
 // Acquire gets a connection or waits until it is cancelled or receives a connection.

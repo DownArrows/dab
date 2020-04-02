@@ -16,6 +16,9 @@ var Version = SemVer{1, 26, 0}
 // DefaultChannelSize is the size of the channels that are used throughout of the application, unless there's a need for a specific size.
 const DefaultChannelSize = 100
 
+// DefaultJobJitter is the default positive and negative percentage of allowed interval jitter for periodic jobs.
+const DefaultJobJitter uint8 = 10
+
 var userAddSeparators = regexp.MustCompile("[ ,]")
 
 // DownArrowsBot and its methods contain very little logic.

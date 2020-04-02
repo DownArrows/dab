@@ -13,9 +13,10 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"time"
 )
 
-// TODO sessions cleanup & inject authorization on all pages
+// TODO inject authorization on all pages
 
 var (
 	markdownExtensions = blackfriday.Tables | blackfriday.Autolink | blackfriday.Strikethrough | blackfriday.NoIntraEmphasis
@@ -147,15 +148,31 @@ func (wsrv *WebServer) Run(ctx Ctx) error {
 	tasks.SpawnCtx(HTTPServerShutdown(wsrv.server))
 
 	if interval := wsrv.DBOptimize.Value; interval != 0 {
-		tasks.SpawnCtx(func(ctx Ctx) error { return wsrv.conns.Analyze(ctx, interval) })
+
+		tasks.SpawnCtx(PeriodicTask(interval/time.Duration(pool.Size()), DefaultJobJitter, func(ctx Ctx) error {
+			if err := wsrv.conns.AnalyzeOne(ctx, interval); err != nil {
+				wsrv.logger.Errorf("error when analyzing a connection: %v", err)
+			}
+			return nil
+		}))
+
+		tasks.SpawnCtx(PeriodicTask(interval, DefaultJobJitter, func(ctx Ctx) error {
+			return wsrv.withConn(ctx, func(conn StorageConn) error {
+				if err := conn.CleanupSessions(wsrv.sessions); err != nil {
+					wsrv.logger.Errorf("error when cleaning up sessions: %v", err)
+				}
+				return nil
+			})
+		}))
+
 	}
 
 	return tasks.Wait().ToError()
 }
 
 /************
- Init helpers
- ************/
+Init helpers
+************/
 
 func (wsrv *WebServer) loginEnabled() bool {
 	return wsrv.Discord.ClientID != "" && wsrv.Discord.ClientSecret != ""
@@ -179,23 +196,19 @@ func (wsrv *WebServer) getSelfLink() (string, error) {
 
 func (wsrv *WebServer) initDBPool(ctx Ctx) (SQLiteConnPool, error) {
 	pool, err := NewSQLiteConnPool(ctx, wsrv.NbDBConn, func(ctx Ctx) (SQLiteConn, error) {
-		return wsrv.getConn(ctx)
+		conn, err := wsrv.storage.GetConn(ctx)
+		if err != nil {
+			return conn, err
+		}
+		if wsrv.DirtyReads {
+			return conn, conn.ReadUncommitted(true)
+		}
+		return conn, nil
 	})
 	if wsrv.DirtyReads && err == nil {
 		wsrv.logger.Info("dirty reads of the database enabled")
 	}
 	return pool, nil
-}
-
-func (wsrv *WebServer) getConn(ctx Ctx) (StorageConn, error) {
-	conn, err := wsrv.storage.GetConn(ctx)
-	if err != nil {
-		return conn, err
-	}
-	if wsrv.DirtyReads {
-		return conn, conn.ReadUncommitted(true)
-	}
-	return conn, nil
 }
 
 func (wsrv *WebServer) listen() error {
@@ -228,8 +241,8 @@ func (wsrv *WebServer) listen() error {
 }
 
 /****************
- Request handlers
- ****************/
+Request handlers
+****************/
 
 // CSS serves the style sheets.
 func (wsrv *WebServer) CSS(w http.ResponseWriter, r *http.Request) *HTTPError {
@@ -559,8 +572,8 @@ func (wsrv *WebServer) authorize(conn StorageConn, w http.ResponseWriter, r *htt
 }
 
 /*************************
- Request handlers' helpers
- *************************/
+Request handlers' helpers
+*************************/
 
 func (wsrv *WebServer) withConn(ctx Ctx, cb func(StorageConn) error) error {
 	return wsrv.conns.WithConn(ctx, func(conn SQLiteConn) error { return cb(conn.(StorageConn)) })

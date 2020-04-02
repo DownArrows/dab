@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/google/uuid"
+	"math/rand"
 	"os"
 	"sort"
 	"time"
@@ -10,6 +11,11 @@ import (
 
 // Any is a shorter alias for interface{}.
 type Any = interface{}
+
+// RandBool returns a random boolean (not-cryptographically secure)
+func RandBool() bool {
+	return rand.Intn(2) == 1
+}
 
 // NewRandomToken makes a secure random string token.
 func NewRandomToken() (string, error) {
