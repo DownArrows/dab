@@ -712,8 +712,8 @@ func (bot *DiscordBot) register(msg DiscordMessage) error {
 	return bot.editUsers("register", func(name string) error {
 		return bot.conn.WithTx(func() error {
 			notes := UserNotes{}
-			notes.Registration.From.ID = "discord"
-			notes.Registration.From.Type = msg.Author.ID
+			notes.Registration.From.ID = msg.Author.ID
+			notes.Registration.From.Type = "discord"
 			notesJSON, err := notes.ToJSON()
 			if err != nil {
 				return err
