@@ -549,7 +549,6 @@ func (wsrv *WebServer) authorize(conn StorageConn, w http.ResponseWriter, r *htt
 			return hErr
 		}
 		conf.RedirectURL = r.URL.String()
-		// TODO maybe hash the CSRF token?
 		http.Redirect(w, r, conf.AuthCodeURL(session.CSRF, oauth2.AccessTypeOnline), http.StatusSeeOther)
 		return nil
 	}

@@ -59,13 +59,13 @@ type SQLiteBackupOptions struct {
 
 // SQLiteDatabaseOptions describes the configuration for an SQLite database.
 type SQLiteDatabaseOptions struct {
-	AppID           int
-	InitHook        func(SQLiteConn) error
-	Migrations      []SQLiteMigration
-	Path            string
-	Retry           RetryConf
-	Timeout         time.Duration
-	Version         SemVer
+	AppID      int
+	InitHook   func(SQLiteConn) error
+	Migrations []SQLiteMigration
+	Path       string
+	Retry      RetryConf
+	Timeout    time.Duration
+	Version    SemVer
 }
 
 // SQLiteDatabase provides database features that are not application-specific:

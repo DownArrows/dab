@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"time"
 )
 
 // AddRedditUser is a function for when the only thing needed is to add users by checking through Reddit first.
@@ -10,15 +9,13 @@ type AddRedditUser func(Ctx, StorageConn, UserQuery) UserQuery
 
 // RedditUsers is a data structure to manage Reddit users by interacting with both the database and Reddit.
 type RedditUsers struct {
-	api    *RedditAPI
-	logger LevelLogger
-
-	resurrections               chan User
-	ResurrectionsInterval       time.Duration
+	api           *RedditAPI
+	logger        LevelLogger
+	resurrections chan User
 }
 
 // NewRedditUsers creates a RedditUsers.
-func NewRedditUsers(logger LevelLogger, api *RedditAPI, conf RedditUsersConf) *RedditUsers {
+func NewRedditUsers(logger LevelLogger, api *RedditAPI) *RedditUsers {
 	return &RedditUsers{
 		api:           api,
 		logger:        logger,
@@ -70,35 +67,35 @@ func (ru *RedditUsers) CloseResurrections() {
 // CheckResurrections looks for resurrected users once and sends
 // those it finds to the channel returned by Resurrections.
 func (ru *RedditUsers) CheckResurrections(ctx Ctx, conn StorageConn) error {
-		ru.logger.Debug("looking for resurrected users")
+	ru.logger.Debug("looking for resurrected users")
 
-		users, err := conn.ListSuspendedAndNotFound()
-		if err != nil {
+	users, err := conn.ListSuspendedAndNotFound()
+	if err != nil {
+		return err
+	}
+
+	for _, user := range users {
+		ru.logger.Debugf("checking resurrected user %+v", user)
+
+		res := ru.api.AboutUser(ctx, user.Name)
+		if res.Error != nil {
+			if IsCancellation(res.Error) {
+				return res.Error
+			}
+			ru.logger.Errorf("resurrections watcher network error, skipping %q: %v", user.Name, res.Error)
+			continue
+		}
+
+		ru.logger.Debugf("resurrections watcher found about user %+v data from Reddit %+v", user, res)
+
+		err = conn.WithTx(func() error { return ru.updateRedditUserStatus(conn, user, res) })
+		// A foreign key error indicates that the user has been purged and can be ignored
+		if err != nil && !IsSQLiteForeignKeyErr(err) {
 			return err
 		}
+	}
 
-		for _, user := range users {
-			ru.logger.Debugf("checking resurrected user %+v", user)
-
-			res := ru.api.AboutUser(ctx, user.Name)
-			if res.Error != nil {
-				if IsCancellation(res.Error) {
-					return res.Error
-				}
-				ru.logger.Errorf("resurrections watcher network error, skipping %q: %v", user.Name, res.Error)
-				continue
-			}
-
-			ru.logger.Debugf("resurrections watcher found about user %+v data from Reddit %+v", user, res)
-
-			err = conn.WithTx(func() error { return ru.updateRedditUserStatus(conn, user, res) })
-			// A foreign key error indicates that the user has been purged and can be ignored
-			if err != nil && !IsSQLiteForeignKeyErr(err) {
-				return err
-			}
-		}
-
-		return nil
+	return nil
 }
 
 func (ru *RedditUsers) updateRedditUserStatus(conn StorageConn, user User, res UserQuery) error {

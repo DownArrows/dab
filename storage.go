@@ -28,12 +28,12 @@ func NewStorage(ctx Ctx, logger LevelLogger, conf StorageConf) (*Storage, Storag
 	}
 
 	s.db, conn.actual, err = NewSQLiteDatabase(ctx, logger, SQLiteDatabaseOptions{
-		AppID:           ApplicationFileID,
-		Migrations:      StorageMigrations,
-		Path:            s.Path,
-		Retry:           s.Retry,
-		Timeout:         s.Timeout.Value,
-		Version:         Version,
+		AppID:      ApplicationFileID,
+		Migrations: StorageMigrations,
+		Path:       s.Path,
+		Retry:      s.Retry,
+		Timeout:    s.Timeout.Value,
+		Version:    Version,
 	})
 	if err != nil {
 		return nil, conn, err

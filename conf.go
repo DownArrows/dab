@@ -87,14 +87,12 @@ type StorageConf struct {
 		MaxAge  Duration `json:"max_age"`
 		Secrets string   `json:"secrets"`
 	} `json:"backup"`
-	BackupMaxAge    Duration  `json:"backup_max_age"`
-	BackupPath      string    `json:"backup_path"`
-	CleanupInterval Duration  `json:"cleanup_interval"`
-	LogLevel        string    `json:"log_level"`
-	Path            string    `json:"path"`
-	Retry           RetryConf `json:"retry_connection"`
-	SecretsPath     string    `json:"secrets_path"`
-	Timeout         Duration  `json:"timeout"`
+	BackupMaxAge Duration  `json:"backup_max_age"` // Deprecated
+	BackupPath   string    `json:"backup_path"`    // Deprecated
+	Path         string    `json:"path"`
+	Retry        RetryConf `json:"retry_connection"`
+	SecretsPath  string    `json:"secrets_path"`
+	Timeout      Duration  `json:"timeout"`
 }
 
 // RetryConf describes the configuration of the retry logic for a component.
@@ -125,14 +123,6 @@ type RedditScannerConf struct {
 type WatchSubmissions struct {
 	Target   string
 	Interval Duration
-}
-
-// RedditUsersConf describes the configuration for the component that manages users.
-type RedditUsersConf struct {
-	Compendium               WatchCompendiumConf `json:"compendium"`
-	CompendiumUpdateInterval Duration            `json:"compendium_update_interval"` // Deprecated
-	ResurrectionsInterval    Duration            `json:"resurrections_interval"`
-	UnsuspensionInterval     Duration            `json:"unsuspension_interval"` // Deprecated
 }
 
 // WatchCompendiumConf describes the configuration for watching the users added to a third-party compendium (deprecated).
@@ -278,19 +268,24 @@ type Configuration struct {
 	Timezone   Timezone `json:"timezone"`
 
 	Database struct {
-		LogLevel string `json:"log_level"`
 		StorageConf
+		CleanupInterval Duration `json:"cleanup_interval"`
+		LogLevel        string   `json:"log_level"`
 	}
 
 	Reddit struct {
 		RedditAuth
 		RedditScannerConf
-		RedditUsersConf
-		DVTInterval      Duration           `json:"dvt_interval"` // Deprecated
-		LogLevel         string             `json:"log_level"`
-		Retry            RetryConf          `json:"retry_connection"`
-		UserAgent        string             `json:"user_agent"`
-		WatchSubmissions []WatchSubmissions `json:"watch_submissions"` // Deprecated
+
+		DVTInterval              Duration            `json:"dvt_interval"` // Deprecated
+		LogLevel                 string              `json:"log_level"`
+		ResurrectionsInterval    Duration            `json:"resurrections_interval"`
+		Retry                    RetryConf           `json:"retry_connection"`
+		UserAgent                string              `json:"user_agent"`
+		WatchSubmissions         []WatchSubmissions  `json:"watch_submissions"`          // Deprecated
+		Compendium               WatchCompendiumConf `json:"compendium"`                 // Deprecated
+		CompendiumUpdateInterval Duration            `json:"compendium_update_interval"` // Deprecated
+		UnsuspensionInterval     Duration            `json:"unsuspension_interval"`      // Deprecated
 	}
 
 	Compendium CompendiumConf `json:"-"`

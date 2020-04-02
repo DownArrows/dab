@@ -178,7 +178,7 @@ func (dab *DownArrowsBot) Run(ctx Ctx, args []string) error {
 			return fmt.Errorf("error when setting a logging level for the reddit components: %v", err)
 		}
 		dab.components.RedditScanner = NewRedditScanner(redditLogger, dab.layers.Storage, redditAPI, dab.conf.Reddit.RedditScannerConf)
-		dab.components.RedditUsers = NewRedditUsers(redditLogger, redditAPI, dab.conf.Reddit.RedditUsersConf)
+		dab.components.RedditUsers = NewRedditUsers(redditLogger, redditAPI)
 
 		retrier := NewRetrier(dab.conf.Reddit.Retry, func(r *Retrier, err error) {
 			dab.logger.Errorf("error in reddit component, restarting (%s): %v", r, err)
@@ -304,7 +304,7 @@ func (dab *DownArrowsBot) userAdd(ctx Ctx, conn StorageConn) error {
 		return err
 	}
 
-	ru := NewRedditUsers(dab.logger, ra, dab.conf.Reddit.RedditUsersConf)
+	ru := NewRedditUsers(dab.logger, ra)
 
 	usernames := userAddSeparators.Split(dab.runtimeConf.UserAdd, -1)
 	for _, username := range usernames {
