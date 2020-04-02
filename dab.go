@@ -16,8 +16,8 @@ var Version = SemVer{1, 26, 0}
 // DefaultChannelSize is the size of the channels that are used throughout of the application, unless there's a need for a specific size.
 const DefaultChannelSize = 100
 
-// DefaultJobJitter is the default positive and negative percentage of allowed interval jitter for periodic jobs.
-const DefaultJobJitter uint8 = 10
+// DefaultPeriodicTaskJitter is the default positive and negative percentage of allowed interval jitter for periodic tasks.
+const DefaultPeriodicTaskJitter uint8 = 10
 
 var userAddSeparators = regexp.MustCompile("[ ,]")
 
@@ -162,8 +162,9 @@ func (dab *DownArrowsBot) Run(ctx Ctx, args []string) error {
 		tasks.SpawnCtx(dab.components.Web.Run)
 	}
 
-	if !dab.conf.Database.CleanupInterval.IsZero() {
-		tasks.SpawnCtx(dab.layers.Storage.PeriodicCleanup)
+	if interval := dab.conf.Database.CleanupInterval.Value; interval != 0 {
+		// first database connection is re-used here
+		tasks.SpawnCtx(PeriodicTask(interval, DefaultPeriodicTaskJitter, dab.layers.Storage.Cleanup(conn)))
 	}
 
 	if dab.components.ConfState.Reddit.Enabled {
@@ -219,10 +220,13 @@ func (dab *DownArrowsBot) Run(ctx Ctx, args []string) error {
 
 		tasks.Spawn(func() { dab.components.Discord.SignalDeaths(dab.components.RedditScanner.OpenDeaths()) })
 
-		if dab.components.RedditUsers.ResurrectionsWatcherEnabled {
-			tasks.SpawnCtx(func(ctx Ctx) error {
-				return dab.components.RedditUsers.ResurrectionsWatcher(ctx, conn) // we re-use the first created conn here
-			})
+		if interval := dab.conf.Reddit.ResurrectionsInterval.Value; interval != 0 {
+			dab.logger.Infof("watching resurrections with interval %s", interval)
+			tasks.SpawnCtx(PeriodicTask(interval, DefaultPeriodicTaskJitter, func(ctx Ctx) error {
+				return storage.WithConn(ctx, func(conn StorageConn) error {
+					return dab.components.RedditUsers.CheckResurrections(ctx, conn)
+				})
+			}))
 			tasks.Spawn(func() { dab.components.Discord.SignalResurrections(dab.components.RedditUsers.OpenResurrections()) })
 		}
 

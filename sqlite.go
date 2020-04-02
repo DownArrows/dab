@@ -60,7 +60,6 @@ type SQLiteBackupOptions struct {
 // SQLiteDatabaseOptions describes the configuration for an SQLite database.
 type SQLiteDatabaseOptions struct {
 	AppID           int
-	CleanupInterval time.Duration
 	InitHook        func(SQLiteConn) error
 	Migrations      []SQLiteMigration
 	Path            string
@@ -77,7 +76,7 @@ type SQLiteDatabaseOptions struct {
 //  - write the choosen application ID and version
 //  - create connections with sane options
 //  - a backup method
-//  - an autonomous method for recurring cleanup and optimization
+//  - a method for cleanup and optimization that must be launched independently
 type SQLiteDatabase struct {
 	SQLiteDatabaseOptions
 	// The mutex for backups avoids overwriting a backup while another one is running on the same destination path.
@@ -99,8 +98,7 @@ func NewSQLiteDatabase(ctx Ctx, logger LevelLogger, opts SQLiteDatabaseOptions) 
 		logger:  logger,
 	}
 
-	db.logger.Debugf("opening %s, version %s, application ID 0x%x, cleanup interval %s",
-		db, db.Version, db.AppID, db.CleanupInterval)
+	db.logger.Debugf("opening %s, version %s, application ID 0x%x", db, db.Version, db.AppID)
 
 	conn, err := db.GetConn(ctx)
 	if err != nil {
@@ -294,26 +292,12 @@ func (db *SQLiteDatabase) quickCheck(conn SQLiteConn) error {
 	return nil
 }
 
-// PeriodicCleanup is a Task to be launched independently which periodically optimizes the database,
-// according to the interval set in the SQLiteDatabaseOptions.
-func (db *SQLiteDatabase) PeriodicCleanup(ctx Ctx) error {
-	if !(db.CleanupInterval > 0) {
-		return fmt.Errorf("database at %q cannot run periodic cleanup with an interval of %s", db.Path, db.CleanupInterval)
-	}
-
-	conn, err := db.GetConn(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	for SleepCtx(ctx, db.CleanupInterval) {
+// Cleanup cleans up the database; it is advised you launch it regularly.
+func (db *SQLiteDatabase) Cleanup(conn SQLiteConn) Task {
+	return WithCtx(func() error {
 		db.logger.Debugf("performing incremental vacuum of %s", db)
-		if err := conn.Exec("PRAGMA incremental_vacuum"); err != nil {
-			return err
-		}
-	}
-	return ctx.Err()
+		return conn.Exec("PRAGMA incremental_vacuum")
+	})
 }
 
 // Backup creates or clobbers a backup of the current database at the destination set in the SQLiteBackupOptinos.

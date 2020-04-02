@@ -149,14 +149,14 @@ func (wsrv *WebServer) Run(ctx Ctx) error {
 
 	if interval := wsrv.DBOptimize.Value; interval != 0 {
 
-		tasks.SpawnCtx(PeriodicTask(interval/time.Duration(pool.Size()), DefaultJobJitter, func(ctx Ctx) error {
+		tasks.SpawnCtx(PeriodicTask(interval/time.Duration(pool.Size()), DefaultPeriodicTaskJitter, func(ctx Ctx) error {
 			if err := wsrv.conns.AnalyzeOne(ctx, interval); err != nil {
 				wsrv.logger.Errorf("error when analyzing a connection: %v", err)
 			}
 			return nil
 		}))
 
-		tasks.SpawnCtx(PeriodicTask(interval, DefaultJobJitter, func(ctx Ctx) error {
+		tasks.SpawnCtx(PeriodicTask(interval, DefaultPeriodicTaskJitter, func(ctx Ctx) error {
 			return wsrv.withConn(ctx, func(conn StorageConn) error {
 				if err := conn.CleanupSessions(wsrv.sessions); err != nil {
 					wsrv.logger.Errorf("error when cleaning up sessions: %v", err)

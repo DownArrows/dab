@@ -29,7 +29,6 @@ func NewStorage(ctx Ctx, logger LevelLogger, conf StorageConf) (*Storage, Storag
 
 	s.db, conn.actual, err = NewSQLiteDatabase(ctx, logger, SQLiteDatabaseOptions{
 		AppID:           ApplicationFileID,
-		CleanupInterval: s.CleanupInterval.Value,
 		Migrations:      StorageMigrations,
 		Path:            s.Path,
 		Retry:           s.Retry,
@@ -60,9 +59,9 @@ func (s *Storage) initTables(conn SQLiteConn) error {
 	return nil
 }
 
-// PeriodicCleanup is a Task that periodically cleans up and optimizes the underlying database.
-func (s *Storage) PeriodicCleanup(ctx Ctx) error {
-	return s.db.PeriodicCleanup(ctx)
+// Cleanup returns a Task that cleans up and optimizes the underlying database once.
+func (s *Storage) Cleanup(conn StorageConn) Task {
+	return s.db.Cleanup(conn)
 }
 
 // BackupMain performs a backup of the main database.
