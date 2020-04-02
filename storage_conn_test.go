@@ -350,6 +350,32 @@ func TestCRUDComments(t *testing.T) {
 		}
 	})
 
+	t.Run("save and diff highscores", func(t *testing.T) {
+		var comments []Comment
+		for _, userComments := range data {
+			comments = append(comments, userComments...)
+		}
+
+		first := comments[0:1]
+		rest := comments[1:]
+
+		diff, err := conn.SaveAndDiffHighScores(rest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(diff) != len(rest) || diff[0] != rest[0] {
+			t.Errorf("expected all %d comments to be returned as a diff, instead got %d comments", len(rest), len(diff))
+		}
+
+		diff, err = conn.SaveAndDiffHighScores(comments)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(diff) != len(first) || diff[0] != first[0] {
+			t.Errorf("expected only comment %+v to be returned as a diff, instead got %+v", first, diff)
+		}
+	})
+
 	// Leave that test case at the end so as not to complicate the previous ones.
 	t.Run("purge", func(t *testing.T) {
 		err := conn.PurgeUser(users[0].Name)

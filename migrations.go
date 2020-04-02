@@ -132,9 +132,13 @@ var StorageMigrations = []SQLiteMigration{
 				{SQL: "DROP TABLE user_archive"},
 				{SQL: "ALTER TABLE new_user_archive RENAME TO user_archive"},
 				{SQL: "PRAGMA foreign_keys = ON"},
-				// TODO migrate highscores
-				{SQL: "DROP TABLE key_value"},
 				{SQL: "DROP TRIGGER IF EXISTS purge_user"}, // migrated to foreign key cascade
+				{SQL: `CREATE TABLE IF NOT EXISTS highscores(
+					id TEXT PRIMARY KEY,
+					FOREIGN KEY (id) REFERENCES comments(id) ON DELETE CASCADE
+				) WITHOUT ROWID`},
+				{SQL: "INSERT INTO highscores SELECT value FROM key_value WHERE key = 'highscores'"},
+				{SQL: "DROP TABLE key_value"},
 			})
 		},
 	},

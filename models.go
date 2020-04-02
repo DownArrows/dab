@@ -35,6 +35,10 @@ func (c Comment) InitializationQueries() []SQLQuery {
 			FOREIGN KEY (author) REFERENCES user_archive(name) ON DELETE CASCADE
 		) WITHOUT ROWID`},
 		{SQL: "CREATE INDEX IF NOT EXISTS comments_idx ON comments (author, score ASC, sub, created DESC)"},
+		{SQL: `CREATE TABLE IF NOT EXISTS highscores (
+			id TEXT PRIMARY KEY,
+			FOREIGN KEY (id) REFERENCES comments(id) ON DELETE CASCADE
+		) WITHOUT ROWID`},
 	}
 }
 

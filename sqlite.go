@@ -25,6 +25,15 @@ func IsSQLiteForeignKeyError(err error) bool {
 	return errSQLite.Code() == sqlite.CONSTRAINT_FOREIGNKEY
 }
 
+// IsSQLitePrimaryKeyConstraintError indicates whether the given error is an error about the constraints on a primary key.
+func IsSQLitePrimaryKeyConstraintError(err error) bool {
+	errSQLite, ok := err.(*sqlite.Error)
+	if !ok {
+		return false
+	}
+	return errSQLite.Code() == sqlite.CONSTRAINT_PRIMARYKEY
+}
+
 // SQLQuery describes multiple SQL queries and their arguments.
 type SQLQuery struct {
 	SQL  string

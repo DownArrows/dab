@@ -389,6 +389,37 @@ func (conn StorageConn) comments(sql string, args ...Any) ([]Comment, error) {
 	return comments, err
 }
 
+// SaveAndDiffHighScores saves and returns comments that were new.
+func (conn StorageConn) SaveAndDiffHighScores(comments []Comment) ([]Comment, error) {
+	var diff []Comment
+	err := conn.WithTx(func() error {
+		stmt, err := conn.Prepare("INSERT INTO highscores(id) VALUES (?)")
+		if err != nil {
+			return err
+		}
+		defer stmt.Close()
+
+		for _, comment := range comments {
+
+			if err := stmt.Exec(comment.ID); err != nil {
+				if !IsSQLitePrimaryKeyConstraintError(err) {
+					return err
+				}
+			} else {
+				diff = append(diff, comment)
+			}
+
+			if err := stmt.ClearBindings(); err != nil {
+				return err
+			}
+
+		}
+
+		return nil
+	})
+	return diff, err
+}
+
 /**********
  Statistics
 ***********/
