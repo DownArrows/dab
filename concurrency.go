@@ -8,9 +8,25 @@ import (
 	"time"
 )
 
+// Ctx is a shortcut for the often-used context.Context
+type Ctx = context.Context
+
+// Task is a function that can be managed by a TaskGroup.
+type Task func(Ctx) error
+
 // IsCancellation returns whether the error corresponds to a cancellation.
 func IsCancellation(err error) bool {
 	return err == context.Canceled || err == context.DeadlineExceeded
+}
+
+// WithCtx adds a cancellation point before the execution of the given callback.
+func WithCtx(cb func() error) Task {
+	return func(ctx Ctx) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return cb()
+	}
 }
 
 // SleepCtx sleeps with the ability to be cancelled,
@@ -41,12 +57,6 @@ func PeriodicTask(interval time.Duration, jitterPercent uint8, task Task) Task {
 		return ctx.Err()
 	}
 }
-
-// Ctx is a shortcut for the often-used context.Context
-type Ctx = context.Context
-
-// Task is a function that can be managed by a TaskGroup.
-type Task func(Ctx) error
 
 // TaskGroup launches and shuts down a group of goroutine which take a context and return an error.
 // Use TaskGroup.Spawn to launch functions asynchronously,
@@ -278,14 +288,4 @@ func (r *Retrier) sleepCtx(ctx Ctx) bool {
 		r.Backoff *= 2
 	}
 	return SleepCtx(ctx, sleeptime)
-}
-
-// WithCtx adds a cancellation point before the execution of the given callback.
-func WithCtx(cb func() error) Task {
-	return func(ctx Ctx) error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		return cb()
-	}
 }
