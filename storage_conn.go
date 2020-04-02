@@ -151,9 +151,10 @@ func (conn StorageConn) simpleEditUser(sql, username string) error {
 *********/
 
 // AddAuthorizedIDs adds multiple IDs that are authorized to log into the web application.
+// No error is returned for IDs that were already registered.
 func (conn StorageConn) AddAuthorizedIDs(ids []string) error {
 	return conn.WithTx(func() error {
-		stmt, err := conn.Prepare("INSERT INTO secrets.authorized(id) VALUES (?)")
+		stmt, err := conn.Prepare("INSERT INTO secrets.authorized(id) VALUES (?) ON CONFLICT DO NOTHING")
 		if err != nil {
 			return err
 		}
