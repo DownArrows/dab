@@ -30,6 +30,7 @@ const (
 	EmojiThumbDown     = "\U0001f44e"
 	EmojiThumbUp       = "\U0001f44d"
 	EmojiWarning       = "\u26a0"
+	EmojiWavingHand    = "\U0001F44B"
 	EmojiWheelOfDharma = "\u2638"
 	EmojiWhiteFlower   = "\U0001f4ae"
 )
@@ -75,11 +76,7 @@ func NewDiscordMessage(dgMsg *discordgo.MessageCreate) DiscordMessage {
 		ID:        dgMsg.ID,
 		Content:   dgMsg.Content,
 		ChannelID: dgMsg.ChannelID,
-		Author: DiscordMember{
-			ID:            dgMsg.Author.ID,
-			Name:          dgMsg.Author.Username,
-			Discriminator: dgMsg.Author.Discriminator,
-		},
+		Author:    NewDiscordMember(dgMsg.Author),
 	}
 }
 
@@ -88,6 +85,15 @@ type DiscordMember struct {
 	ID            string
 	Name          string
 	Discriminator string
+}
+
+// NewDiscordMember creates a DiscordMember from a *discordgo.User.
+func NewDiscordMember(dgUser *discordgo.User) DiscordMember {
+	return DiscordMember{
+		ID:            dgUser.ID,
+		Name:          dgUser.Username,
+		Discriminator: dgUser.Discriminator,
+	}
 }
 
 // FQN returns the fully qualified name of a user, with its discriminator.
@@ -270,6 +276,13 @@ func NewDiscordBot(
 		})
 	}
 
+	if conf.Graveyard != "" {
+		session.AddHandler(func(_ *discordgo.Session, event *discordgo.GuildMemberRemove) {
+			member := NewDiscordMember(event.Member.User)
+			bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.goodbyeMember(member) })
+		})
+	}
+
 	session.AddHandler(func(_ *discordgo.Session, msg *discordgo.MessageCreate) {
 		bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.onMessage(msg) })
 	})
@@ -403,17 +416,18 @@ func (bot *DiscordBot) welcomeNewMember(member *discordgo.Member) error {
 	data := DiscordWelcomeData{
 		BotID:      bot.ID,
 		ChannelsID: bot.channelsID,
-		Member: DiscordMember{
-			ID:            member.User.ID,
-			Name:          member.User.Username,
-			Discriminator: member.User.Discriminator,
-		},
+		Member: NewDiscordMember(member.User),
 	}
 	bot.logger.Debugf("welcoming user %s", data.Member.FQN())
 	if err := bot.welcome.Execute(&msg, data); err != nil {
 		return err
 	}
 	return bot.channelMessageSend(bot.channelsID.General, msg.String())
+}
+
+func (bot *DiscordBot) goodbyeMember(member DiscordMember) error {
+	msg := fmt.Sprintf("Goodbye <@%s> (%s) %s.", member.ID, member.FQN(), EmojiWavingHand)
+	return bot.channelMessageSend(bot.channelsID.Graveyard, msg)
 }
 
 func (bot *DiscordBot) onMessage(dgMsg *discordgo.MessageCreate) error {
