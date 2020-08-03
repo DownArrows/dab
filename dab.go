@@ -12,7 +12,7 @@ import (
 )
 
 // Version of the application.
-var Version = SemVer{1, 26, 0}
+var Version = SemVer{1, 26, 1}
 
 // DefaultChannelSize is the size of the channels that are used throughout of the application, unless there's a need for a specific size.
 const DefaultChannelSize = 100

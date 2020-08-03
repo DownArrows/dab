@@ -441,9 +441,13 @@ Next {{.CommentsLen}} comments &rarr;
 	<td>{{.Stats.Count}}</td>
 	<td>{{.Stats.Average}}</td>
 	<td>
+	{{if .Stats.Count -}}
 		<span class="detail">{{.Stats.Latest.Format "15:04"}}</span>
 		<span>{{.Stats.Latest.Format "2006-01-02"}}</span>
 		<span class="detail">{{.Stats.Latest.Format "MST"}}</span>
+	{{- else}}
+		<emph>N/A</emph>
+	{{end -}}
 	</td>
 </tr>
 {{end -}}
