@@ -53,6 +53,10 @@ README.html: README.md
 #	sed '/<\/title>/ a \  <link rel="stylesheet" href="/css/main"/>' \
 #	> $@
 
+push:
+	git push
+	git push --tags
+
 tarball: .tarball.sentinel
 .PHONY: tarball
 
@@ -60,9 +64,7 @@ tarball: .tarball.sentinel
 	tar cJf $(TARBALL) $^
 	touch .tarball.sentinel
 
-release: tarball
-	hub push origin HEAD:master
-	hub push origin HEAD:master --tags
+release: push tarball
 	hub release create -a $(TARBALL) $(TAG)
 .PHONY: release
 
