@@ -604,10 +604,9 @@ func (bot *DiscordBot) getCommandsDescriptors() []DiscordCommand {
 		HasArgs:    true,
 		Privileged: true,
 	}, {
-		Command:    "purge",
-		Callback:   bot.editUsers("purge", bot.conn.PurgeUser),
-		HasArgs:    true,
-		Privileged: true,
+		Command:  "purge",
+		Callback: bot.simpleReply(fmt.Sprintf("Please use the %sunregister command instead (%sreregister to cancel it).", bot.prefix, bot.prefix)),
+		HasArgs:  true,
 	}, {
 		Command:  "info",
 		Callback: bot.userInfo,
