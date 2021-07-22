@@ -366,10 +366,10 @@ func (bot *DiscordBot) setStatus() {
 func (bot *DiscordBot) onReady(r *discordgo.Ready) error {
 	bot.logger.Debug("(re-)connected, checking settings")
 
-	// guild-related information and checks
-	if nb := len(r.Guilds); nb != 1 {
-		return fmt.Errorf("the bot needs to be in one and only one server (found in %d server(s))", nb)
-	}
+//	// guild-related information and checks
+//	if nb := len(r.Guilds); nb != 1 {
+//		return fmt.Errorf("the bot needs to be in one and only one server (found in %d server(s))", nb)
+//	}
 
 	// The data structure representing guilds only has their ID set at this point.
 	bot.guildID = r.Guilds[0].ID
