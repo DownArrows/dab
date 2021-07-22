@@ -357,7 +357,7 @@ func (bot *DiscordBot) myColor(channelID string) int {
 }
 
 func (bot *DiscordBot) setStatus() {
-	if err := bot.client.UpdateStatus(0, discordStatus); err != nil {
+	if err := bot.client.UpdateGameStatus(0, discordStatus); err != nil {
 		bot.logger.Errorf("couldn't set status: %v", err)
 	}
 }
