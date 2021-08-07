@@ -270,25 +270,29 @@ func NewDiscordBot(
 
 	bot.commands = bot.getCommandsDescriptors()
 
+	session.AddHandler(func(_ *discordgo.Session, r *discordgo.Ready) {
+		bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.onReady(r) })
+	})
+
+	session.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages
+	session.AddHandler(func(_ *discordgo.Session, msg *discordgo.MessageCreate) {
+		bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.onMessage(msg) })
+	})
+
 	if conf.Welcome != "" && conf.General != "" {
+		session.Identify.Intents |= discordgo.IntentsGuildMembers
 		session.AddHandler(func(_ *discordgo.Session, event *discordgo.GuildMemberAdd) {
 			bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.welcomeNewMember(event.Member) })
 		})
 	}
 
 	if conf.Graveyard != "" {
+		session.Identify.Intents |= discordgo.IntentsGuildMembers
 		session.AddHandler(func(_ *discordgo.Session, event *discordgo.GuildMemberRemove) {
 			member := NewDiscordMember(event.Member.User)
 			bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.goodbyeMember(member) })
 		})
 	}
-
-	session.AddHandler(func(_ *discordgo.Session, msg *discordgo.MessageCreate) {
-		bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.onMessage(msg) })
-	})
-	session.AddHandler(func(_ *discordgo.Session, r *discordgo.Ready) {
-		bot.tasks.SpawnCtx(func(_ context.Context) error { return bot.onReady(r) })
-	})
 
 	return bot, nil
 }
