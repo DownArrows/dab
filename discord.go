@@ -59,6 +59,14 @@ var (
 	}
 )
 
+func escape(content string) string {
+	return strings.ReplaceAll(content, "_", "\\_")
+}
+
+func unEscape(content string) string {
+	return strings.ReplaceAll(content, "\\_", "_")
+}
+
 // DiscordMessage exists because discordgo's data structures aren't well adapted to our needs,
 // and typing "*discordgo.<DataStructure>" all the time gets tiring.
 type DiscordMessage struct {
@@ -74,7 +82,7 @@ type DiscordMessage struct {
 func NewDiscordMessage(dgMsg *discordgo.MessageCreate) DiscordMessage {
 	return DiscordMessage{
 		ID:        dgMsg.ID,
-		Content:   dgMsg.Content,
+		Content:   unEscape(dgMsg.Content),
 		ChannelID: dgMsg.ChannelID,
 		Author:    NewDiscordMember(dgMsg.Author),
 	}
@@ -460,7 +468,7 @@ func (bot *DiscordBot) SignalDeaths(suspensions <-chan User) {
 		if user.NotFound {
 			state = "deleted"
 		}
-		msg := fmt.Sprintf("RIP /u/%s %s (%s)", user.Name, EmojiPrayingHands, state)
+		msg := fmt.Sprintf("RIP /u/%s %s (%s)", escape(user.Name), EmojiPrayingHands, state)
 		bot.tasks.SpawnCtx(func(_ context.Context) error {
 			return bot.channelMessageSend(bot.channelsID.Graveyard, msg)
 		})
@@ -471,7 +479,7 @@ func (bot *DiscordBot) SignalDeaths(suspensions <-chan User) {
 // It needs to be launched independently of the bot.
 func (bot *DiscordBot) SignalResurrections(ch <-chan User) {
 	for user := range ch {
-		msg := fmt.Sprintf("%s /u/%s has been resurrected! %s", EmojiRainbow, user.Name, EmojiRainbow)
+		msg := fmt.Sprintf("%s /u/%s has been resurrected! %s", EmojiRainbow, escape(user.Name), EmojiRainbow)
 		bot.tasks.SpawnCtx(func(_ context.Context) error {
 			return bot.channelMessageSend(bot.channelsID.Graveyard, msg)
 		})
@@ -729,7 +737,7 @@ func (bot *DiscordBot) userInfo(msg DiscordMessage) error {
 	user := query.User
 
 	embed := &DiscordEmbed{
-		Title: "Information about /u/" + user.Name,
+		Title: "Information about /u/" + escape(user.Name),
 		Color: bot.myColor(msg.ChannelID),
 		Fields: []DiscordEmbedField{{
 			Name:   "Created",
@@ -808,7 +816,7 @@ func (bot *DiscordBot) karma(msg DiscordMessage) error {
 	}
 
 	embed := &DiscordEmbed{
-		Title: "Karma for /u/" + user.Name,
+		Title: "Karma for /u/" + escape(user.Name),
 		Fields: []DiscordEmbedField{
 			{Name: "Positive", Value: fmt.Sprintf("%d", total-negative), Inline: true},
 			{Name: "Negative", Value: fmt.Sprintf("%d", negative), Inline: true},

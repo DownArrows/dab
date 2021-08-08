@@ -88,5 +88,27 @@ var StorageMigrations = []SQLiteMigration{
 				SET key = "register-from-discord_" || TRIM(key, "register-from-discord-")
 				WHERE key LIKE "register-from-discord-%"`)
 		},
+	}, {
+		From: SemVer{1, 26, 3},
+		To: SemVer{1, 26, 4},
+		Exec: func(conn SQLiteConn) error {
+			return conn.Exec(`WITH
+				counted AS (
+					SELECT key, MIN(created) AS created, COUNT(*) AS nb
+					FROM key_value
+					WHERE key LIKE 'register-from-discord_%'
+					GROUP BY key
+				),
+				duplicate AS (
+					SELECT key, created FROM counted WHERE nb > 1
+				),
+				todo AS (
+					SELECT kv.key, kv.created
+					FROM key_value AS kv
+					JOIN duplicate ON kv.key = duplicate.key
+					WHERE kv.created > duplicate.created
+				)
+				DELETE FROM key_value WHERE (key_value.key, key_value.created) IN todo`)
+		},
 	},
 }
